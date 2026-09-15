@@ -530,7 +530,7 @@
   }
   /* geen toetsenbord: hints zijn ruis */
   @media (pointer: coarse) {
-    .choice kbd, #assess-keys-hint { display: none; }
+    .choice kbd, #assess-keys-hint, #q-keys-hint { display: none; }
   }
   /* wel een muis of trackpad: hover mag bestaan zonder te blijven plakken */
   @media (hover: hover) and (pointer: fine) {

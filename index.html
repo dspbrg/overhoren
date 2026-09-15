@@ -500,7 +500,7 @@ function renderQuestion(){
   $("q-class-field").hidden = !cs.length; $("fb-cls-row").hidden = !cs.length;
   const keyHints = ["Enter = controleren en volgende"];
   if(cs.length) keyHints.push("Toetsen 1 tot 4 = woordsoort");
-  if(canSkip()) keyHints.push("L = doe later");
+  if(canSkip()) keyHints.push("Esc = doe later");
   $("q-keys-hint").textContent = keyHints.join(". ")+".";
   $("fb-word-k").textContent = lb.word; $("fb-def-k").textContent = lb.def;
   $("q-input").value = ""; $("q-input").disabled = false;
@@ -782,8 +782,15 @@ function bind(){
       return;
     }
     if(e.key==="Enter" && ui.checked && !e.target.matches("button, input, textarea")){ e.preventDefault(); next(); return; }
-    if(!ui.checked && (e.key==="l"||e.key==="L") && !$("btn-later").hidden){ e.preventDefault(); later(); return; }
-    if(!ui.checked && /^[1-9]$/.test(e.key)){ const cs=classes(); const k=parseInt(e.key,10)-1; if(cs[k]){ e.preventDefault(); pickClass(cs[k]); } }
+    // Nooit een letter als globale sneltoets: het invoerveld heeft vrijwel
+    // altijd focus, dus "leraar" zou bij de eerste l de vraag overslaan.
+    // Escape kan niet botsen met typen.
+    if(!ui.checked && e.key==="Escape" && !$("btn-later").hidden){ e.preventDefault(); later(); return; }
+    // Cijfers alleen als kiezer zolang het veld leeg is, anders kan ze geen
+    // getal in een definitie typen.
+    if(!ui.checked && /^[1-9]$/.test(e.key) && !$("q-input").value){
+      const cs=classes(); const k=parseInt(e.key,10)-1; if(cs[k]){ e.preventDefault(); pickClass(cs[k]); }
+    }
   });
 }
 
