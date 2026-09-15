@@ -24,9 +24,25 @@
   const CATS = (root.CAT_CATALOG && root.CAT_CATALOG.length) ? root.CAT_CATALOG : [
     { src: "cats/gewoon-de-spionnen.jpg", naam: "De Spionnen", rang: "gewoon" }
   ];
-  // Kans per zeldzaamheid. Tellen niet op tot 100 als een rang leeg is;
-  // dan valt de keuze vanzelf terug op een rang die wel bestaat.
-  const KANS = { gewoon: 70, bijzonder: 25, zeldzaam: 5 };
+  // Kans per zeldzaamheid, afhankelijk van hoeveel woorden er in de ronde
+  // zaten. Zonder dat verband is een korte ronde de goedkoopste manier om
+  // katten te verzamelen, en dan doet ze alleen nog rondes van tien.
+  // Een vlekkeloze ronde van 70 woorden hoort echt iets anders waard te zijn.
+  const KANS_KLEIN = { gewoon: 88, bijzonder: 11, zeldzaam: 1 };   // 10 woorden
+  const KANS_GROOT = { gewoon: 25, bijzonder: 45, zeldzaam: 30 };  // 50+ woorden
+  function kansen(woorden) {
+    const n = Number(woorden) || 10;
+    const f = Math.max(0, Math.min(1, (n - 10) / 40));   // 0 bij 10, 1 vanaf 50
+    const uit = {};
+    for (const rang in KANS_KLEIN) uit[rang] = KANS_KLEIN[rang] + f * (KANS_GROOT[rang] - KANS_KLEIN[rang]);
+    return uit;
+  }
+  // Voor de uitleg in de app: kans op iets beters dan gewoon.
+  function kansOpBijzonder(woorden) {
+    const k = kansen(woorden);
+    const totaal = k.gewoon + k.bijzonder + k.zeldzaam;
+    return Math.round(100 * (k.bijzonder + k.zeldzaam) / totaal);
+  }
 
   // Onderschriften bij de foto. Willekeurig gekozen, los van de kat.
   const CAPTIONS = ["Foutloos!", "Nul fouten", "Kat is trots", "Hoedje af", "Helemaal goed"];
@@ -50,7 +66,8 @@
   }
   // Eerst een rang loten, dan een kat binnen die rang. Zo bepaalt de
   // zeldzaamheid de kans, niet het aantal plaatjes per rang.
-  function loot() {
+  function loot(woorden) {
+    const KANS = kansen(woorden);
     const beschikbaar = Object.keys(KANS).filter(r => CATS.some(k => k.rang === r));
     const totaal = beschikbaar.reduce((s, r) => s + KANS[r], 0);
     let n = Math.random() * totaal;
@@ -170,9 +187,9 @@
   // Vaste beeldverhouding met object-fit, zodat elke foto er even
   // netjes uitziet ongeacht het bronformaat.
   // Laadt het plaatje niet, dan verschijnt er niets en breekt er niets.
-  function cat() {
+  function cat(woorden) {
     if (!CATS.length) return null;
-    const kat = loot();
+    const kat = loot(woorden);
     const nieuw = verdien(kat.src);
     const img = new Image();
     img.src = kat.src;
@@ -204,10 +221,10 @@
   function celebrate(opts) {
     opts = opts || {};
     if (!reduced()) confetti(opts.duration);
-    cat();
+    cat(opts.woorden);
     return pick(PRAISE);
   }
 
   root.Celebrate = { celebrate, confetti, cat, collectie, setLearner, loot,
-                     CATS, KANS, CAPTIONS, PRAISE };
+                     kansen, kansOpBijzonder, CATS, CAPTIONS, PRAISE };
 })(typeof window === "object" ? window : globalThis);

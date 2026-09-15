@@ -485,6 +485,9 @@
   }
   .deadline-chip.is-dichtbij .icon { color: var(--tertiary); }
   #deadline-input { width: auto; max-width: 220px; }
+  /* de beloningsprikkel bij de rondegrootte, rustig maar zichtbaar */
+  .size-kans { display: inline-flex; align-items: center; gap: 5px; color: var(--tertiary); }
+  .size-kans .icon { flex: none; }
 
   .due-chip {
     display: inline-flex; align-items: center; gap: 6px;

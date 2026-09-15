@@ -516,9 +516,14 @@ function renderHome(){
   const c = counts(progress, list, allowed);
   $("st-new").textContent=c.fresh; $("st-due").textContent=c.due; $("st-known").textContent=c.known;
   const pick = E.selectSession(list, progress, sizeChoice, now, {allowed});
-  $("size-hint").textContent = pick.kind==="extra"
+  const basis = pick.kind==="extra"
     ? "Niets aan de beurt. Deze ronde oefent de "+pick.indices.length+" zwakste woorden extra."
     : "Deze ronde: "+pick.indices.length+" woorden ("+Math.min(pick.dueCount, pick.indices.length)+" herhalen, "+(pick.indices.length-Math.min(pick.dueCount,pick.indices.length))+" nieuw).";
+  // De prikkel expliciet maken, anders kiest ze altijd de kortste ronde.
+  const kans = window.Celebrate ? Celebrate.kansOpBijzonder(pick.indices.length) : null;
+  $("size-hint").innerHTML = esc(basis) +
+    (kans !== null ? ' <span class="size-kans">' + UI.Icon("trophy") +
+      ' Foutloos? Dan <b>' + kans + '%</b> kans op een bijzondere of zeldzame kat.</span>' : "");
   const dl = deadlineVan(list), dagen = dagenTot(dl);
   $("deadline-input").value = dl ? new Date(dl).toISOString().slice(0,10) : "";
   // snelkeuze voor de drie gevallen die bijna altijd gelden, datumveld
@@ -855,7 +860,7 @@ function finish(stopped){
   $("sum-first").innerHTML = perfect ? UI.Icon("trophy") + "<span>" + first + "</span>" : String(first);
   $("sum-perfect").hidden = !perfect;
   if(perfect && window.Celebrate){
-    $("sum-perfect").innerHTML = UI.Icon("sparkle") + "<span>" + esc(Celebrate.celebrate()) + "</span>";
+    $("sum-perfect").innerHTML = UI.Icon("sparkle") + "<span>" + esc(Celebrate.celebrate({ woorden: ids.length })) + "</span>";
   }
   $("sum-hard-wrap").hidden = !hard.length; $("sum-hard").textContent = hard.join(", ");
   const now = Date.now();
