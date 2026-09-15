@@ -24,7 +24,7 @@
     </div>
     <div><span class="eyebrow">Kies een les</span></div>
     <div class="lessons" id="lessons"></div>
-    <p class="foot"><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button><button class="link" id="btn-import">Lijst toevoegen</button></p>
+    <p class="foot"><button class="link" data-icon="trophy" id="btn-cats">Mijn katten</button><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button><button class="link" id="btn-import">Lijst toevoegen</button></p>
   </div>
 </section>
 
@@ -52,6 +52,7 @@
         </div>
         <p class="hint" id="size-hint"></p>
       </div>
+      <div class="notice" id="break-notice" hidden><span id="break-text"></span></div>
       <button class="btn primary big" data-icon="play" id="btn-start">Start overhoring</button>
       <div class="row"><button class="btn" data-icon="book" id="btn-study">Eerst lezen</button><button class="btn" data-icon="chart" id="btn-progress">Voortgang</button></div>
     </div>
@@ -133,6 +134,15 @@
 </section>
 
 <!-- RAPPORT -->
+<section id="scr-cats" class="screen" hidden>
+  <div class="app">
+    <div class="topbar"><button class="link" data-icon="back" id="btn-cats-back">Terug</button><span class="muted" id="cats-count"></span></div>
+    <header class="brand"><h1>Mijn katten</h1></header>
+    <p class="hint" id="cats-intro"></p>
+    <div class="cat-grid" id="cats-grid"></div>
+  </div>
+</section>
+
 <section id="scr-report" class="screen" hidden>
   <div class="app">
     <div class="topbar"><button class="link" data-icon="back" id="btn-report-back">Terug</button><button class="link" id="btn-report-copy">Kopieer als tekst</button></div>
@@ -218,6 +228,7 @@
 </div>
 
 <script src="ui.js"></script>
+<script src="cats.js"></script>
 <script src="celebrate.js"></script>
 <script src="lists.js"></script>
 <script src="engine.js"></script>
@@ -228,7 +239,26 @@ const E = window.Engine;
 const $ = id => document.getElementById(id);
 const MIN = 60000, DAY = 86400000;
 const GAP = 3;              // minimaal aantal andere woorden tussen twee keer hetzelfde woord
-const PAUSE_AFTER = 15*MIN; // pauzehint
+const PAUSE_AFTER = 15*MIN;   // zachte hint tijdens een ronde
+// Aandacht zakt na ongeveer 25 minuten. Een blok van die lengte vraagt een
+// micropauze van een minuut of vijf; pas na een uur totaal is een langere
+// herstelpauze nodig. De pauze blijft dus kort: bij een toets morgen is
+// doorleren vandaag juist zinvol, de beperking is aandacht en niet spreiding.
+const BLOK_MAX = 25*MIN, PAUZE_KORT = 5*MIN, PAUZE_LANG = 15*MIN, DAG_LANG_NA = 60*MIN;
+const TKEY = () => "overhoor:tijd:"+slug(learner)+":"+new Date().toISOString().slice(0,10);
+function tijdVandaag(){ return load(TKEY(), {blok:0, dag:0, pauzeTot:0}); }
+function bewaarTijd(t){ save(TKEY(), t); }
+// Een afgeronde ronde telt mee voor het blok en voor de dag.
+function boekTijd(ms){
+  const t = tijdVandaag();
+  t.blok += ms; t.dag += ms;
+  if(t.blok >= BLOK_MAX){
+    t.pauzeTot = Date.now() + (t.dag >= DAG_LANG_NA ? PAUZE_LANG : PAUZE_KORT);
+    t.blok = 0;
+  }
+  bewaarTijd(t);
+}
+function pauzeRest(){ const t = tijdVandaag(); return Math.max(0, (t.pauzeTot||0) - Date.now()); }
 
 // ---------- opslag ----------
 function load(key, fallback){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; } }
@@ -350,6 +380,68 @@ function fmtRel(ms){
 }
 
 // ---------- schermen ----------
+// Verdiende katten in kleur, de rest als silhouet. Zeldzaamheid staat
+// erbij, zodat duidelijk is waarom sommige zelden vallen.
+function renderCats(){
+  Celebrate.setLearner(learner);
+  const have = Celebrate.collectie();
+  // Vaste volgorde op zeldzaamheid, zodat een kaart niet verspringt zodra
+  // ze hem verdient. Leest als een verzamelalbum: het zeldzame achteraan.
+  const RANGORDE = { gewoon: 0, bijzonder: 1, zeldzaam: 2 };
+  const alle = Celebrate.CATS.slice().sort((a,b)=>
+    (RANGORDE[a.rang]-RANGORDE[b.rang]) || a.naam.localeCompare(b.naam));
+  const aantal = alle.filter(k=>have[k.src]).length;
+  $("cats-count").textContent = aantal+" van "+alle.length;
+  $("cats-intro").textContent = aantal===alle.length
+    ? "Je hebt ze allemaal. Blijf oefenen, dan komen ze vaker langs."
+    : "Elke ronde die je in een keer helemaal goed hebt, levert een kat op.";
+  $("cats-grid").innerHTML = alle.map(function(k){
+    const h = have[k.src];
+    const rangLabel = k.rang.charAt(0).toUpperCase()+k.rang.slice(1);
+    return '<figure class="cat-card'+(h?" is-verdiend":"")+'" data-rang="'+esc(k.rang)+'">'
+      + (h ? '<img src="'+esc(k.src)+'" alt="">' : '<div class="cat-locked">'+UI.Icon("help")+'</div>')
+      + '<figcaption>'
+        + '<b>'+(h?esc(k.naam):"Nog niet gevonden")+'</b>'
+        + '<span class="cat-rang">'+esc(rangLabel)+'</span>'
+        + (h ? '<span class="cat-meta">'+h.aantal+(h.aantal===1?" keer":" keer")+' · sinds '+fmtDate(h.eerst)+'</span>' : '')
+      + '</figcaption></figure>';
+  }).join("");
+}
+
+// Tijdens een afgedwongen pauze kan er geen nieuwe ronde starten. De
+// lopende ronde wordt nooit onderbroken: pauzeren gebeurt tussen rondes.
+let pauzeTimer = null;
+function bewaakPauze(){
+  clearInterval(pauzeTimer);
+  const teken = () => {
+    const rest = pauzeRest();
+    const t = tijdVandaag();
+    const blok = $("break-notice"), knop = $("btn-start");
+    if(rest > 0){
+      blok.hidden = false;
+      $("break-text").innerHTML = "<b>Even pauze.</b> Je bent " + Math.round(BLOK_MAX/MIN) +
+        " minuten bezig geweest. Heel kort rusten laat je hersenen het net geleerde vastzetten. " +
+        "Nog <b>" + fmtTime(rest) + "</b>. Loop even weg van het scherm.";
+      knop.disabled = true;
+      $("btn-study-start").disabled = true;
+    } else {
+      knop.disabled = false;
+      $("btn-study-start").disabled = false;
+      if(t.dag >= DAG_LANG_NA){
+        blok.hidden = false;
+        $("break-text").innerHTML = "<b>Je hebt vandaag al " + Math.round(t.dag/MIN) +
+          " minuten geoefend.</b> Nog een ronde mag. Vanaf nu worden de pauzes wat langer, " +
+          "want na een uur levert doorgaan zonder echte rust steeds minder op.";
+      } else {
+        blok.hidden = true;
+      }
+      clearInterval(pauzeTimer);
+    }
+  };
+  teken();
+  if(pauzeRest() > 0) pauzeTimer = setInterval(teken, 1000);
+}
+
 function show(id){ document.querySelectorAll(".screen").forEach(s=>s.hidden = s.id!==id); window.scrollTo(0,0); }
 
 function renderLessons(){
@@ -378,6 +470,7 @@ function renderHome(){
   $("size-hint").textContent = pick.kind==="extra"
     ? "Niets aan de beurt. Deze ronde oefent de "+pick.indices.length+" zwakste woorden extra."
     : "Deze ronde: "+pick.indices.length+" woorden ("+Math.min(pick.dueCount, pick.indices.length)+" herhalen, "+(pick.indices.length-Math.min(pick.dueCount,pick.indices.length))+" nieuw).";
+  bewaakPauze();
   const s = load(SKEY(list.id), null);
   $("resume").hidden = !(s && s.pos < s.queue.length);
   $("btn-delete-list").hidden = !String(list.id).startsWith("custom-");
@@ -682,6 +775,7 @@ function finish(stopped){
   const first = ids.filter(i=>session.firstTry[i]).length;
   const hard = ids.filter(i=>session.attempts[i]>=2).map(i=>list.items[i].word);
   progress.sessions.push({ date: Date.now(), n: ids.length, first, ms, stopped: !!stopped });
+  boekTijd(ms);
   saveProgress(); save(SKEY(list.id), null); finalized=false;
   // Vlekkeloos: alles in een keer goed, en niet halverwege gestopt.
   const perfect = !stopped && ids.length > 0 && first === ids.length && !session.skipped;
@@ -752,6 +846,8 @@ function bind(){
   $("btn-progress-back").addEventListener("click", ()=>{ renderHome(); show("scr-home"); });
   $("btn-reset").addEventListener("click", ()=>{ if(confirm("Alle voortgang van '"+list.title+"' wissen?")){ progress={items:{},sessions:[]}; saveProgress(); save(SKEY(list.id),null); renderProgress(); } });
   $("btn-info").addEventListener("click", ()=>show("scr-info"));
+  $("btn-cats").addEventListener("click", ()=>{ show("scr-cats"); renderCats(); });
+  $("btn-cats-back").addEventListener("click", ()=>{ show("scr-lessons"); renderLessons(); });
   $("btn-report").addEventListener("click", ()=>{ show("scr-report"); renderReport(); });
   $("btn-report-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
   $("btn-report-copy").addEventListener("click", copyReport);

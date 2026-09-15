@@ -13,17 +13,51 @@
 (function (root) {
   "use strict";
 
-  // Vrijstaande katten. Zet je bestanden in app/cats/ en vul deze lijst aan.
-  const CATS = [
-    "cats/kat-01.jpg",
-    "cats/kat-03.jpg",
-    "cats/kat-04.jpg",
-    "cats/kat-05.jpg",
-    "cats/kat-06.jpg"
+  // De kattencatalogus. Een kat erbij? Zet het bestand in app/cats/ en
+  // voeg hier een regel toe met een naam en een zeldzaamheid.
+  //   gewoon    valt vaak
+  //   bijzonder valt af en toe
+  //   zeldzaam  valt bijna nooit, met gouden randje in de collectie
+  // De catalogus komt uit cats.js, dat door maak-catalogus.sh uit de map
+  // app/cats/ wordt gebouwd. Ontbreekt dat bestand, dan valt de app terug
+  // op deze minimale lijst zodat er nooit niets is.
+  const CATS = (root.CAT_CATALOG && root.CAT_CATALOG.length) ? root.CAT_CATALOG : [
+    { src: "cats/gewoon-de-spionnen.jpg", naam: "De Spionnen", rang: "gewoon" }
   ];
+  // Kans per zeldzaamheid. Tellen niet op tot 100 als een rang leeg is;
+  // dan valt de keuze vanzelf terug op een rang die wel bestaat.
+  const KANS = { gewoon: 70, bijzonder: 25, zeldzaam: 5 };
 
   // Onderschriften bij de foto. Willekeurig gekozen, los van de kat.
   const CAPTIONS = ["Foutloos!", "Nul fouten", "Kat is trots", "Hoedje af", "Helemaal goed"];
+
+  // --- verzameling -------------------------------------------------
+  // Per oefenaar bijhouden welke katten al gevallen zijn en hoe vaak.
+  let wieVerzamelt = "pia";
+  function setLearner(naam) { wieVerzamelt = String(naam || "pia").toLowerCase().replace(/[^a-z0-9]+/g, "-"); }
+  const KKEY = () => "overhoor:cats:" + wieVerzamelt;
+  function collectie() {
+    try { return JSON.parse(localStorage.getItem(KKEY()) || "{}"); } catch (e) { return {}; }
+  }
+  function bewaar(c) { try { localStorage.setItem(KKEY(), JSON.stringify(c)); } catch (e) {} }
+  function verdien(src) {
+    const c = collectie();
+    const nu = Date.now();
+    const nieuw = !c[src];
+    c[src] = { aantal: (c[src] ? c[src].aantal : 0) + 1, eerst: nieuw ? nu : c[src].eerst, laatst: nu };
+    bewaar(c);
+    return nieuw;
+  }
+  // Eerst een rang loten, dan een kat binnen die rang. Zo bepaalt de
+  // zeldzaamheid de kans, niet het aantal plaatjes per rang.
+  function loot() {
+    const beschikbaar = Object.keys(KANS).filter(r => CATS.some(k => k.rang === r));
+    const totaal = beschikbaar.reduce((s, r) => s + KANS[r], 0);
+    let n = Math.random() * totaal;
+    let rang = beschikbaar[beschikbaar.length - 1];
+    for (const r of beschikbaar) { if (n < KANS[r]) { rang = r; break; } n -= KANS[r]; }
+    return pick(CATS.filter(k => k.rang === rang));
+  }
 
   const PRAISE = [
     "Alles goed. Alles.",
@@ -137,10 +171,11 @@
   // netjes uitziet ongeacht het bronformaat.
   // Laadt het plaatje niet, dan verschijnt er niets en breekt er niets.
   function cat() {
-    if (!CATS.length) return;
-    const src = pick(CATS);
+    if (!CATS.length) return null;
+    const kat = loot();
+    const nieuw = verdien(kat.src);
     const img = new Image();
-    img.src = src;
+    img.src = kat.src;
     img.onerror = function () { /* stil overslaan */ };
     img.onload = function () {
       const fig = document.createElement("figure");
@@ -150,8 +185,10 @@
       fig.setAttribute("aria-hidden", "true");
       img.alt = "";
       fig.appendChild(img);
+      fig.dataset.rang = kat.rang;
       const cap = document.createElement("figcaption");
-      cap.textContent = pick(CAPTIONS);
+      cap.innerHTML = '<b>' + kat.naam + '</b>' +
+        '<span class="fx-cat-sub">' + (nieuw ? "Nieuwe kat!" : pick(CAPTIONS)) + '</span>';
       fig.appendChild(cap);
       document.body.appendChild(fig);
       requestAnimationFrame(() => fig.classList.add("is-in"));
@@ -171,5 +208,6 @@
     return pick(PRAISE);
   }
 
-  root.Celebrate = { celebrate, confetti, cat, CATS, CAPTIONS, PRAISE };
+  root.Celebrate = { celebrate, confetti, cat, collectie, setLearner, loot,
+                     CATS, KANS, CAPTIONS, PRAISE };
 })(typeof window === "object" ? window : globalThis);
