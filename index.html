@@ -89,7 +89,7 @@
         <ul class="fb-list">
           <li><span class="mark" id="fb-word-mark"></span><div><div class="k" id="fb-word-k">Woord</div><div id="fb-word"></div><div class="yours" id="fb-word-yours"></div></div></li>
           <li id="fb-cls-row"><span class="mark" id="fb-cls-mark"></span><div><div class="k">Woordsoort</div><div id="fb-cls"></div></div></li>
-          <li><span class="mark" id="fb-def-mark"></span><div><div class="k" id="fb-def-k">Definitie</div><div id="fb-def"></div><div class="yours" id="fb-def-yours"></div></div></li>
+          <li><span class="mark" id="fb-def-mark"></span><div><div class="k" id="fb-def-k">Definitie</div><div id="fb-def"></div><div class="yours" id="fb-def-alts"></div><div class="yours" id="fb-def-yours"></div></div></li>
         </ul>
         <div class="notice assess" id="fb-assess" hidden>
           <p><b>Twijfelgeval.</b> Komt jouw omschrijving hierop neer?</p>
@@ -98,8 +98,8 @@
         </div>
         <button class="link" id="btn-override" hidden>Toch goed rekenen</button>
       </div>
+      <p class="hint" id="q-keys-hint"></p>
     </div>
-    <p class="hint" id="q-keys-hint">Enter = controleren en volgende. Toetsen 1 tot 4 = woordsoort. L = doe later.</p>
   </div>
 </section>
 
@@ -514,7 +514,11 @@ function check(){
   $("q-classes").querySelectorAll(".choice").forEach(b=>{ b.disabled=true; b.classList.remove("on"); if(b.dataset.cls===item.cls) b.classList.add("right"); else if(b.dataset.cls===ui.pick) b.classList.add("wrong"); });
 
   // feedbackregels
-  $("fb-word").textContent = item.word; $("fb-cls").innerHTML = hasCls ? chip(item.cls) : ""; $("fb-def").textContent = item.def;
+  const alts = isTranslate() ? String(item.def).split(/\s*[\/,;]\s*|\s+of\s+/).map(x=>x.trim()).filter(Boolean) : [];
+  $("fb-word").textContent = item.word; $("fb-cls").innerHTML = hasCls ? chip(item.cls) : "";
+  $("fb-def").textContent = alts.length ? alts[0] : item.def;
+  // de overige goede antwoorden als stille voetnoot, niet als hoofdantwoord
+  $("fb-def-alts").textContent = alts.length > 1 ? "ook goed: "+alts.slice(1).join(", ") : "";
   mark("fb-cls-mark", ui.clsOk?"ok":"bad");
   $("fb-word-yours").textContent = ""; $("fb-def-yours").textContent = "";
   ui.typed = text; ui.official = officialAnswer(item, wd);
