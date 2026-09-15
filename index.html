@@ -82,6 +82,7 @@
       <p class="hint" id="q-hint" hidden></p>
       <button class="btn primary big" id="btn-check">Controleer</button>
       <button class="btn primary big" id="btn-next" hidden>Volgende</button>
+      <button class="link" data-icon="clock" id="btn-later">Weet ik even niet, doe later</button>
       <div id="feedback" hidden>
         <div class="verdict" id="fb-verdict"></div>
         <p id="fb-official" hidden></p>
@@ -98,7 +99,7 @@
         <button class="link" id="btn-override" hidden>Toch goed rekenen</button>
       </div>
     </div>
-    <p class="hint" id="q-keys-hint">Enter = controleren en volgende. Toetsen 1 tot 4 = woordsoort.</p>
+    <p class="hint" id="q-keys-hint">Enter = controleren en volgende. Toetsen 1 tot 4 = woordsoort. L = doe later.</p>
   </div>
 </section>
 
@@ -438,7 +439,7 @@ async function copyReport(){
 function startSession(){
   const pick = E.selectSession(list, progress, sizeChoice, Date.now(), {allowed: null});
   session = { listId:list.id, queue: pick.indices.map(i=>({i, dir:null})), pos:0, total: pick.indices.length,
-    attempts:{}, firstTry:{}, done:0, streak:0, startedAt: Date.now(), elapsedBefore:0, kind: pick.kind };
+    attempts:{}, firstTry:{}, done:0, streak:0, skipped:0, startedAt: Date.now(), elapsedBefore:0, kind: pick.kind };
   save(SKEY(list.id), session);
   ui.pauseShown = false;
   show("scr-quiz"); renderQuestion(); startTimer();
@@ -475,7 +476,10 @@ function renderQuestion(){
   $("q-prompt").className = "prompt"+(wd||tr?"":" def");
   $("q-input-label").textContent = wd ? (tr ? lb.def : lb.def+" (in je eigen woorden)") : lb.word;
   $("q-class-field").hidden = !cs.length; $("fb-cls-row").hidden = !cs.length;
-  $("q-keys-hint").textContent = cs.length ? "Enter = controleren en volgende. Toetsen 1 tot 4 = woordsoort." : "Enter = controleren en volgende.";
+  const keyHints = ["Enter = controleren en volgende"];
+  if(cs.length) keyHints.push("Toetsen 1 tot 4 = woordsoort");
+  if(canSkip()) keyHints.push("L = doe later");
+  $("q-keys-hint").textContent = keyHints.join(". ")+".";
   $("fb-word-k").textContent = lb.word; $("fb-def-k").textContent = lb.def;
   $("q-input").value = ""; $("q-input").disabled = false;
   $("q-count").textContent = session.done+" van "+session.total+" klaar";
@@ -485,6 +489,7 @@ function renderQuestion(){
   $("q-classes").innerHTML = UI.Choices(classes());
   $("q-classes").querySelectorAll(".choice").forEach(b=>b.addEventListener("click", ()=>pickClass(b.dataset.cls)));
   $("q-hint").hidden = true; $("feedback").hidden = true; $("btn-check").hidden = false;
+  $("btn-later").hidden = !canSkip();
   $("fb-assess").hidden = true; $("btn-override").hidden = true; $("btn-next").hidden = true;
   $("feedback").classList.remove("only-verdict"); $("fb-official").hidden = true;
   setTimeout(()=>$("q-input").focus(), 50);
@@ -504,7 +509,7 @@ function check(){
   if(!ui.pick && !text && !ui.firstBlank){
     ui.firstBlank = true; $("q-hint").textContent = (hasCls?"Kies een woordsoort en vul iets in.":"Vul iets in.")+" Weet je het niet? Druk dan nog een keer op Controleer."; $("q-hint").hidden=false; return;
   }
-  ui.checked = true; $("q-hint").hidden = true; $("btn-check").hidden = true; $("q-input").disabled = true;
+  ui.checked = true; $("q-hint").hidden = true; $("btn-check").hidden = true; $("btn-later").hidden = true; $("q-input").disabled = true;
   ui.clsOk = hasCls ? ui.pick === item.cls : true;
   $("q-classes").querySelectorAll(".choice").forEach(b=>{ b.disabled=true; b.classList.remove("on"); if(b.dataset.cls===item.cls) b.classList.add("right"); else if(b.dataset.cls===ui.pick) b.classList.add("wrong"); });
 
@@ -602,6 +607,26 @@ function override(){
 const PRAISE = ["Goed zo!", "Yes!", "Top!", "Precies!", "Helemaal goed!", "Lekker bezig!"];
 function pickPraise(){ return PRAISE[Math.floor(Math.random()*PRAISE.length)]; }
 
+// Overslaan is geen fout. Er wordt niets geregistreerd, de Leitner-box
+// blijft staan en het woord komt verderop in deze ronde gewoon terug.
+// Wel telt het mee voor 'vlekkeloos': wie overslaat had het niet in een keer.
+function later(){
+  if(ui.checked) return;
+  const entry = current();
+  const at = Math.min(session.queue.length, session.pos+1+GAP);
+  session.queue.splice(at, 0, {i:entry.i, dir:entry.dir});
+  session.skipped = (session.skipped||0)+1;
+  session.pos++;
+  persistSession(); renderQuestion();
+}
+// Alleen zinvol als er nog een ander woord op de rij staat, anders
+// zou hetzelfde woord meteen opnieuw verschijnen.
+function canSkip(){
+  const entry = current(); if(!entry) return false;
+  for(let k=session.pos+1;k<session.queue.length;k++) if(session.queue[k].i!==entry.i) return true;
+  return false;
+}
+
 function next(){
   if(!ui.checked || !$("fb-assess").hidden) return;
   finalized = false;
@@ -619,7 +644,7 @@ function finish(stopped){
   progress.sessions.push({ date: Date.now(), n: ids.length, first, ms, stopped: !!stopped });
   saveProgress(); save(SKEY(list.id), null); finalized=false;
   // Vlekkeloos: alles in een keer goed, en niet halverwege gestopt.
-  const perfect = !stopped && ids.length > 0 && first === ids.length;
+  const perfect = !stopped && ids.length > 0 && first === ids.length && !session.skipped;
   $("sum-title").textContent = stopped ? "Ronde gestopt" : (perfect ? "Vlekkeloos" : "Ronde klaar");
   $("sum-n").textContent = ids.length; $("sum-time").textContent = fmtTime(ms);
   $("sum-first").innerHTML = perfect ? UI.Icon("trophy") + "<span>" + first + "</span>" : String(first);
@@ -707,6 +732,7 @@ function bind(){
   $("btn-quit").addEventListener("click", ()=>{ if(ui.checked && !finalized && !$("fb-assess").hidden){ ui.verdictDef=false; finalize(); } finish(true); });
   $("btn-sum-home").addEventListener("click", ()=>{ renderHome(); show("scr-home"); });
   $("btn-sum-lessons").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
+  $("btn-later").addEventListener("click", later);
   $("q-input").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); ui.checked ? next() : check(); } });
   document.addEventListener("keydown", e=>{
     if($("scr-quiz").hidden) return;
@@ -716,6 +742,7 @@ function bind(){
       return;
     }
     if(e.key==="Enter" && ui.checked && !e.target.matches("button, input, textarea")){ e.preventDefault(); next(); return; }
+    if(!ui.checked && (e.key==="l"||e.key==="L") && !$("btn-later").hidden){ e.preventDefault(); later(); return; }
     if(!ui.checked && /^[1-9]$/.test(e.key)){ const cs=classes(); const k=parseInt(e.key,10)-1; if(cs[k]){ e.preventDefault(); pickClass(cs[k]); } }
   });
 }
