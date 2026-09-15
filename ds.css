@@ -366,28 +366,54 @@
   .brand { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
   .brand .tag { color: var(--muted); }
 
-  /* --- lesson: de kaart op het lessenoverzicht --- */
+  /* --- lesson: de kaart op het lessenoverzicht ---
+     Twee kolommen: tekst links, voortgangsring rechts. De ring toont
+     hoeveel er al geoefend is, niet alleen wat er "in zit", want dat
+     laatste beweegt pas na dagen en zou dus altijd nul lijken. --- */
   .lessons { display: flex; flex-direction: column; gap: var(--s3); }
   .lesson {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--s4);
-    align-items: center; text-align: left; font: inherit; color: var(--ink);
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--s4); row-gap: var(--s3); align-items: center;
+    text-align: left; font: inherit; color: var(--ink);
     background: var(--surface); border: 1px solid var(--line-strong);
-    border-radius: var(--shape-xl); padding: var(--s4) 18px; cursor: pointer; box-shadow: var(--shadow);
+    border-radius: var(--shape-xl); padding: 18px 20px; cursor: pointer; box-shadow: var(--shadow);
   }
+  .lesson-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .lesson .subj { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--accent); }
   .lesson h2 { font-size: var(--t-title); margin-top: 2px; }
-  /* Let op: .cnt heeft een expliciete kolom nodig. Zonder grid-column plaatst
-     het grid-algoritme een item met alleen grid-row in kolom 1, links van de titel. */
-  .lesson .cnt {
-    grid-column: 2; grid-row: 1 / 4; align-self: center;
-    font-family: var(--display); font-size: 2.25rem; line-height: 1;
-    color: var(--ink); text-align: right; font-variant-numeric: tabular-nums;
+  /* een regel, geen onvoorspelbare afbreking die de kaarthoogte laat springen */
+  .lesson-meta {
+    font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .lesson .cnt small {
-    display: block; font-family: var(--body); font-size: var(--t-label-sm); font-weight: 700;
-    letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap;
+  .lesson-stats {
+    margin-top: 6px; font-size: var(--t-label); font-weight: 700; color: var(--muted);
+    font-variant-numeric: tabular-nums;
   }
-  .lesson .meter { grid-column: 1 / 3; margin-top: 10px; }
+
+  .lesson-ring { display: grid; justify-items: center; gap: 2px; }
+  .ring { width: 64px; height: 64px; display: block; }
+  .ring-track { fill: none; stroke: var(--track); stroke-width: 8; }
+  .ring-arc { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray var(--m3-spatial); }
+  .ring-arc.learning { stroke: var(--accent); }
+  .ring-arc.known { stroke: var(--ok); }
+  .ring-pct {
+    fill: var(--ink); font-family: var(--display); font-weight: 600; font-size: 19px;
+    text-anchor: middle; dominant-baseline: central;
+  }
+  .ring-sign { font-size: 11px; fill: var(--muted); }
+  .ring-cap {
+    font-size: var(--t-label-sm); font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--muted); white-space: nowrap;
+  }
+
+  /* de enige echte oproep tot actie op de kaart, dus als los label */
+  .due-chip {
+    grid-column: 1 / -1; justify-self: start;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent-soft); color: var(--accent);
+    font-size: var(--t-label); font-weight: 700;
+    padding: 5px 12px; border-radius: var(--shape-full);
+  }
 
   /* --- feedbacklijst --- */
   .fb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -520,7 +546,7 @@
     body > .app { max-width: none; }
     #scr-lessons > .app, #scr-report > .app { max-width: 960px; margin-inline: auto; }
     #scr-lessons .lessons { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s4); }
-    #scr-lessons .lesson { grid-template-rows: auto auto 1fr auto; min-height: 150px; padding: 20px; }
+    #scr-lessons .lesson { min-height: 150px; padding: 20px; align-content: center; }
     #report-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: var(--s4); align-items: start; max-width: none; }
   }
   /* Alleen bij echt weinig hoogte de feedback naast de vraag zetten, zodat

@@ -109,6 +109,35 @@
     return '<span class="' + cls("meter", o.size || "sm", o.className) + '"' + attr("id", o.id) + '>' + parts + '</span>';
   }
 
+  // --- Ring: voortgang als donut ------------------------------
+  // Twee bogen over elkaar: eerst alles wat geoefend is, daarbovenop
+  // het deel dat er echt in zit. In het midden het percentage dat al
+  // een keer geoefend is, want dat beweegt na elke ronde. "Zit erin"
+  // alleen zou dagenlang op nul blijven staan.
+  function Ring(o) {
+    o = o || {};
+    const total = Math.max(1, Number(o.total) || 1);
+    const known = Number(o.known) || 0;
+    const learning = Number(o.learning) || 0;
+    const r = 26, C = 2 * Math.PI * r;
+    const geoefend = Math.min(total, known + learning);
+    const boog = v => (Math.max(0, Math.min(total, v)) / total * C).toFixed(2) + " " + C.toFixed(2);
+    // Een boog van lengte nul tekent met stroke-linecap:round alsnog een
+    // rond puntje. Bij nul laten we hem dus helemaal weg.
+    const arc = (klasse, v) => v > 0
+      ? '<circle class="ring-arc ' + klasse + '" cx="32" cy="32" r="' + r + '" stroke-dasharray="' + boog(v) + '"/>'
+      : "";
+    const pct = Math.round(100 * geoefend / total);
+    return '<svg class="ring" viewBox="0 0 64 64" aria-hidden="true" focusable="false">' +
+      '<g transform="rotate(-90 32 32)">' +
+        '<circle class="ring-track" cx="32" cy="32" r="' + r + '"/>' +
+        arc("learning", geoefend) +
+        arc("known", known) +
+      '</g>' +
+      '<text class="ring-pct" x="32" y="32">' + pct + '<tspan class="ring-sign">%</tspan></text>' +
+      '</svg>';
+  }
+
   // --- Chip: woordsoort ---------------------------------------
   function Chip(kind) {
     return kind ? '<span class="chip ' + esc(kind) + '">' + esc(kind) + '</span>' : "";
@@ -156,15 +185,26 @@
   // grid-kolom nodig; die zit in ds.css op .lesson .cnt.
   function LessonCard(o) {
     o = o || {};
+    const known = Number(o.known) || 0, learning = Number(o.learning) || 0;
+    const nieuw = Math.max(0, (Number(o.total) || 0) - known - learning);
+    // Alleen tonen wat er is, zodat er geen rij nullen op de kaart staat.
+    // Hooguit twee segmenten: anders breekt de regel op een telefoon en
+    // springt de kaarthoogte. "Nieuw" is af te leiden en valt als eerste af.
+    const delen = [];
+    if (known) delen.push(known + " zit erin");
+    if (learning) delen.push(learning + " aan het leren");
+    if (!delen.length && nieuw) delen.push(nieuw + " nieuw");
     return '<button type="button" class="lesson"' + attr("data-id", o.id) + '>' +
-      '<span class="subj">' + esc(o.subject || "Woordenlijst") + '</span>' +
-      '<span class="cnt">' + esc(o.known) + '<small>van ' + esc(o.total) + '</small></span>' +
-      '<h2>' + esc(o.title) + '</h2>' +
-      '<span class="muted">' + esc(o.meta) + (o.due ? ' · <b>' + esc(o.due) + ' aan de beurt</b>' : "") + '</span>' +
-      Meter({ size: "sm", total: o.total, parts: [
-        { kind: "a", value: o.known },
-        { kind: "b", value: o.learning }
-      ]}) +
+      '<div class="lesson-body">' +
+        '<span class="subj">' + esc(o.subject || "Woordenlijst") + '</span>' +
+        '<h2>' + esc(o.title) + '</h2>' +
+        '<span class="muted lesson-meta">' + esc(o.meta) + '</span>' +
+        '<span class="lesson-stats">' + esc(delen.join(" · ")) + '</span>' +
+      '</div>' +
+      '<div class="lesson-ring">' + Ring({ known: known, learning: learning, total: o.total }) +
+        '<span class="ring-cap">geoefend</span>' +
+      '</div>' +
+      (o.due ? '<span class="due-chip">' + Icon("clock") + '<span>' + esc(o.due) + ' aan de beurt</span></span>' : "") +
       '</button>';
   }
 
@@ -190,6 +230,6 @@
     });
   }
 
-  root.UI = { esc, cls, pct, Icon, ICONS, Button, Link, TopBar, Stat, StatsRow, Meter, Chip,
+  root.UI = { esc, cls, pct, Icon, ICONS, Button, Link, TopBar, Stat, StatsRow, Meter, Ring, Chip,
               Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, hydrateIcons };
 })(typeof window === "object" ? window : globalThis);
