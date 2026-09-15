@@ -372,13 +372,19 @@
      laatste beweegt pas na dagen en zou dus altijd nul lijken. --- */
   .lessons { display: flex; flex-direction: column; gap: var(--s3); }
   .lesson {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: var(--s4); row-gap: var(--s3); align-items: center;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    /* Vaste plekken, zodat de ring over beide rijen staat en bij elke kaart
+       op dezelfde hoogte begint. Anders centreert hij binnen rij 1 en gaat
+       hij meebewegen met de hoeveelheid tekst. */
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "body ring" "chip ring";
+    column-gap: var(--s4); row-gap: var(--s3); align-items: start;
     text-align: left; font: inherit; color: var(--ink);
     background: var(--surface); border: 1px solid var(--line-strong);
     border-radius: var(--shape-xl); padding: 18px 20px; cursor: pointer; box-shadow: var(--shadow);
   }
-  .lesson-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .lesson-body { grid-area: body; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .lesson .subj { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--accent); }
   .lesson h2 { font-size: var(--t-title); margin-top: 2px; }
   /* een regel, geen onvoorspelbare afbreking die de kaarthoogte laat springen */
@@ -390,7 +396,7 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .lesson-ring { display: grid; justify-items: center; gap: 2px; }
+  .lesson-ring { grid-area: ring; align-self: start; display: grid; justify-items: center; gap: 2px; }
   .ring { width: 64px; height: 64px; display: block; }
   .ring-track { fill: none; stroke: var(--track); stroke-width: 8; }
   .ring-arc { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray var(--m3-spatial); }
@@ -408,7 +414,7 @@
 
   /* de enige echte oproep tot actie op de kaart, dus als los label */
   .due-chip {
-    grid-column: 1 / -1; justify-self: start;
+    grid-area: chip; justify-self: start; align-self: end;
     display: inline-flex; align-items: center; gap: 6px;
     background: var(--accent-soft); color: var(--accent);
     font-size: var(--t-label); font-weight: 700;
@@ -546,7 +552,7 @@
     body > .app { max-width: none; }
     #scr-lessons > .app, #scr-report > .app { max-width: 960px; margin-inline: auto; }
     #scr-lessons .lessons { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s4); }
-    #scr-lessons .lesson { min-height: 150px; padding: 20px; align-content: center; }
+    #scr-lessons .lesson { min-height: 150px; padding: 20px; }
     #report-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: var(--s4); align-items: start; max-width: none; }
   }
   /* Alleen bij echt weinig hoogte de feedback naast de vraag zetten, zodat
