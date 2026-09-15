@@ -16,7 +16,6 @@ window.WORDLISTS = [
   {
     id: "horrid-henry-1tto",
     title: "Horrid Henry wordlist",
-    subtitle: "1TTO-H/A",
     subject: "Engels",
     classes: ["Verb", "Adjective", "Noun", "Adverb"],
     items: [

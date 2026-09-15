@@ -4,146 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Overhoren</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<style>
-:root{
-  --bg:#F4F3F8; --surface:#FFFFFF; --ink:#1C1A2E; --muted:#6A6784; --line:#DDDAE8;
-  --accent:#6B3FD1; --accent-ink:#FFFFFF; --accent-soft:#EEE8FB;
-  --ok:#2E9E5B; --ok-soft:#DFF5E7; --bad:#D9463A; --bad-soft:#FBE3E0; --warn:#B8790A; --warn-soft:#FDF1D6;
-  --verb:#C0392B; --adj:#2C6BB3; --noun:#2E8B57; --adv:#5B5470;
-  --shadow:0 10px 30px rgba(40,30,90,.10);
-  --display:"Fredoka","Trebuchet MS",system-ui,sans-serif;
-  --body:"Atkinson Hyperlegible","Verdana",system-ui,sans-serif;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#16142A; --surface:#221F3A; --ink:#EFEDF7; --muted:#A5A1BD; --line:#3A3656;
-    --accent:#A88BF0; --accent-ink:#16142A; --accent-soft:#2E2750;
-    --ok:#5FCF8A; --ok-soft:#1F3A2C; --bad:#F07A6E; --bad-soft:#452527; --warn:#F0BE55; --warn-soft:#423519;
-    --verb:#F08C80; --adj:#7FB2F0; --noun:#7FD3A1; --adv:#B9B2D4;
-    --shadow:0 10px 30px rgba(0,0,0,.35);
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#16142A; --surface:#221F3A; --ink:#EFEDF7; --muted:#A5A1BD; --line:#3A3656;
-  --accent:#A88BF0; --accent-ink:#16142A; --accent-soft:#2E2750;
-  --ok:#5FCF8A; --ok-soft:#1F3A2C; --bad:#F07A6E; --bad-soft:#452527; --warn:#F0BE55; --warn-soft:#423519;
-  --verb:#F08C80; --adj:#7FB2F0; --noun:#7FD3A1; --adv:#B9B2D4;
-  --shadow:0 10px 30px rgba(0,0,0,.35);
-}
-*{box-sizing:border-box}
-[hidden]{display:none!important}
-html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.45;padding-inline:16px;padding-block:20px 40px;min-height:100%}
-.app{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
-h1,h2,h3{font-family:var(--display);font-weight:600;margin:0;line-height:1.15;text-wrap:balance}
-h1{font-size:2rem}
-h2{font-size:1.4rem}
-h3{font-size:1.1rem}
-p{margin:0}
-.muted{color:var(--muted)}
-.eyebrow{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
-.brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.brand .tag{color:var(--muted)}
-.card{background:var(--surface);border-radius:20px;padding:22px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:16px}
-.field{display:flex;flex-direction:column;gap:8px}
-.label{font-weight:700;font-size:.95rem}
-select,input[type=text],textarea{font:inherit;color:var(--ink);background:var(--bg);border:2px solid var(--line);border-radius:12px;padding:12px 14px;width:100%}
-input[type=text]{font-size:1.15rem}
-select:focus,input:focus,textarea:focus,button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-textarea{min-height:160px;resize:vertical;font-size:.95rem}
-.btn{font:inherit;font-weight:700;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:14px;padding:12px 18px;cursor:pointer;transition:transform .08s ease,background .15s}
-.btn:active{transform:scale(.98)}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.btn.big{font-family:var(--display);font-size:1.25rem;padding:16px 20px;width:100%}
-.btn.ok{background:var(--ok-soft);border-color:var(--ok);color:var(--ink)}
-.btn.danger{border-color:var(--bad);color:var(--bad)}
-.link{font:inherit;background:none;border:0;color:var(--accent);cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px;font-weight:700}
-.row{display:flex;gap:10px;flex-wrap:wrap}
-.row>.btn{flex:1 1 140px}
-.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.stat{background:var(--bg);border-radius:14px;padding:12px 10px;text-align:center;display:flex;flex-direction:column;gap:2px}
-.stat b{font-family:var(--display);font-size:1.7rem;font-variant-numeric:tabular-nums}
-.stat span{font-size:.8rem;color:var(--muted)}
-.seg{display:flex;flex-wrap:wrap;gap:8px}
-.seg button{font:inherit;font-weight:700;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:8px 14px;cursor:pointer}
-.seg button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
-.hint{font-size:.9rem;color:var(--muted)}
-.banner{background:var(--warn-soft);border-radius:14px;padding:14px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
-.foot{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;color:var(--muted)}
-.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;font-variant-numeric:tabular-nums}
-.bar{height:10px;background:var(--line);border-radius:999px;overflow:hidden}
-.bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:999px;transition:width .3s ease}
-.q-card{gap:18px}
-.prompt{font-family:var(--display);font-size:2rem;line-height:1.15;text-wrap:balance}
-.prompt.def{font-size:1.45rem;font-family:var(--body);font-weight:400}
-.choices{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-.choice{font:inherit;font-weight:700;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:14px;padding:14px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}
-.choice kbd{font:inherit;font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:0 6px}
-.choice.on{background:var(--accent-soft);border-color:var(--accent)}
-.choice.right{background:var(--ok-soft);border-color:var(--ok)}
-.choice.wrong{background:var(--bad-soft);border-color:var(--bad)}
-.choice:disabled{cursor:default}
-.chip{display:inline-block;font-weight:700;font-size:.85rem;padding:2px 10px;border-radius:999px;background:var(--accent-soft)}
-.chip.verb{color:var(--verb)} .chip.adjective{color:var(--adj)} .chip.noun{color:var(--noun)} .chip.adverb{color:var(--adv)}
-.verdict{font-family:var(--display);font-size:1.5rem;padding:12px 16px;border-radius:14px}
-.verdict.good{background:var(--ok-soft)} .verdict.bad{background:var(--bad-soft)} .verdict.maybe{background:var(--warn-soft)}
-.fb-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
-.fb-list li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start}
-.fb-list .mark{font-weight:700;font-size:1.2rem;text-align:center}
-.fb-list .mark.ok{color:var(--ok)} .fb-list .mark.bad{color:var(--bad)} .fb-list .mark.maybe{color:var(--warn)}
-.fb-list .k{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
-.fb-list .yours{color:var(--muted);font-size:.95rem}
-#feedback{display:flex;flex-direction:column;gap:14px}
-.assess{background:var(--warn-soft);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
-table{width:100%;border-collapse:collapse;font-size:.95rem}
-th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}
-th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
-.tbl{overflow-x:auto}
-.word{font-family:var(--display);font-weight:600;font-size:1.05rem}
-.info h3{margin-top:6px}
-.info ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
-.hard{color:var(--bad);font-weight:700;font-size:.8rem}
-.dots{letter-spacing:2px;color:var(--accent);font-size:.8rem}
-.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.pause{background:var(--warn-soft);border-radius:14px;padding:12px 16px}
-.learner-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.lessons{display:flex;flex-direction:column;gap:12px}
-.lesson{display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:center;text-align:left;font:inherit;color:var(--ink);background:var(--surface);border:2px solid var(--line);border-radius:18px;padding:16px 18px;cursor:pointer;box-shadow:var(--shadow)}
-.lesson:hover{border-color:var(--accent)}
-.lesson .subj{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--accent)}
-.lesson h2{font-size:1.25rem}
-.lesson .cnt{grid-row:1/4;font-family:var(--display);font-size:1.6rem;color:var(--muted);text-align:right;line-height:1}
-.lesson .cnt small{display:block;font-family:var(--body);font-size:.75rem}
-.lesson .lm{grid-column:1/3;height:8px;background:var(--line);border-radius:999px;overflow:hidden;display:flex}
-.lesson .lm i{display:block;height:100%} .lesson .lm .a{background:var(--ok)} .lesson .lm .b{background:var(--accent)}
-.sec-title td{background:var(--bg);font-weight:700;font-family:var(--display)}
-.info .ref{font-size:.85rem;color:var(--muted)}
-.info table{font-size:.9rem}
-.radio{display:flex;flex-direction:column;gap:8px}
-.radio label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
-.radio input{margin-top:5px}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.learner-row .row{align-items:center}
-.learner-row input{max-width:200px}
-.sync{font-size:.85rem;color:var(--muted)}
-.sync.on{color:var(--ok)}
-.rep{display:flex;flex-direction:column;gap:12px}
-.rep h3{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.rep .meter{height:12px;background:var(--line);border-radius:999px;overflow:hidden;display:flex}
-.rep .meter i{display:block;height:100%}
-.rep .meter .a{background:var(--ok)} .rep .meter .b{background:var(--accent)} .rep .meter .c{background:var(--warn)}
-.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
-.sessions{display:flex;flex-direction:column;gap:6px;font-size:.9rem;font-variant-numeric:tabular-nums}
-.sessions .s{display:grid;grid-template-columns:110px 1fr 70px;gap:10px;align-items:center}
-.sessions .sb{height:8px;background:var(--line);border-radius:999px;overflow:hidden}
-.sessions .sb i{display:block;height:100%;background:var(--ok)}
-.hardlist{display:flex;flex-direction:column;gap:6px;font-size:.95rem}
-.hardlist div{display:flex;justify-content:space-between;gap:10px}
-@media (max-width:420px){.choices{grid-template-columns:1fr 1fr}.prompt{font-size:1.7rem}.stat b{font-size:1.4rem}}
-@media (prefers-reduced-motion: reduce){*{transition:none!important}}
-</style>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128218;</text></svg>">
+<meta name="theme-color" content="#F4F3F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16142A" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="ds.css">
 </head>
 <body>
 <div class="app">
@@ -166,17 +31,13 @@ th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 <!-- LES -->
 <section id="scr-home" class="screen" hidden>
   <div class="app">
-    <div class="topbar"><button class="link" id="btn-home-back">Alle lessen</button><span class="muted" id="home-learner"></span></div>
-    <div id="resume" class="banner" hidden>
+    <div class="topbar"><button class="link" data-icon="back" id="btn-home-back">Alle lessen</button><span class="muted" id="home-learner"></span></div>
+    <div id="resume" class="notice row-between" hidden>
       <span>Je was nog bezig met een ronde.</span>
       <span class="row"><button class="btn primary" id="btn-resume">Verder gaan</button><button class="link" id="btn-discard">Opnieuw beginnen</button></span>
     </div>
     <div class="card">
       <div><span class="eyebrow" id="list-subject"></span><h2 id="list-title"></h2><p class="muted" id="list-sub"></p></div>
-      <div class="field" id="section-field" hidden>
-        <span class="eyebrow">Welk deel?</span>
-        <div class="seg" id="section-seg"></div>
-      </div>
       <div class="stats-row">
         <div class="stat"><b id="st-new">0</b><span>nieuw</span></div>
         <div class="stat"><b id="st-due">0</b><span>aan de beurt</span></div>
@@ -187,12 +48,12 @@ th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
         <div class="seg" id="size-seg">
           <button type="button" data-size="10">Kort · 10</button>
           <button type="button" data-size="15" class="on">Normaal · 15</button>
-          <button type="button" data-size="all">Alles wat aan de beurt is</button>
+          <button type="button" data-size="all">Lang · alles</button>
         </div>
         <p class="hint" id="size-hint"></p>
       </div>
-      <button class="btn primary big" id="btn-start">Start overhoring</button>
-      <div class="row"><button class="btn" id="btn-study">Eerst lezen</button><button class="btn" id="btn-progress">Voortgang</button></div>
+      <button class="btn primary big" data-icon="play" id="btn-start">Start overhoring</button>
+      <div class="row"><button class="btn" data-icon="book" id="btn-study">Eerst lezen</button><button class="btn" data-icon="chart" id="btn-progress">Voortgang</button></div>
     </div>
     <p class="foot"><button class="link" id="btn-delete-list" hidden>Lijst verwijderen</button></p>
   </div>
@@ -201,18 +62,18 @@ th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 <!-- EERST LEZEN -->
 <section id="scr-study" class="screen" hidden>
   <div class="app">
-    <div class="topbar"><button class="link" id="btn-study-back">Terug</button><span class="muted" id="study-title"></span></div>
+    <div class="topbar"><button class="link" data-icon="back" id="btn-study-back">Terug</button><span class="muted" id="study-title"></span></div>
     <div class="card"><div class="tbl"><table><thead><tr id="study-head"></tr></thead><tbody id="study-body"></tbody></table></div></div>
-    <button class="btn primary big" id="btn-study-start">Start overhoring</button>
+    <button class="btn primary big" data-icon="play" id="btn-study-start">Start overhoring</button>
   </div>
 </section>
 
 <!-- OVERHOREN -->
 <section id="scr-quiz" class="screen" hidden>
   <div class="app">
-    <div class="topbar"><button class="link" id="btn-quit">Stoppen</button><span id="q-count"></span><span class="muted" id="q-timer">0:00</span></div>
-    <div class="bar"><i id="q-bar"></i></div>
-    <div class="pause" id="pause-hint" hidden>Al 15 minuten bezig. Even pauze is slimmer dan doorgaan: stop na dit woord, de rest komt straks vanzelf terug.</div>
+    <div class="topbar"><button class="link" data-icon="close" id="btn-quit">Stoppen</button><span id="q-count"></span><span class="streak" id="q-streak" hidden></span><span class="muted" id="q-timer">0:00</span></div>
+    <div class="meter sm"><i id="q-bar" class="b"></i></div>
+    <div class="notice" id="pause-hint" hidden>Al 15 minuten bezig. Even pauze is slimmer dan doorgaan: stop na dit woord, de rest komt straks vanzelf terug.</div>
     <div class="card q-card">
       <span class="eyebrow" id="q-kind">Woord</span>
       <p class="prompt" id="q-prompt"></p>
@@ -220,19 +81,21 @@ th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
       <div class="field"><label class="label" for="q-input" id="q-input-label">Definitie</label><input type="text" id="q-input" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go"></div>
       <p class="hint" id="q-hint" hidden></p>
       <button class="btn primary big" id="btn-check">Controleer</button>
+      <button class="btn primary big" id="btn-next" hidden>Volgende</button>
       <div id="feedback" hidden>
         <div class="verdict" id="fb-verdict"></div>
+        <p id="fb-official" hidden></p>
         <ul class="fb-list">
           <li><span class="mark" id="fb-word-mark"></span><div><div class="k" id="fb-word-k">Woord</div><div id="fb-word"></div><div class="yours" id="fb-word-yours"></div></div></li>
           <li id="fb-cls-row"><span class="mark" id="fb-cls-mark"></span><div><div class="k">Woordsoort</div><div id="fb-cls"></div></div></li>
           <li><span class="mark" id="fb-def-mark"></span><div><div class="k" id="fb-def-k">Definitie</div><div id="fb-def"></div><div class="yours" id="fb-def-yours"></div></div></li>
         </ul>
-        <div class="assess" id="fb-assess" hidden>
+        <div class="notice assess" id="fb-assess" hidden>
           <p><b>Twijfelgeval.</b> Komt jouw omschrijving hierop neer?</p>
           <div class="row"><button class="btn ok" id="btn-assess-yes">Ja, goed rekenen</button><button class="btn" id="btn-assess-no">Nee, fout</button></div>
+          <span class="hint" id="assess-keys-hint">J = goed rekenen, N = fout</span>
         </div>
         <button class="link" id="btn-override" hidden>Toch goed rekenen</button>
-        <button class="btn primary big" id="btn-next">Volgende</button>
       </div>
     </div>
     <p class="hint" id="q-keys-hint">Enter = controleren en volgende. Toetsen 1 tot 4 = woordsoort.</p>
@@ -245,9 +108,9 @@ th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
     <header class="brand"><h1 id="sum-title">Ronde klaar</h1></header>
     <div class="card">
       <div class="summary-grid">
+        <div class="stat"><b id="sum-first">0</b><span>in één keer goed</span><p id="sum-perfect" hidden></p></div>
         <div class="stat"><b id="sum-n">0</b><span>woorden</span></div>
-        <div class="stat"><b id="sum-first">0</b><span>in één keer goed</span></div>
-        <div class="stat"><b id="sum-time">0:00</b><span>minuten</span></div>
+        <div class="stat"><b id="sum-time">0:00</b><span>tijd</span></div>
       </div>
       <div id="sum-hard-wrap" hidden><span class="eyebrow">Nog lastig</span><p id="sum-hard"></p></div>
       <div><span class="eyebrow">Volgende ronde</span><p id="sum-next"></p></div>
@@ -259,7 +122,7 @@ th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 <!-- VOORTGANG -->
 <section id="scr-progress" class="screen" hidden>
   <div class="app">
-    <div class="topbar"><button class="link" id="btn-progress-back">Terug</button><span class="muted" id="progress-title"></span></div>
+    <div class="topbar"><button class="link" data-icon="back" id="btn-progress-back">Terug</button><span class="muted" id="progress-title"></span></div>
     <div class="card">
       <div class="tbl"><table><thead><tr><th>Woord</th><th>Status</th><th>Fout</th></tr></thead><tbody id="progress-body"></tbody></table></div>
       <p class="hint">Status loopt op van nieuw naar zit erin. Een woord komt terug na 10 minuten, 1 dag, 3 dagen, 1 week, 2 weken en 1 maand. Fout = weer van voren af aan.</p>
@@ -271,7 +134,7 @@ th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 <!-- RAPPORT -->
 <section id="scr-report" class="screen" hidden>
   <div class="app">
-    <div class="topbar"><button class="link" id="btn-report-back">Terug</button><button class="link" id="btn-report-copy">Kopieer als tekst</button></div>
+    <div class="topbar"><button class="link" data-icon="back" id="btn-report-back">Terug</button><button class="link" id="btn-report-copy">Kopieer als tekst</button></div>
     <header class="brand"><h1>Rapport</h1><p class="tag" id="report-date"></p></header>
     <div id="report-body" class="app"></div>
   </div>
@@ -280,7 +143,7 @@ th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 <!-- HOE WERKT HET -->
 <section id="scr-info" class="screen" hidden>
   <div class="app">
-    <div class="topbar"><button class="link" id="btn-info-back">Terug</button></div>
+    <div class="topbar"><button class="link" data-icon="back" id="btn-info-back">Terug</button></div>
     <div class="card info">
       <h2>Hoe werkt het?</h2>
       <p>De app is gebouwd op wat onderzoek naar leren en geheugen laat zien. Per punt: wat het onderzoek zegt, en wat de app daarmee doet.</p>
@@ -330,7 +193,7 @@ th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 <!-- LIJST TOEVOEGEN -->
 <section id="scr-import" class="screen" hidden>
   <div class="app">
-    <div class="topbar"><button class="link" id="btn-import-back">Terug</button></div>
+    <div class="topbar"><button class="link" data-icon="back" id="btn-import-back">Terug</button></div>
     <div class="card">
       <h2>Lijst toevoegen</h2>
       <div class="field"><span class="label">Soort les</span>
@@ -353,6 +216,8 @@ th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 
 </div>
 
+<script src="ui.js"></script>
+<script src="celebrate.js"></script>
 <script src="lists.js"></script>
 <script src="engine.js"></script>
 <script>
@@ -445,9 +310,6 @@ async function allProgress(){
 function isTranslate(){ return list.mode==="translate"; }
 function classes(){ if(isTranslate()) return []; return list.classes || Array.from(new Set(list.items.map(i=>i.cls).filter(Boolean))); }
 function labels(){ return { word: list.from || "Woord", def: list.to || "Definitie" }; }
-function sectionKeys(){ return list.sections ? Object.keys(list.sections) : []; }
-let sectionChoice = "all";
-function allowedIndices(){ if(sectionChoice==="all" || !sectionKeys().length) return null; return list.items.map((it,i)=>it.section===sectionChoice?i:-1).filter(i=>i>=0); }
 function counts(p, l, allowed){
   const now = Date.now(); let fresh=0, due=0, known=0, learning=0;
   l.items.forEach((_,i)=>{ if(allowed && !allowed.includes(i)) return; const s=p.items[i]; if(!s||s.seen===0) fresh++; else { if(s.due<=now) due++; if(s.box>=3) known++; else learning++; } });
@@ -455,7 +317,7 @@ function counts(p, l, allowed){
 }
 function clsClass(c){ return "chip "+String(c).toLowerCase().replace(/[^a-z]/g,""); }
 function chip(c){ return '<span class="'+clsClass(c)+'">'+esc(c)+'</span>'; }
-function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+const esc = UI.esc;
 function fmtTime(ms){ const s=Math.floor(ms/1000); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
 function fmtRel(ms){
   if(ms<=30000) return "nu";
@@ -474,29 +336,19 @@ function renderLessons(){
     if(!p.items) p.items = {};
     const c = counts(p, l, null); const pct = x=>Math.round(100*x/Math.max(1,c.total));
     const dir = l.mode==="translate" ? (l.from||"")+" naar "+(l.to||"") : "woord, woordsoort en definitie";
-    return '<button type="button" class="lesson" data-id="'+esc(l.id)+'">'+
-      '<span class="subj">'+esc(l.subject||"Woordenlijst")+'</span>'+
-      '<span class="cnt">'+c.known+'<small>van '+c.total+' zit erin</small></span>'+
-      '<h2>'+esc(l.title)+'</h2>'+
-      '<span class="muted">'+(l.subtitle?esc(l.subtitle)+' · ':'')+esc(dir)+(c.due?' · <b>'+c.due+' aan de beurt</b>':'')+'</span>'+
-      '<span class="lm"><i class="a" style="width:'+pct(c.known)+'%"></i><i class="b" style="width:'+pct(c.learning)+'%"></i></span>'+
-    '</button>';
+    return UI.LessonCard({ id: l.id, subject: l.subject, title: l.title,
+      meta: (l.subtitle ? l.subtitle+" · " : "")+dir, due: c.due,
+      known: c.known, learning: c.learning, total: c.total });
   }).join("");
-  $("lessons").querySelectorAll(".lesson").forEach(b=>b.addEventListener("click", ()=>{ selectList(b.dataset.id); sectionChoice="all"; renderHome(); show("scr-home"); }));
+  $("lessons").querySelectorAll(".lesson").forEach(b=>b.addEventListener("click", ()=>{ selectList(b.dataset.id); renderHome(); show("scr-home"); }));
 }
 function renderHome(){
   $("home-learner").textContent = "Wie oefent: "+learner;
   $("list-subject").textContent = list.subject || "";
   $("list-title").textContent = list.title;
   $("list-sub").textContent = (list.subtitle?list.subtitle+" · ":"")+list.items.length+" woorden"+(isTranslate()?" · "+(list.from||"")+" naar "+(list.to||""):"");
-  const secs = sectionKeys();
-  $("section-field").hidden = !secs.length;
-  if(secs.length){
-    $("section-seg").innerHTML = '<button type="button" data-sec="all"'+(sectionChoice==="all"?' class="on"':'')+'>Alles</button>'+secs.map(k=>'<button type="button" data-sec="'+esc(k)+'"'+(sectionChoice===k?' class="on"':'')+'>'+esc(k)+' · '+esc(list.sections[k])+'</button>').join("");
-    $("section-seg").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{ sectionChoice=b.dataset.sec; renderHome(); }));
-  }
   const now = Date.now();
-  const allowed = allowedIndices();
+  const allowed = null; // hele lijst: geen deelselectie meer
   const c = counts(progress, list, allowed);
   $("st-new").textContent=c.fresh; $("st-due").textContent=c.due; $("st-known").textContent=c.known;
   const pick = E.selectSession(list, progress, sizeChoice, now, {allowed});
@@ -512,7 +364,7 @@ function renderStudy(){
   $("study-title").textContent = list.title;
   const lb = labels(), hasCls = classes().length>0;
   $("study-head").innerHTML = '<th>'+esc(lb.word)+'</th>'+(hasCls?'<th>Woordsoort</th>':'')+'<th>'+esc(lb.def)+'</th>';
-  const allowed = allowedIndices();
+  const allowed = null; // hele lijst: geen deelselectie meer
   let lastSec = null, rows = [];
   list.items.forEach((it,i)=>{
     if(allowed && !allowed.includes(i)) return;
@@ -552,16 +404,16 @@ async function renderReport(){
   $("report-date").textContent = "Stand van "+fmtDate(Date.now());
   const entries = await allProgress();
   const body = $("report-body");
-  if(!entries.length){ body.innerHTML = '<div class="card"><p>Nog geen rondes gedaan.</p></div>'; return; }
+  if(!entries.length){ body.innerHTML = '<div class="card">'+UI.Empty({glyph:"?", title:"Nog niets te rapporteren.", body:"Doe eerst een ronde, dan zie je hier wat er al in zit en wat nog lastig is."})+'</div>'; return; }
   body.innerHTML = entries.map(e=>{
     const r = reportData(e); const pct = x=>Math.round(100*x/Math.max(1,r.n));
     return '<div class="card rep">'+
       '<h3><span>'+esc(e.learner)+' · '+esc((e.list.subject?e.list.subject+" · ":"")+e.list.title)+'</span><span class="muted">'+r.ready+' van '+r.n+' zit erin</span></h3>'+
-      '<div class="meter"><i class="a" style="width:'+pct(r.ready)+'%"></i><i class="b" style="width:'+pct(r.learning)+'%"></i></div>'+
+      '<div class="meter lg"><i class="a" style="width:'+pct(r.ready)+'%"></i><i class="b" style="width:'+pct(r.learning)+'%"></i></div>'+
       '<div class="legend"><span><i style="background:var(--ok)"></i>zit erin '+r.ready+'</span><span><i style="background:var(--accent)"></i>aan het leren '+r.learning+'</span><span><i style="background:var(--line)"></i>nog niet geoefend '+r.fresh+'</span></div>'+
       '<div class="stats-row"><div class="stat"><b>'+r.rounds+'</b><span>rondes</span></div><div class="stat"><b>'+Math.round(r.totalMs/MIN)+'</b><span>minuten totaal</span></div><div class="stat"><b>'+(r.last?Math.round(100*r.last.first/Math.max(1,r.last.n))+'%':'–')+'</b><span>laatste ronde in één keer goed</span></div></div>'+
       (r.advice?'<p>'+esc(r.advice)+'</p>':'')+
-      '<div><span class="eyebrow">Laatste rondes</span><div class="sessions">'+r.sessions.map(s=>'<div class="s"><span>'+fmtDate(s.date)+'</span><span class="sb"><i style="width:'+Math.round(100*s.first/Math.max(1,s.n))+'%"></i></span><span>'+s.first+'/'+s.n+' · '+fmtTime(s.ms||0)+(s.stopped?" (gestopt)":"")+'</span></div>').join("")+'</div></div>'+
+      '<div><span class="eyebrow">Laatste rondes</span><div class="sessions">'+r.sessions.map(s=>'<div class="s"><span>'+fmtDate(s.date)+'</span><span class="meter md"><i class="a" style="width:'+Math.round(100*s.first/Math.max(1,s.n))+'%"></i></span><span>'+s.first+'/'+s.n+' · '+fmtTime(s.ms||0)+(s.stopped?" (gestopt)":"")+'</span></div>').join("")+'</div></div>'+
       (r.hard.length?'<div><span class="eyebrow">Moeilijke woorden</span><div class="hardlist">'+r.hard.map(h=>'<div><span class="word">'+esc(h.word)+'</span><span class="muted">'+h.lapses+'× fout'+(h.parts?' ('+esc(h.parts)+')':'')+'</span></div>').join("")+'</div></div>':'<p class="muted">Geen woorden die vaak fout gaan.</p>')+
     '</div>';
   }).join("");
@@ -584,9 +436,9 @@ async function copyReport(){
 
 // ---------- ronde ----------
 function startSession(){
-  const pick = E.selectSession(list, progress, sizeChoice, Date.now(), {allowed: allowedIndices()});
+  const pick = E.selectSession(list, progress, sizeChoice, Date.now(), {allowed: null});
   session = { listId:list.id, queue: pick.indices.map(i=>({i, dir:null})), pos:0, total: pick.indices.length,
-    attempts:{}, firstTry:{}, done:0, startedAt: Date.now(), elapsedBefore:0, kind: pick.kind };
+    attempts:{}, firstTry:{}, done:0, streak:0, startedAt: Date.now(), elapsedBefore:0, kind: pick.kind };
   save(SKEY(list.id), session);
   ui.pauseShown = false;
   show("scr-quiz"); renderQuestion(); startTimer();
@@ -605,11 +457,20 @@ function persistSession(){ session.elapsedBefore = elapsed(); session.startedAt 
 
 function current(){ return session.queue[session.pos]; }
 
+function renderStreak(){
+  const el = $("q-streak"); if(!el) return;
+  const n = session.streak||0;
+  if(n < 2){ el.hidden = true; el.classList.remove("is-up"); return; }
+  el.hidden = false; el.innerHTML = UI.Icon("flame") + "<span>" + n + " op rij</span>";
+  el.classList.remove("is-up"); void el.offsetWidth; el.classList.add("is-up");
+}
 function renderQuestion(){
   const entry = current(); const item = list.items[entry.i];
   if(!entry.dir) entry.dir = E.pickDirection(progress.items[entry.i], null, list.directions);
   const wd = entry.dir==="wd", lb = labels(), tr = isTranslate(), cs = classes();
   $("q-kind").textContent = wd ? lb.word : lb.def;
+  const c0 = $("q-prompt").closest(".card"); if(c0) c0.classList.remove("is-good");
+  renderStreak();
   $("q-prompt").textContent = wd ? item.word : item.def;
   $("q-prompt").className = "prompt"+(wd||tr?"":" def");
   $("q-input-label").textContent = wd ? (tr ? lb.def : lb.def+" (in je eigen woorden)") : lb.word;
@@ -621,10 +482,11 @@ function renderQuestion(){
   $("q-bar").style.width = Math.round(100*session.done/Math.max(1,session.total))+"%";
   $("q-timer").textContent = fmtTime(elapsed());
   ui.pick = null; ui.checked=false; ui.verdictDef=null; ui.firstBlank=false;
-  $("q-classes").innerHTML = classes().map((c,k)=>'<button type="button" class="choice" data-cls="'+esc(c)+'">'+esc(c)+'<kbd>'+(k+1)+'</kbd></button>').join("");
+  $("q-classes").innerHTML = UI.Choices(classes());
   $("q-classes").querySelectorAll(".choice").forEach(b=>b.addEventListener("click", ()=>pickClass(b.dataset.cls)));
   $("q-hint").hidden = true; $("feedback").hidden = true; $("btn-check").hidden = false;
-  $("fb-assess").hidden = true; $("btn-override").hidden = true; $("btn-next").hidden = false;
+  $("fb-assess").hidden = true; $("btn-override").hidden = true; $("btn-next").hidden = true;
+  $("feedback").classList.remove("only-verdict"); $("fb-official").hidden = true;
   setTimeout(()=>$("q-input").focus(), 50);
 }
 function pickClass(c){
@@ -650,18 +512,19 @@ function check(){
   $("fb-word").textContent = item.word; $("fb-cls").innerHTML = hasCls ? chip(item.cls) : ""; $("fb-def").textContent = item.def;
   mark("fb-cls-mark", ui.clsOk?"ok":"bad");
   $("fb-word-yours").textContent = ""; $("fb-def-yours").textContent = "";
+  ui.typed = text; ui.official = officialAnswer(item, wd);
   let status;
   if(wd){
     mark("fb-word-mark","ok");
     const r = isTranslate() ? E.gradeTranslation(item, text) : E.gradeDefinition(item, text);
     status = r.status;
-    $("fb-def-yours").textContent = text ? (r.near ? "Bijna? Jij: "+text : "Jij: "+text) : "Jij: (leeg)";
+    $("fb-def-yours").textContent = text ? "" : "Niets ingevuld";
     mark("fb-def-mark", status==="correct"?"ok":status==="maybe"?"maybe":"bad");
   } else {
     mark("fb-def-mark","ok");
     const r = E.gradeWord(item, text);
     status = r.status==="correct" ? "correct" : "wrong";
-    $("fb-word-yours").textContent = r.status==="near" ? "Bijna! Jij: "+text+" (let op de spelling)" : text ? "Jij: "+text : "Jij: (leeg)";
+    $("fb-word-yours").textContent = r.status==="near" ? "Bijna, let op de spelling" : text ? "" : "Niets ingevuld";
     mark("fb-word-mark", status==="correct"?"ok":"bad");
   }
   $("feedback").hidden = false;
@@ -669,6 +532,7 @@ function check(){
     ui.verdictDef = null;
     $("fb-assess").hidden = false; $("btn-next").hidden = true;
     setVerdict("maybe", "Bijna?");
+    setTimeout(()=>$("btn-assess-yes").focus(), 50);
   } else {
     ui.verdictDef = status==="correct";
     if(wd && !ui.verdictDef && text) $("btn-override").hidden = false;
@@ -676,8 +540,17 @@ function check(){
   }
   persistSession();
 }
-function mark(id, kind){ const el=$(id); el.className="mark "+kind; el.textContent = kind==="ok"?"✓":kind==="maybe"?"?":"✗"; }
-function setVerdict(kind, txt){ const v=$("fb-verdict"); v.className="verdict "+(kind==="correct"?"good":kind==="maybe"?"maybe":"bad"); v.textContent = txt; }
+const ART = /^(de|het|een|le|la|les|un|une|des|l|the|a|an|to) /;
+function officialAnswer(item, wd){
+  if(!wd) return item.word;
+  return isTranslate() ? String(item.def).split(/\s*[\/,;]\s*|\s+of\s+/)[0].trim() : item.def;
+}
+function sameAsOfficial(a, b){
+  const clean = x => E.norm(String(x||"")).replace(ART, "").trim();
+  return clean(a) !== "" && clean(a) === clean(b);
+}
+function mark(id, kind){ const el=$(id); el.className="mark "+kind; el.innerHTML = UI.Icon(UI.MARK_ICON[kind]||"help"); }
+function setVerdict(kind, txt){ const v=$("fb-verdict"); v.className="verdict "+(kind==="correct"?"good":kind==="maybe"?"maybe":"bad"); v.textContent = txt; v.style.animation="none"; void v.offsetWidth; v.style.animation=""; }
 
 let finalized = false;
 function finalize(){
@@ -685,6 +558,14 @@ function finalize(){
   const ok = ui.clsOk && ui.verdictDef===true;
   setVerdict(ok?"correct":"bad", ok ? pickPraise() : (ui.clsOk ? "Nog niet helemaal" : (ui.verdictDef ? "Woordsoort was fout" : "Nog niet")));
   $("fb-assess").hidden = true; $("btn-next").hidden = false;
+  const card = $("q-prompt").closest(".card");
+  if(card){ card.classList.remove("is-good"); if(ok){ void card.offsetWidth; card.classList.add("is-good"); } }
+  // Bij een goed antwoord geen herhaling van vraag en invoer. Alleen als een synoniem is
+  // goedgekeurd tonen we het officiele antwoord, want dat heeft ze dan niet ingetypt.
+  $("feedback").classList.toggle("only-verdict", ok);
+  const anders = ok && ui.official && !sameAsOfficial(ui.typed, ui.official);
+  $("fb-official").hidden = !anders;
+  if(anders) $("fb-official").innerHTML = 'Ook goed. Officieel is het: <b>'+esc(ui.official)+'</b>';
   if(finalized) return; // override na een eerder oordeel: alleen het oordeel bijwerken
   finalized = true;
   applyResult(entry, item, ok);
@@ -697,6 +578,8 @@ function applyResult(entry, item, ok){
   if(ui.verdictDef!==true){ if(entry.dir==="wd") st.partWrong.def++; else st.partWrong.word++; st.dirWrong[entry.dir]++; }
   session.attempts[entry.i] = (session.attempts[entry.i]||0)+1;
   if(session.attempts[entry.i]===1) session.firstTry[entry.i] = ok;
+  session.streak = (session.attempts[entry.i]===1 && ok) ? (session.streak||0)+1 : 0;
+  renderStreak();
   if(ok) session.done++;
   else {
     const at = Math.min(session.queue.length, session.pos+1+GAP);
@@ -735,8 +618,15 @@ function finish(stopped){
   const hard = ids.filter(i=>session.attempts[i]>=2).map(i=>list.items[i].word);
   progress.sessions.push({ date: Date.now(), n: ids.length, first, ms, stopped: !!stopped });
   saveProgress(); save(SKEY(list.id), null); finalized=false;
-  $("sum-title").textContent = stopped ? "Ronde gestopt" : "Ronde klaar";
-  $("sum-n").textContent = ids.length; $("sum-first").textContent = first; $("sum-time").textContent = fmtTime(ms);
+  // Vlekkeloos: alles in een keer goed, en niet halverwege gestopt.
+  const perfect = !stopped && ids.length > 0 && first === ids.length;
+  $("sum-title").textContent = stopped ? "Ronde gestopt" : (perfect ? "Vlekkeloos" : "Ronde klaar");
+  $("sum-n").textContent = ids.length; $("sum-time").textContent = fmtTime(ms);
+  $("sum-first").innerHTML = perfect ? UI.Icon("trophy") + "<span>" + first + "</span>" : String(first);
+  $("sum-perfect").hidden = !perfect;
+  if(perfect && window.Celebrate){
+    $("sum-perfect").innerHTML = UI.Icon("sparkle") + "<span>" + esc(Celebrate.celebrate()) + "</span>";
+  }
   $("sum-hard-wrap").hidden = !hard.length; $("sum-hard").textContent = hard.join(", ");
   const now = Date.now();
   let fresh=0, dueNow=0, minDue=Infinity;
@@ -774,7 +664,7 @@ function importList(){
   if(Object.keys(sections).length) nl.sections = sections;
   custom.push(nl); save(LKEY, custom);
   lists = allLists(); selectList(nl.id); $("imp-title").value=""; $("imp-text").value=""; msg.hidden=true;
-  sectionChoice="all"; renderHome(); show("scr-home");
+  renderHome(); show("scr-home");
 }
 function deleteList(){
   if(!confirm("Lijst '"+list.title+"' en de voortgang ervan verwijderen?")) return;
@@ -820,12 +710,18 @@ function bind(){
   $("q-input").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); ui.checked ? next() : check(); } });
   document.addEventListener("keydown", e=>{
     if($("scr-quiz").hidden) return;
+    if(ui.checked && !$("fb-assess").hidden){
+      if(e.key==="j"||e.key==="J"||e.key==="1"){ e.preventDefault(); $("btn-assess-yes").click(); return; }
+      if(e.key==="n"||e.key==="N"||e.key==="2"){ e.preventDefault(); $("btn-assess-no").click(); return; }
+      return;
+    }
     if(e.key==="Enter" && ui.checked && !e.target.matches("button, input, textarea")){ e.preventDefault(); next(); return; }
     if(!ui.checked && /^[1-9]$/.test(e.key)){ const cs=classes(); const k=parseInt(e.key,10)-1; if(cs[k]){ e.preventDefault(); pickClass(cs[k]); } }
   });
 }
 
 function init(){
+  UI.hydrateIcons(document);
   lists = allLists();
   if(!lists.length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
   setLearner(learner);

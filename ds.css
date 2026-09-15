@@ -1,0 +1,540 @@
+/* =============================================================
+   Overhoren design systeem
+   Bron van waarheid voor alles wat je ziet. Pas hier iets aan en
+   het verandert overal, want de schermen gebruiken alleen tokens
+   en componentklassen, nooit losse waarden.
+
+   Lagen (later = wint van eerder):
+     tokens      de enige plek met harde waarden
+     base        reset en standaard elementen
+     components  herbruikbare bouwstenen
+     screens     uitzonderingen per scherm, zo weinig mogelijk
+     responsive  aanpassingen per schermformaat en voorkeuren
+
+   Kleur staat per rol op een regel, met light en dark naast elkaar
+   via light-dark(). Er is dus geen tweede blok dat je kunt vergeten
+   bij te werken. Schakelen kan met data-theme="light" of "dark".
+   ============================================================= */
+
+@layer tokens, base, components, screens, responsive;
+
+/* =============================================================
+   1. TOKENS
+   ============================================================= */
+@layer tokens {
+  :root {
+    color-scheme: light dark;
+
+    /* --- kleur: rol, niet uiterlijk. light-dark(licht, donker) --- */
+    --bg:            light-dark(#F4F3F8, #16142A);
+    --surface:       light-dark(#FFFFFF, #221F3A);
+    --ink:           light-dark(#1C1A2E, #EFEDF7);
+    --muted:         light-dark(#6A6784, #A5A1BD);
+
+    /* --line scheidt, --line-strong omlijnt iets dat je kunt bedienen.
+       --line-strong haalt minimaal 3:1 met --surface (WCAG 1.4.11). */
+    --line:          light-dark(#DDDAE8, #3A3656);
+    --line-strong:   light-dark(#928AAE, #6F6894);
+
+    /* oppervlakken van bedienbare elementen */
+    --control:       light-dark(#F3F1FA, #2A2647);
+    --control-hover: light-dark(#EAE6F6, #332E55);
+    --track:         light-dark(#DFDAEE, #3A3656);
+
+    /* primary: de actie */
+    --accent:        light-dark(#6B3FD1, #A88BF0);
+    --accent-ink:    light-dark(#FFFFFF, #16142A);
+    --accent-soft:   light-dark(#EEE8FB, #2E2750);
+
+    /* tertiary: uitsluitend prestatie (streak, score). Nergens anders. */
+    --tertiary:               light-dark(#8A5200, #FFC46B);
+    --tertiary-container:     light-dark(#FFDDA1, #5C3A00);
+    --on-tertiary-container:  light-dark(#4A2E00, #FFDDA1);
+
+    /* feedback. --ok-strong is de gevulde variant en haalt AA met --on-ok. */
+    --ok:        light-dark(#2E9E5B, #5FCF8A);
+    --ok-soft:   light-dark(#DFF5E7, #1F3A2C);
+    --ok-strong: light-dark(#1E7A4D, #5FCF8A);
+    --on-ok:     light-dark(#FFFFFF, #16142A);
+    --bad:       light-dark(#D9463A, #F07A6E);
+    --bad-soft:  light-dark(#FBE3E0, #452527);
+    --warn:      light-dark(#B8790A, #F0BE55);
+    --warn-soft: light-dark(#FDF1D6, #423519);
+
+    /* woordsoorten: semantisch, helpt bij het leren */
+    --verb: light-dark(#C0392B, #F08C80);
+    --adj:  light-dark(#2C6BB3, #7FB2F0);
+    --noun: light-dark(#1E7A4D, #7FD3A1);
+    --adv:  light-dark(#5B5470, #B9B2D4);
+
+    --shadow:
+      0 0 0 1px light-dark(transparent, rgba(255,255,255,.055)),
+      0 10px 28px -12px light-dark(rgba(28,26,46,.20), rgba(0,0,0,.65));
+
+    /* --- vorm: Material 3 corner radius scale --- */
+    --shape-xs:4px;  --shape-s:8px;   --shape-m:12px;  --shape-l:16px;
+    --shape-li:20px; --shape-xl:28px; --shape-xli:32px; --shape-xxl:48px;
+    --shape-full:999px;
+    /* Optische regel: buitenradius min padding = binnenradius.
+       Kaart 28 met padding 20 vraagt dus 8 tot 12 binnenin. */
+
+    /* --- typografie: grote sprongen, geen bijna-gelijke maten --- */
+    --t-display:   clamp(2.25rem, 9vw, 2.8125rem);
+    --t-headline:  1.75rem;
+    --t-headline-sm: 1.5rem;
+    --t-title:     1.375rem;
+    --t-title-md:  1rem;
+    --t-body:      1.0625rem;
+    --t-label:     .875rem;
+    --t-label-sm:  .6875rem;
+    /* Fredoka is de brand typeface en staat NOOIT onder 1.375rem.
+       Atkinson Hyperlegible is de plain typeface: gekozen om zijn
+       onderscheidende letterparen (I/l/1, b/d/p/q) bij het spellen. */
+    --display: "Fredoka","Trebuchet MS",system-ui,sans-serif;
+    --body:    "Atkinson Hyperlegible","Verdana",system-ui,sans-serif;
+
+    /* --- ruimte: 8px-ritme. Binnen een groep klein, ertussen groot. --- */
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:36px;
+
+    /* --- beweging: M3 springs, omgezet naar curves voor het web.
+       spatial schiet bewust door (positie en formaat),
+       effects nooit (kleur en opacity). --- */
+    --m3-spatial-fast: 350ms cubic-bezier(0.42,1.67,0.21,0.90);
+    --m3-spatial:      500ms cubic-bezier(0.38,1.21,0.22,1.00);
+    --m3-spatial-slow: 650ms cubic-bezier(0.39,1.29,0.35,0.98);
+    --m3-effects-fast: 150ms cubic-bezier(0.31,0.94,0.34,1.00);
+    --m3-effects:      200ms cubic-bezier(0.34,0.80,0.34,1.00);
+    --m3-effects-slow: 300ms cubic-bezier(0.34,0.88,0.34,1.00);
+
+    /* kleinste tikdoel op een telefoon */
+    --tap:44px;
+  }
+
+  /* handmatig schakelen, anders volgt de app het systeem */
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"]  { color-scheme: dark; }
+}
+
+/* =============================================================
+   2. BASE
+   ============================================================= */
+@layer base {
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--body); font-size: var(--t-body); line-height: 1.45;
+    padding-inline: var(--s4); padding-block: var(--s5) var(--s6);
+    min-height: 100%;
+  }
+  p { margin: 0; }
+  h1, h2 { font-family: var(--display); font-weight: 600; margin: 0; line-height: 1.15; text-wrap: balance; }
+  h1 { font-size: var(--t-headline); }
+  h2 { font-size: 1.4rem; }
+  h3 { font-family: var(--body); font-weight: 700; font-size: 1.1rem; line-height: 1.15; margin: 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+
+  select, input[type=text], textarea {
+    font: inherit; color: var(--ink); background: var(--control);
+    border: 1.5px solid var(--line-strong); border-radius: var(--shape-m);
+    padding: 12px 14px; width: 100%;
+  }
+  input[type=text] { font-size: 1.15rem; }
+  textarea { min-height: 160px; resize: vertical; font-size: .95rem; }
+
+  /* Focus is overal gelijk en wint altijd van hover. */
+  select:focus, input:focus, textarea:focus, button:focus-visible,
+  :where(.btn, .choice, .lesson, .seg button, .link):focus-visible {
+    outline: 3px solid var(--accent); outline-offset: 2px;
+  }
+}
+
+/* =============================================================
+   3. COMPONENTEN
+   ============================================================= */
+@layer components {
+
+  /* --- layout-primitieven --- */
+  .app { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--s5); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > .btn { flex: 1 1 0; min-width: 0; white-space: nowrap; padding-inline: 14px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: var(--s2); }
+
+  /* --- tekst --- */
+  .muted { color: var(--muted); }
+  .label { font-weight: 700; font-size: .95rem; }
+  .hint  { font-size: var(--t-label); color: var(--muted); }
+  .eyebrow { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+  .word  { font-family: var(--body); font-weight: 700; font-size: 1.05rem; }
+
+  /* --- icon: inline SVG dat meeschaalt met de tekst en de kleur
+         van zijn omgeving overneemt. Nooit los gebruiken als enige
+         betekenisdrager; er hoort altijd tekst bij. --- */
+  .icon { width: 1em; height: 1em; flex: none; vertical-align: -.125em; }
+  .icon.lg { width: 1.5em; height: 1.5em; }
+
+  /* --- card --- */
+  .card {
+    background: var(--surface); border-radius: var(--shape-xl);
+    padding: var(--s5) 20px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: var(--s5);
+  }
+
+  /* --- button --- */
+  .btn {
+    font: inherit; font-weight: 700; cursor: pointer;
+    border: 1.5px solid var(--line-strong); background: var(--control); color: var(--ink);
+    border-radius: var(--shape-full); padding: 12px 18px;
+    min-height: var(--tap);
+  }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.big     { font-family: var(--body); font-size: 1.05rem; padding: 15px 20px; width: 100%; }
+  .btn.ok      { background: var(--ok-soft); border-color: var(--ok); color: var(--ink); }
+  .btn.danger  { border-color: var(--bad); color: var(--bad); }
+
+  /* --- link: ziet eruit als tekst, maar haalt wel het tikdoel --- */
+  .link {
+    font: inherit; font-weight: 700; cursor: pointer;
+    background: none; border: 0; color: var(--accent);
+    display: inline-flex; align-items: center; min-height: var(--tap); padding: 11px 4px;
+    gap: 6px;
+  }
+  /* alleen de tekst onderstrepen, niet het icoon */
+  .link > span { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+  .link:hover > span { text-decoration-thickness: 3px; }
+
+  /* --- segmented control --- */
+  .seg { display: flex; flex-wrap: wrap; gap: var(--s2); }
+  .seg button {
+    font: inherit; font-weight: 700; cursor: pointer;
+    border: 1.5px solid var(--line-strong); background: var(--control); color: var(--ink);
+    border-radius: var(--shape-full); padding: 10px 16px; min-height: var(--tap);
+  }
+  .seg button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+  /* --- stat: getal met label --- */
+  .stats-row, .summary-grid { display: grid; gap: var(--s2); }
+  .stats-row { grid-template-columns: repeat(3, 1fr); }
+  .stat {
+    background: transparent; border: 1px solid var(--line); border-radius: var(--shape-m);
+    padding: var(--s3) var(--s2); text-align: center;
+    display: flex; flex-direction: column; gap: 2px; justify-content: center; min-height: 82px;
+  }
+  .stat b { font-family: var(--display); font-size: 1.7rem; font-variant-numeric: tabular-nums; }
+  .stat > span { font-size: .78rem; color: var(--muted); line-height: 1.25; text-wrap: balance; }
+
+  /* --- chip: woordsoort, kleurt zichzelf op basis van currentColor --- */
+  .chip {
+    display: inline-block; font-weight: 700; font-size: .82rem;
+    padding: 3px 10px; border-radius: var(--shape-full);
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+  }
+  .chip.verb { color: var(--verb); }
+  .chip.adjective { color: var(--adj); }
+  .chip.noun { color: var(--noun); }
+  .chip.adverb { color: var(--adv); }
+
+  /* --- meter: elke voortgangsbalk in de app --- */
+  .meter { background: var(--track); border-radius: var(--shape-full); overflow: hidden; display: flex; }
+  .meter i { display: block; height: 100%; }
+  .meter .a { background: var(--ok); }
+  .meter .b { background: var(--accent); }
+  .meter .c { background: var(--warn); }
+  .meter.sm { height: 6px; }
+  .meter.md { height: 8px; }
+  .meter.lg { height: 12px; }
+
+  /* --- notice: gekleurde kantlijn, geen gevuld vlak --- */
+  .notice {
+    background: transparent; border: 1px solid var(--warn); border-left-width: 4px;
+    border-radius: var(--shape-m); padding: var(--s3) var(--s4);
+  }
+  .notice { display: flex; gap: var(--s3); align-items: flex-start; }
+  .notice .notice-icon { color: var(--warn); margin-top: .15em; }
+  .notice.row-between > div { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: space-between; flex: 1; }
+
+  /* --- choice: woordsoortknop --- */
+  .choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .choice {
+    font: inherit; font-weight: 700; cursor: pointer;
+    border: 1.5px solid var(--line-strong); background: var(--control); color: var(--ink);
+    border-radius: var(--shape-l); padding: 14px 12px; min-height: var(--tap);
+    display: flex; justify-content: space-between; align-items: center; gap: var(--s2);
+  }
+  .choice.on    { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .choice.right { background: var(--ok-soft); border-color: var(--ok); }
+  .choice.wrong { background: var(--bad-soft); border-color: var(--bad); }
+  .choice:disabled { cursor: default; }
+  .choice kbd {
+    font: inherit; font-size: .75rem; font-weight: 700; line-height: 1; flex: none;
+    color: var(--muted); background: var(--bg);
+    border: 1px solid var(--line-strong); border-radius: var(--shape-s); padding: 3px 7px;
+  }
+  .choice.on kbd { color: var(--accent-ink); background: transparent; border-color: currentColor; }
+  .choice:disabled kbd { opacity: 0; }
+
+  /* --- verdict: het oordeel. Goed is gevuld, fout en twijfel omlijnd,
+         zodat bevestiging zwaarder weegt dan correctie. --- */
+  .verdict {
+    font-family: var(--body); font-weight: 700; font-size: var(--t-title-md);
+    padding: 8px 18px; border-radius: var(--shape-full);
+    align-self: flex-start; display: inline-block;
+    animation: pop var(--m3-spatial-fast) both;
+  }
+  .verdict.good { background: var(--ok-strong); color: var(--on-ok); }
+  .verdict.bad, .verdict.maybe { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+  .verdict.bad { color: var(--bad); }
+  .verdict.maybe { color: var(--warn); }
+
+  /* --- streak: prestatie, de enige plek met tertiary --- */
+  .streak {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--tertiary-container); color: var(--on-tertiary-container);
+    font-weight: 700; font-size: var(--t-label);
+    padding: 5px 12px; border-radius: var(--shape-full); font-variant-numeric: tabular-nums;
+  }
+  .streak.is-up { animation: bump var(--m3-spatial-fast); }
+  .streak .icon { color: var(--tertiary); }
+
+  /* --- empty: lege staat met karakter, zonder illustratie --- */
+  .empty {
+    display: grid; place-items: center; gap: var(--s3); text-align: center;
+    padding: 48px var(--s5); border-radius: var(--shape-xl); background: var(--control);
+  }
+  .empty .glyph {
+    width: 88px; height: 88px; display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent);
+    font-family: var(--display); font-weight: 700; font-size: 2.5rem;
+    border-radius: var(--shape-xxl) var(--shape-m) var(--shape-xxl) var(--shape-m);
+  }
+
+  /* --- viering: alleen bij een vlekkeloze ronde --- */
+  .fx-canvas {
+    position: fixed; inset: 0; z-index: 90;
+    pointer-events: none;
+  }
+  /* De kattenfoto's zijn niet vrijstaand, dus ze hangen in een lijstje:
+     een scheef fotokaartje dat vanaf een hoek in beeld schuift. Vaste
+     beeldverhouding, zodat elke foto er even netjes uitziet. */
+  .fx-cat {
+    position: fixed; z-index: 91;
+    left: 50%; top: 50%;
+    width: min(72vw, 320px); margin: 0;
+    padding: 12px 12px 0;
+    background: light-dark(#FFFFFF, #F3F1FA);
+    border-radius: var(--shape-l);
+    box-shadow: 0 24px 60px -12px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.06);
+    pointer-events: none; user-select: none;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.6) rotate(var(--tilt, -4deg));
+    transition: transform var(--m3-spatial), opacity var(--m3-effects);
+  }
+  .fx-cat img {
+    display: block; width: 100%; height: auto;
+    max-height: 60vh; object-fit: contain;
+    border-radius: var(--shape-s);
+    background: light-dark(#EFEDF6, #E4E0F0);
+  }
+  .fx-cat figcaption {
+    font-family: var(--display); font-weight: 600; font-size: 1.05rem;
+    color: #1C1A2E; text-align: center;
+    padding: 10px 4px 12px; line-height: 1.2;
+  }
+  .fx-cat.is-in {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(var(--tilt, -4deg));
+  }
+
+  /* --- topbar en foot --- */
+  .topbar { margin-block: -10px; display: flex; justify-content: space-between; align-items: center; gap: var(--s3); font-variant-numeric: tabular-nums; }
+  .foot { display: flex; gap: var(--s2) var(--s4); justify-content: center; flex-wrap: wrap; color: var(--muted); margin-block: -10px; }
+  .brand { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+  .brand .tag { color: var(--muted); }
+
+  /* --- lesson: de kaart op het lessenoverzicht --- */
+  .lessons { display: flex; flex-direction: column; gap: var(--s3); }
+  .lesson {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--s4);
+    align-items: center; text-align: left; font: inherit; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: var(--shape-xl); padding: var(--s4) 18px; cursor: pointer; box-shadow: var(--shadow);
+  }
+  .lesson .subj { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--accent); }
+  .lesson h2 { font-size: var(--t-title); margin-top: 2px; }
+  /* Let op: .cnt heeft een expliciete kolom nodig. Zonder grid-column plaatst
+     het grid-algoritme een item met alleen grid-row in kolom 1, links van de titel. */
+  .lesson .cnt {
+    grid-column: 2; grid-row: 1 / 4; align-self: center;
+    font-family: var(--display); font-size: 2.25rem; line-height: 1;
+    color: var(--ink); text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .lesson .cnt small {
+    display: block; font-family: var(--body); font-size: var(--t-label-sm); font-weight: 700;
+    letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap;
+  }
+  .lesson .meter { grid-column: 1 / 3; margin-top: 10px; }
+
+  /* --- feedbacklijst --- */
+  .fb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .fb-list li { display: grid; grid-template-columns: 24px 1fr; gap: var(--s3); align-items: start; }
+  .fb-list .mark { display: grid; place-items: center; font-size: 1.25rem; margin-top: .1em; }
+  .fb-list .mark.ok { color: var(--ok); }
+  .fb-list .mark.bad { color: var(--bad); }
+  .fb-list .mark.maybe { color: var(--warn); }
+  .fb-list .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+  .fb-list .yours { color: var(--muted); font-size: .88rem; margin-top: 4px; }
+  .fb-list .yours:empty { display: none; }
+
+  /* --- overig --- */
+  .tbl { overflow-x: auto; }
+  .radio { display: flex; flex-direction: column; gap: var(--s2); }
+  .radio label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+  .radio input { margin-top: 5px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .85rem; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--line-strong); margin-right: 5px; vertical-align: middle; }
+  .hard { color: var(--bad); font-weight: 700; font-size: .8rem; }
+  .dots { letter-spacing: 2px; color: var(--accent); font-size: .8rem; }
+  .sync { font-size: .85rem; color: var(--muted); }
+  .sync.on { color: var(--ok); }
+
+  /* --- beweging --- */
+  .btn, .choice, .seg button, .lesson {
+    transition: background var(--m3-effects), border-color var(--m3-effects),
+                color var(--m3-effects), transform var(--m3-spatial-fast);
+  }
+  .meter i { transition: width var(--m3-spatial); }
+  .btn:active { transform: scale(.98); }
+  .lesson:active, .choice:active:not(:disabled), .seg button:active { transform: scale(.99); }
+
+  @keyframes pop  { from { transform: scale(.7); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+  @keyframes bump { 0% { transform: scale(1) } 40% { transform: scale(1.22) } 100% { transform: scale(1) } }
+  @keyframes ring {
+    0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent) }
+    100% { box-shadow: 0 0 0 14px transparent }
+  }
+}
+
+/* =============================================================
+   4. SCHERMEN
+   Alleen wat echt bij een scherm hoort. Groeit dit, dan hoort er
+   waarschijnlijk een component bij.
+   ============================================================= */
+@layer screens {
+  /* lesscherm */
+  .learner-row { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+  .learner-row .row { align-items: center; }
+  .learner-row input { max-width: 200px; }
+
+  /* quiz */
+  .q-card { gap: var(--s4); border-radius: var(--shape-xxl) var(--shape-xl) var(--shape-xl) var(--shape-xl); }
+  .q-card > #q-kind { margin-bottom: calc(-1 * var(--s3)); }
+  .q-card.is-good { animation: ring var(--m3-effects-slow) both; }
+  .prompt {
+    font-family: var(--display); font-weight: 700; font-size: var(--t-display);
+    line-height: 1.08; letter-spacing: -.01em; text-wrap: balance; margin-block: 2px 4px;
+  }
+  .prompt.def { font-family: var(--body); font-weight: 400; font-size: clamp(1.3rem, 4.5vw, 1.7rem); line-height: 1.3; letter-spacing: 0; }
+
+  #feedback { display: flex; flex-direction: column; gap: var(--s4); margin-top: var(--s2); padding-top: var(--s4); border-top: 1px solid var(--line); }
+  #fb-word, #fb-def { font-size: var(--t-headline-sm); font-weight: 700; line-height: 1.3; }
+  /* Bij een goed antwoord geen herhaling van vraag en invoer. */
+  #feedback.only-verdict .fb-list { display: none; }
+  #fb-official { font-size: var(--t-label); color: var(--muted); }
+  #fb-official b { display: block; font-size: var(--t-headline-sm); color: var(--ink); line-height: 1.3; margin-top: 2px; }
+  #btn-override { align-self: flex-start; }
+  .assess { display: flex; flex-direction: column; gap: 10px; }
+
+  /* samenvatting: het scorecijfer is de held */
+  .summary-grid { grid-template-columns: 1fr 1fr; }
+  .summary-grid .stat:first-child {
+    grid-column: 1 / -1; padding: 28px 20px; border: 0;
+    background: var(--tertiary-container); color: var(--on-tertiary-container);
+    border-radius: var(--shape-xl); animation: pop var(--m3-spatial-slow) both;
+  }
+  .summary-grid .stat:first-child > span { color: inherit; opacity: .8; }
+  #sum-first { font-family: var(--display); font-weight: 700; font-size: 3.5rem; line-height: 1; }
+  #sum-perfect { display: flex; align-items: center; justify-content: center; gap: var(--s2); margin-top: var(--s2); font-weight: 700; font-size: var(--t-label); color: var(--on-tertiary-container); }
+  #sum-perfect .icon { font-size: 1.4em; color: var(--tertiary); }
+  .summary-grid .stat:first-child b { display: flex; align-items: center; justify-content: center; gap: var(--s3); }
+
+  /* eerst lezen */
+  .sec-title td { background: var(--bg); font-weight: 700; font-family: var(--body); }
+
+  /* rapport */
+  .rep { display: flex; flex-direction: column; gap: var(--s3); }
+  .rep h3 { display: grid; gap: 2px; justify-content: start; }
+  .rep h3 .muted { font-family: var(--body); font-weight: 400; font-size: .9rem; }
+  .sessions { display: flex; flex-direction: column; gap: 6px; font-variant-numeric: tabular-nums; }
+  .sessions .s { display: grid; grid-template-columns: auto minmax(40px, 1fr) auto; gap: var(--s2); align-items: center; font-size: .85rem; }
+  .sessions .s > span:first-child, .sessions .s > span:last-child { white-space: nowrap; }
+  .hardlist { display: flex; flex-direction: column; gap: 6px; font-size: .95rem; }
+  .hardlist div { display: flex; justify-content: space-between; gap: 10px; }
+
+  /* hoe werkt het */
+  .info h3 { margin-top: 6px; }
+  .info ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: var(--s2); }
+  .info .ref { font-size: .85rem; color: var(--muted); }
+  .info table { font-size: .9rem; }
+}
+
+/* =============================================================
+   5. RESPONSIVE
+   ============================================================= */
+@layer responsive {
+  /* telefoon */
+  @media (max-width: 420px) {
+    .choices { grid-template-columns: 1fr 1fr; }
+    .stat b { font-size: 1.4rem; }
+  }
+  /* geen toetsenbord: hints zijn ruis */
+  @media (pointer: coarse) {
+    .choice kbd, #assess-keys-hint { display: none; }
+  }
+  /* wel een muis of trackpad: hover mag bestaan zonder te blijven plakken */
+  @media (hover: hover) and (pointer: fine) {
+    .lesson:hover { border-color: var(--accent); background: var(--control-hover); }
+    .btn:hover:not(:disabled) { background: var(--control-hover); border-color: var(--accent); }
+    .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+    .choice:hover:not(:disabled):not(.on) { border-color: var(--accent); background: var(--control-hover); }
+    .seg button:hover:not(.on) { border-color: var(--accent); background: var(--control-hover); }
+    .link:hover { text-decoration-thickness: 3px; }
+  }
+  /* breed scherm: benut de ruimte in overzichten */
+  @media (min-width: 900px) {
+    body > .app { max-width: none; }
+    #scr-lessons > .app, #scr-report > .app { max-width: 960px; margin-inline: auto; }
+    #scr-lessons .lessons { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s4); }
+    #scr-lessons .lesson { grid-template-rows: auto auto 1fr auto; min-height: 150px; padding: 20px; }
+    #report-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: var(--s4); align-items: start; max-width: none; }
+  }
+  /* Chromebook: breed maar laag. Feedback naast de vraag, zodat het
+     gevraagde woord in beeld blijft en er niet gescrold hoeft te worden. */
+  @media (min-width: 860px) and (max-height: 900px) {
+    body > .app { max-width: none; }
+    #scr-quiz > .app { max-width: 900px; margin-inline: auto; }
+    .q-card { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); column-gap: var(--s5); row-gap: var(--s3); align-items: start; }
+    .q-card > * { grid-column: 1; }
+    .q-card > #feedback {
+      grid-column: 2; grid-row: 1 / span 7;
+      border-top: 0; margin-top: 0; padding-top: 0;
+      border-left: 1px solid var(--line); padding-left: var(--s5);
+    }
+  }
+  /* weinig hoogte: hoogte winnen */
+  @media (max-height: 760px) {
+    .choices { grid-template-columns: repeat(4, 1fr); }
+    .choice { padding: 12px 10px; font-size: .95rem; }
+    .card { padding: 18px 20px; gap: var(--s4); }
+    #q-keys-hint { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+}
