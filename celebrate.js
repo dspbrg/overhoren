@@ -42,10 +42,27 @@
   // Snippers vallen met zwaartekracht en wat luchtweerstand, en
   // tollen om hun as. Kleuren komen uit de tokens, zodat het bij de
   // app blijft passen ook als je het thema aanpast.
+  // De tokens staan als light-dark(licht, donker) in de CSS. getPropertyValue
+  // geeft die tekst onopgelost terug, en dat is geen geldige fillStyle: canvas
+  // negeert hem dan en alles wordt een kleur. Daarom laten we de browser hem
+  // eerst uitrekenen via een echt element.
+  function resolveColors(tokens) {
+    const probe = document.createElement("span");
+    probe.style.cssText = "position:absolute;left:-9999px;width:0;height:0";
+    document.body.appendChild(probe);
+    const out = tokens.map(function (t) {
+      probe.style.color = "";
+      probe.style.color = "var(" + t + ")";
+      const c = getComputedStyle(probe).color;
+      return /^rgba?\(/.test(c) ? c : null;
+    }).filter(Boolean);
+    probe.remove();
+    return out.length ? out : ["#6B3FD1", "#2E9E5B", "#F0BE55", "#D9463A", "#2C6BB3"];
+  }
+
   function confetti(duration) {
-    const cs = getComputedStyle(document.documentElement);
-    const colors = ["--accent", "--ok", "--tertiary", "--warn", "--adj"]
-      .map(t => cs.getPropertyValue(t).trim()).filter(Boolean);
+    const colors = resolveColors(["--accent", "--ok", "--tertiary", "--warn",
+                                  "--adj", "--verb", "--noun", "--bad"]);
 
     const cv = document.createElement("canvas");
     cv.className = "fx-canvas";
@@ -60,19 +77,23 @@
     size();
     addEventListener("resize", size);
 
-    const N = innerWidth < 500 ? 80 : 140;
+    const N = innerWidth < 500 ? 120 : 220;
     const bits = [];
     for (let i = 0; i < N; i++) {
+      const soort = Math.random();
       bits.push({
         x: Math.random() * innerWidth,
-        y: -20 - Math.random() * innerHeight * 0.6,
-        w: 6 + Math.random() * 6,
-        h: 9 + Math.random() * 8,
-        vx: -1.2 + Math.random() * 2.4,
-        vy: 2.2 + Math.random() * 3.2,
+        y: -20 - Math.random() * innerHeight * 0.7,
+        w: 6 + Math.random() * 7,
+        h: 9 + Math.random() * 9,
+        vx: -1.6 + Math.random() * 3.2,
+        vy: 2.0 + Math.random() * 3.6,
         rot: Math.random() * Math.PI,
-        vr: -0.14 + Math.random() * 0.28,
-        color: pick(colors)
+        vr: -0.18 + Math.random() * 0.36,
+        zwaai: 0.6 + Math.random() * 1.4,      // hoe sterk hij heen en weer wiegt
+        fase: Math.random() * Math.PI * 2,
+        vorm: soort < 0.62 ? "snipper" : soort < 0.85 ? "rond" : "lint",
+        color: colors[i % colors.length]        // gelijkmatig over alle kleuren
       });
     }
 
@@ -83,14 +104,24 @@
       for (const b of bits) {
         b.vy += 0.045;          // zwaartekracht
         b.vx *= 0.995;          // luchtweerstand
-        b.x += b.vx; b.y += b.vy; b.rot += b.vr;
+        b.fase += 0.06;
+        b.x += b.vx + Math.sin(b.fase) * b.zwaai * 0.5;   // wiegen tijdens het vallen
+        b.y += b.vy; b.rot += b.vr;
         if (b.y < innerHeight + 40) alive = true;
         ctx.save();
         ctx.translate(b.x, b.y);
         ctx.rotate(b.rot);
         ctx.fillStyle = b.color;
-        // de snipper kantelt, zodat hij lijkt te fladderen
-        ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h * Math.abs(Math.cos(b.rot)));
+        if (b.vorm === "rond") {
+          ctx.beginPath();
+          ctx.ellipse(0, 0, b.w / 2, (b.w / 2) * Math.abs(Math.cos(b.rot)), 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (b.vorm === "lint") {
+          ctx.fillRect(-b.w / 4, -b.h, b.w / 2, b.h * 2 * Math.abs(Math.cos(b.rot)));
+        } else {
+          // de snipper kantelt, zodat hij lijkt te fladderen
+          ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h * Math.abs(Math.cos(b.rot)));
+        }
         ctx.restore();
       }
       if (alive && now < end) requestAnimationFrame(frame);

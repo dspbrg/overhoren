@@ -96,7 +96,7 @@
           <div class="row"><button class="btn ok" id="btn-assess-yes">Ja, goed rekenen</button><button class="btn" id="btn-assess-no">Nee, fout</button></div>
           <span class="hint" id="assess-keys-hint">J = goed rekenen, N = fout</span>
         </div>
-        <button class="link" id="btn-override" hidden>Toch goed rekenen</button>
+        <button class="link" data-icon="check" id="btn-override" hidden>Dit was ook goed</button>
       </div>
       <p class="hint" id="q-keys-hint"></p>
     </div>
@@ -236,6 +236,27 @@ function save(key, val){ try{ if(val==null) localStorage.removeItem(key); else l
 const LKEY = "overhoor:lists", CKEY = "overhoor:current", LEARNER_KEY = "overhoor:learner", LEARNERS_KEY = "overhoor:learners";
 const slug = s => String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "leerling";
 const PKEY = id => "overhoor:progress:"+slug(learner)+":"+id, SKEY = id => "overhoor:session:"+slug(learner)+":"+id;
+const AKEY = id => "overhoor:alts:"+slug(learner)+":"+id;
+// Antwoorden die Pia zelf goed heeft laten rekenen. De app onthoudt ze,
+// zodat dezelfde vertaling de volgende keer meteen goed is.
+let learnedAlts = {};
+function loadAlts(){ learnedAlts = load(AKEY(list.id), {}); }
+function altsFor(i){ return learnedAlts[i] || []; }
+function addAlt(i, text){
+  const t = String(text||"").trim(); if(!t) return;
+  const have = altsFor(i);
+  if(have.some(x=>E.norm(x)===E.norm(t))) return;
+  learnedAlts[i] = have.concat([t]);
+  save(AKEY(list.id), learnedAlts);
+}
+// Het item verrijkt met wat ze eerder heeft goedgekeurd, zodat de engine
+// het gewoon als geldig antwoord ziet in plaats van als uitzondering.
+function withAlts(item, i){
+  const extra = altsFor(i); if(!extra.length) return item;
+  return isTranslate()
+    ? Object.assign({}, item, { def: item.def + " / " + extra.join(" / ") })
+    : Object.assign({}, item, { accept: (item.accept||[]).concat(extra) });
+}
 let learner = load(LEARNER_KEY, "Pia");
 let db = null, syncChain = Promise.resolve(), syncTimer = null;
 
@@ -250,6 +271,7 @@ function selectList(id){
   const legacy = load("overhoor:progress:"+list.id, null);
   if(legacy && !load(PKEY(list.id), null)){ save(PKEY(list.id), legacy); save("overhoor:progress:"+list.id, null); }
   progress = load(PKEY(list.id), {items:{}, sessions:[]});
+  loadAlts();
   if(!progress.items) progress.items = {};
   if(!progress.sessions) progress.sessions = [];
   save(CKEY, list.id);
@@ -525,7 +547,7 @@ function check(){
   let status;
   if(wd){
     mark("fb-word-mark","ok");
-    const r = isTranslate() ? E.gradeTranslation(item, text) : E.gradeDefinition(item, text);
+    const r = isTranslate() ? E.gradeTranslation(withAlts(item, entry.i), text) : E.gradeDefinition(withAlts(item, entry.i), text);
     status = r.status;
     $("fb-def-yours").textContent = text ? "" : "Niets ingevuld";
     mark("fb-def-mark", status==="correct"?"ok":status==="maybe"?"maybe":"bad");
@@ -582,6 +604,10 @@ function finalize(){
 }
 function applyResult(entry, item, ok){
   const st = E.getState(progress, entry.i);
+  // Volledige momentopname, zodat "Dit was ook goed" de boeking echt kan
+  // terugdraaien en niet alleen de tellers. Zonder dit blijft box 0 staan.
+  ui.stateBefore = JSON.parse(JSON.stringify(st));
+  ui.streakBefore = session.streak||0;
   E.applyAnswer(st, ok, Date.now());
   if(!ui.clsOk && classes().length) st.partWrong.cls++;
   if(ui.verdictDef!==true){ if(entry.dir==="wd") st.partWrong.def++; else st.partWrong.word++; st.dirWrong[entry.dir]++; }
@@ -597,16 +623,26 @@ function applyResult(entry, item, ok){
   saveProgress(); persistSession();
 }
 // Override: van fout naar goed. Draai de vorige boeking terug en boek opnieuw.
+// "Dit was ook goed" is geen uitzondering maar een correctie. De hele
+// boeking gaat terug naar de staat van voor het antwoord, inclusief de
+// Leitner-box en de herhaaldatum, en daarna wordt het opnieuw geboekt als
+// goed. Haar antwoord wordt onthouden, zodat het de volgende keer meteen
+// goed gerekend wordt in plaats van opnieuw gecorrigeerd te moeten worden.
 function override(){
   const entry = current(); const item = list.items[entry.i];
-  const st = E.getState(progress, entry.i);
-  // terugdraaien van de foute boeking
-  st.seen--; st.wrong--; st.lapses--; st.dirWrong[entry.dir]--; if(entry.dir==="wd") st.partWrong.def--; else st.partWrong.word--;
-  if(!ui.clsOk && classes().length) st.partWrong.cls--;
-  session.attempts[entry.i]--;
+  if(ui.stateBefore) progress.items[entry.i] = JSON.parse(JSON.stringify(ui.stateBefore));
+  session.attempts[entry.i] = Math.max(0, (session.attempts[entry.i]||1) - 1);
+  if(!session.attempts[entry.i]) delete session.attempts[entry.i];
+  delete session.firstTry[entry.i];
+  session.streak = ui.streakBefore||0;
   const at = session.queue.findIndex((e,k)=>k>session.pos && e.i===entry.i); if(at>0) session.queue.splice(at,1);
+  if(entry.dir==="wd") addAlt(entry.i, ui.typed);
   ui.verdictDef = true; finalized = false; $("btn-override").hidden = true;
   finalize();
+  if(entry.dir==="wd" && String(ui.typed||"").trim()){
+    $("fb-official").hidden = false;
+    $("fb-official").innerHTML = 'Onthouden. <b>'+esc(String(ui.typed).trim())+'</b> telt voortaan ook goed.';
+  }
 }
 const PRAISE = ["Goed zo!", "Yes!", "Top!", "Precies!", "Helemaal goed!", "Lekker bezig!"];
 function pickPraise(){ return PRAISE[Math.floor(Math.random()*PRAISE.length)]; }
