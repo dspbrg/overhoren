@@ -52,6 +52,17 @@
         </div>
         <p class="hint" id="size-hint"></p>
       </div>
+      <div class="field">
+        <span class="eyebrow">Wanneer is de overhoring?</span>
+        <div class="seg" id="deadline-seg">
+          <button type="button" data-d="0">Vandaag</button>
+          <button type="button" data-d="1">Morgen</button>
+          <button type="button" data-d="2">Overmorgen</button>
+          <button type="button" data-d="x">Andere dag</button>
+        </div>
+        <input type="date" id="deadline-input" hidden>
+        <p class="hint" id="deadline-hint"></p>
+      </div>
       <div class="notice" id="break-notice" hidden><span id="break-text"></span></div>
       <button class="btn primary big" data-icon="play" id="btn-start">Start overhoring</button>
       <div class="row"><button class="btn" data-icon="book" id="btn-study">Eerst lezen</button><button class="btn" data-icon="chart" id="btn-progress">Voortgang</button></div>
@@ -245,6 +256,45 @@ const PAUSE_AFTER = 15*MIN;   // zachte hint tijdens een ronde
 // herstelpauze nodig. De pauze blijft dus kort: bij een toets morgen is
 // doorleren vandaag juist zinvol, de beperking is aandacht en niet spreiding.
 const BLOK_MAX = 25*MIN, PAUZE_KORT = 5*MIN, PAUZE_LANG = 15*MIN, DAG_LANG_NA = 60*MIN;
+// Vlak voor een toets weegt doorleren zwaarder dan een lange pauze. Het blok
+// blijft even lang (aandacht zakt nu eenmaal na een minuut of 25), maar de
+// pauze wordt korter en er mag meer op een dag.
+function pauzeDuur(){
+  const n = dagenTot(deadlineVan(list));
+  const t = tijdVandaag();
+  const lang = t.dag >= dagBudget();
+  if(n === null || n > 2) return lang ? PAUZE_LANG : PAUZE_KORT;
+  if(n <= 0) return lang ? 5*MIN : 2*MIN;      // toetsdag
+  return lang ? 8*MIN : 3*MIN;                 // morgen of overmorgen
+}
+function dagBudget(){
+  const n = dagenTot(deadlineVan(list));
+  if(n === null || n > 2) return DAG_LANG_NA;  // 60 min
+  return n <= 0 ? 120*MIN : 90*MIN;
+}
+// De toetsdatum komt uit lists.js, maar is per apparaat aan te passen zonder
+// deploy. Einde van de schooldag als moment: 15:00 op de toetsdag.
+const DKEY = id => "overhoor:deadline:"+id;
+function deadlineVan(l){
+  const eigen = load(DKEY(l.id), null);
+  const d = eigen || l.deadline;
+  if(!d) return 0;
+  const t = new Date(d+"T15:00:00");
+  return isNaN(t) ? 0 : t.getTime();
+}
+function dagenTot(ts){
+  if(!ts) return null;
+  const nu = new Date(); nu.setHours(0,0,0,0);
+  const d = new Date(ts); d.setHours(0,0,0,0);
+  return Math.round((d-nu)/(24*60*60*1000));
+}
+function deadlineLabel(n){
+  if(n===null) return "";
+  if(n < 0) return "toets geweest";
+  if(n === 0) return "toets vandaag";
+  if(n === 1) return "toets morgen";
+  return "toets over "+n+" dagen";
+}
 const TKEY = () => "overhoor:tijd:"+slug(learner)+":"+new Date().toISOString().slice(0,10);
 function tijdVandaag(){ return load(TKEY(), {blok:0, dag:0, pauzeTot:0}); }
 function bewaarTijd(t){ save(TKEY(), t); }
@@ -252,10 +302,7 @@ function bewaarTijd(t){ save(TKEY(), t); }
 function boekTijd(ms){
   const t = tijdVandaag();
   t.blok += ms; t.dag += ms;
-  if(t.blok >= BLOK_MAX){
-    t.pauzeTot = Date.now() + (t.dag >= DAG_LANG_NA ? PAUZE_LANG : PAUZE_KORT);
-    t.blok = 0;
-  }
+  if(t.blok >= BLOK_MAX){ t.pauzeTot = Date.now() + pauzeDuur(); t.blok = 0; }
   bewaarTijd(t);
 }
 function pauzeRest(){ const t = tijdVandaag(); return Math.max(0, (t.pauzeTot||0) - Date.now()); }
@@ -427,7 +474,7 @@ function bewaakPauze(){
     } else {
       knop.disabled = false;
       $("btn-study-start").disabled = false;
-      if(t.dag >= DAG_LANG_NA){
+      if(t.dag >= dagBudget()){
         blok.hidden = false;
         $("break-text").innerHTML = "<b>Je hebt vandaag al " + Math.round(t.dag/MIN) +
           " minuten geoefend.</b> Nog een ronde mag. Vanaf nu worden de pauzes wat langer, " +
@@ -451,9 +498,11 @@ function renderLessons(){
     if(!p.items) p.items = {};
     const c = counts(p, l, null); const pct = x=>Math.round(100*x/Math.max(1,c.total));
     const dir = l.mode==="translate" ? (l.from||"")+" naar "+(l.to||"") : "woord, woordsoort en definitie";
+    const dagen = dagenTot(deadlineVan(l));
     return UI.LessonCard({ id: l.id, subject: l.subject, title: l.title,
       meta: (l.subtitle ? l.subtitle+" · " : "")+dir, due: c.due,
-      known: c.known, learning: c.learning, total: c.total });
+      known: c.known, learning: c.learning, total: c.total,
+      deadline: deadlineLabel(dagen), deadlineDagen: dagen });
   }).join("");
   $("lessons").querySelectorAll(".lesson").forEach(b=>b.addEventListener("click", ()=>{ selectList(b.dataset.id); renderHome(); show("scr-home"); }));
 }
@@ -470,6 +519,16 @@ function renderHome(){
   $("size-hint").textContent = pick.kind==="extra"
     ? "Niets aan de beurt. Deze ronde oefent de "+pick.indices.length+" zwakste woorden extra."
     : "Deze ronde: "+pick.indices.length+" woorden ("+Math.min(pick.dueCount, pick.indices.length)+" herhalen, "+(pick.indices.length-Math.min(pick.dueCount,pick.indices.length))+" nieuw).";
+  const dl = deadlineVan(list), dagen = dagenTot(dl);
+  $("deadline-input").value = dl ? new Date(dl).toISOString().slice(0,10) : "";
+  // snelkeuze voor de drie gevallen die bijna altijd gelden, datumveld
+  // alleen als het iets anders is
+  const snel = dagen !== null && dagen >= 0 && dagen <= 2 ? String(dagen) : (dl ? "x" : null);
+  $("deadline-seg").querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.d === snel));
+  $("deadline-input").hidden = snel !== "x";
+  $("deadline-hint").textContent = dl
+    ? deadlineLabel(dagen) + (dagen !== null && dagen >= 0 && dagen <= 2 ? " · kortere pauzes, want de toets is dichtbij" : "")
+    : "Kies een dag, dan plant de app de herhalingen daarop.";
   bewaakPauze();
   const s = load(SKEY(list.id), null);
   $("resume").hidden = !(s && s.pos < s.queue.length);
@@ -695,6 +754,17 @@ function finalize(){
   applyResult(entry, item, ok);
   setTimeout(()=>$("btn-next").focus(), 50);
 }
+// Een woord dat op "over een week" komt te staan, komt niet meer langs voor
+// een toets van morgen. Valt de volgende herhaling na de toets, dan halen we
+// hem naar voren: 40% van de resterende tijd, binnen de band die Cepeda
+// (2008) als optimaal vond voor korte retentie-intervallen.
+function kortInTotDeadline(st){
+  const dl = deadlineVan(list); if(!dl) return;
+  const nu = Date.now();
+  if(dl <= nu) return;
+  if(st.due > dl) st.due = nu + Math.max(10*MIN, Math.round(0.4*(dl-nu)));
+}
+
 function applyResult(entry, item, ok){
   const st = E.getState(progress, entry.i);
   // Volledige momentopname, zodat "Dit was ook goed" de boeking echt kan
@@ -702,6 +772,7 @@ function applyResult(entry, item, ok){
   ui.stateBefore = JSON.parse(JSON.stringify(st));
   ui.streakBefore = session.streak||0;
   E.applyAnswer(st, ok, Date.now());
+  kortInTotDeadline(st);
   if(!ui.clsOk && classes().length) st.partWrong.cls++;
   if(ui.verdictDef!==true){ if(entry.dir==="wd") st.partWrong.def++; else st.partWrong.word++; st.dirWrong[entry.dir]++; }
   session.attempts[entry.i] = (session.attempts[entry.i]||0)+1;
@@ -846,6 +917,22 @@ function bind(){
   $("btn-progress-back").addEventListener("click", ()=>{ renderHome(); show("scr-home"); });
   $("btn-reset").addEventListener("click", ()=>{ if(confirm("Alle voortgang van '"+list.title+"' wissen?")){ progress={items:{},sessions:[]}; saveProgress(); save(SKEY(list.id),null); renderProgress(); } });
   $("btn-info").addEventListener("click", ()=>show("scr-info"));
+  $("deadline-seg").addEventListener("click", e=>{
+    const b = e.target.closest("button"); if(!b) return;
+    if(b.dataset.d === "x"){
+      $("deadline-input").hidden = false;
+      $("deadline-seg").querySelectorAll("button").forEach(x=>x.classList.toggle("on", x===b));
+      $("deadline-input").focus();
+      return;
+    }
+    const d = new Date(); d.setDate(d.getDate() + parseInt(b.dataset.d, 10));
+    save(DKEY(list.id), d.toISOString().slice(0,10));
+    renderHome();
+  });
+  $("deadline-input").addEventListener("change", e=>{
+    save(DKEY(list.id), e.target.value || null);
+    renderHome();
+  });
   $("btn-cats").addEventListener("click", ()=>{ show("scr-cats"); renderCats(); });
   $("btn-cats-back").addEventListener("click", ()=>{ show("scr-lessons"); renderLessons(); });
   $("btn-report").addEventListener("click", ()=>{ show("scr-report"); renderReport(); });

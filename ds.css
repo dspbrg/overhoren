@@ -138,12 +138,18 @@
   th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 
-  select, input[type=text], textarea {
+  select, input[type=text], input[type=date], textarea {
     font: inherit; color: var(--ink); background: var(--control);
     border: 1.5px solid var(--line-strong); border-radius: var(--shape-m);
     padding: 12px 14px; width: 100%;
   }
   input[type=text] { font-size: 1.15rem; }
+  input[type=date] { font-size: 1rem; color-scheme: light dark; }
+  /* de kalenderknop meekleuren met de rest */
+  input[type=date]::-webkit-calendar-picker-indicator {
+    opacity: .6; cursor: pointer; filter: grayscale(1);
+  }
+  input[type=date]:hover::-webkit-calendar-picker-indicator { opacity: 1; }
   textarea { min-height: 160px; resize: vertical; font-size: .95rem; }
 
   /* Focus is overal gelijk en wint altijd van hover. */
@@ -459,9 +465,28 @@
     text-transform: uppercase; color: var(--muted); white-space: nowrap;
   }
 
-  /* de enige echte oproep tot actie op de kaart, dus als los label */
+  /* de labels onderaan de kaart: wanneer de toets is, en wat klaarstaat */
+  .lesson-chips {
+    grid-area: chip; align-self: end; justify-self: start;
+    display: flex; flex-wrap: wrap; gap: var(--s2);
+  }
+  .lesson-chips:empty { display: none; }
+  .deadline-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--line-strong);
+    font-size: var(--t-label); font-weight: 700;
+    padding: 4px 11px; border-radius: var(--shape-full);
+  }
+  /* vandaag of morgen: dan mag het opvallen */
+  .deadline-chip.is-dichtbij {
+    background: var(--tertiary-container); color: var(--on-tertiary-container);
+    border-color: transparent;
+  }
+  .deadline-chip.is-dichtbij .icon { color: var(--tertiary); }
+  #deadline-input { width: auto; max-width: 220px; }
+
   .due-chip {
-    grid-area: chip; justify-self: start; align-self: end;
     display: inline-flex; align-items: center; gap: 6px;
     background: var(--accent-soft); color: var(--accent);
     font-size: var(--t-label); font-weight: 700;

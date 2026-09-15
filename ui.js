@@ -204,7 +204,11 @@
       '<div class="lesson-ring">' + Ring({ known: known, learning: learning, total: o.total }) +
         '<span class="ring-cap">geoefend</span>' +
       '</div>' +
-      (o.due ? '<span class="due-chip">' + Icon("clock") + '<span>' + esc(o.due) + ' aan de beurt</span></span>' : "") +
+      '<span class="lesson-chips">' +
+        (o.deadline ? '<span class="' + cls("deadline-chip", o.deadlineDagen !== null && o.deadlineDagen <= 1 && "is-dichtbij") + '">' +
+          Icon("alert") + '<span>' + esc(o.deadline) + '</span></span>' : "") +
+        (o.due ? '<span class="due-chip">' + Icon("clock") + '<span>' + esc(o.due) + ' aan de beurt</span></span>' : "") +
+      '</span>' +
       '</button>';
   }
 

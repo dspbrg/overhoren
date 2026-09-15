@@ -16,6 +16,7 @@ window.WORDLISTS = [
   {
     id: "horrid-henry-1tto",
     title: "Horrid Henry wordlist",
+    deadline: "2026-09-17",   // datum van de overhoring
     subject: "Engels",
     classes: ["Verb", "Adjective", "Noun", "Adverb"],
     items: [
@@ -79,6 +80,7 @@ window.WORDLISTS = [
   {
     id: "frans-arret-apprendre",
     title: "Arrêt Apprendre",
+    deadline: "2026-09-16",   // datum van de overhoring
     subtitle: "Vocabulaire & phrases-clés",
     subject: "Frans",
     mode: "translate",
