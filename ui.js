@@ -194,9 +194,9 @@
     if (known) delen.push(known + " zit erin");
     if (learning) delen.push(learning + " aan het leren");
     if (!delen.length && nieuw) delen.push(nieuw + " nieuw");
-    return '<button type="button" class="lesson"' + attr("data-id", o.id) + '>' +
+    return '<button type="button" class="' + cls("lesson", o.mix && "is-mix") + '"' + attr("data-id", o.id) + '>' +
       '<div class="lesson-body">' +
-        '<span class="subj">' + esc(o.subject || "Woordenlijst") + '</span>' +
+        '<span class="subj">' + (o.mix ? Icon("sparkle") + "<span>herhalen</span>" : esc(o.subject || "Woordenlijst")) + '</span>' +
         '<h2>' + esc(o.title) + '</h2>' +
         '<span class="muted lesson-meta">' + esc(o.meta) + '</span>' +
         '<span class="lesson-stats">' + esc(delen.join(" · ")) + '</span>' +

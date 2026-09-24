@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#F4F3F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16142A" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="ds.css">
+<link rel="stylesheet" href="ds.css?v=20260924112556">
 </head>
 <body>
 <div class="app">
@@ -238,11 +238,11 @@
 
 </div>
 
-<script src="ui.js"></script>
-<script src="cats.js"></script>
-<script src="celebrate.js"></script>
-<script src="lists.js"></script>
-<script src="engine.js"></script>
+<script src="ui.js?v=20260924112556"></script>
+<script src="cats.js?v=20260924112556"></script>
+<script src="celebrate.js?v=20260924112556"></script>
+<script src="lists.js?v=20260924112556"></script>
+<script src="engine.js?v=20260924112556"></script>
 <script>
 (function(){
 "use strict";
@@ -276,6 +276,7 @@ function dagBudget(){
 // deploy. Einde van de schooldag als moment: 15:00 op de toetsdag.
 const DKEY = id => "overhoor:deadline:"+id;
 function deadlineVan(l){
+  if(l && l.mix) return mixDeadline(l);
   const eigen = load(DKEY(l.id), null);
   const d = eigen || l.deadline;
   if(!d) return 0;
@@ -345,8 +346,70 @@ let lists = [], list = null, progress = null, session = null, sizeChoice = 15, t
 const ui = { pick:null, checked:false, verdictDef:null, clsOk:false, firstBlank:false, pauseShown:false };
 
 function allLists(){ return (window.WORDLISTS||[]).concat(load(LKEY, [])); }
+
+// --- gemengde lijst per vak -------------------------------------------
+// Per vak een extra "lijst" met alle woorden van dat vak door elkaar. Dat is
+// alleen bedoeld om te herhalen: de losse lijsten blijven bestaan, zodat een
+// nieuwe lijst leren niet meteen vermengd raakt met oude stof.
+//
+// Belangrijk: de voortgang blijft van de oorspronkelijke lijsten. De toestand
+// van elk woord wordt per referentie gedeeld, dus een goed antwoord hier telt
+// gewoon mee in de eigen lijst. Anders zou ze alles twee keer moeten leren.
+const MIX = "mix:";
+let bronProgress = null;     // alleen gevuld bij een gemengde lijst
+
+function mixLijsten(){
+  const perVak = {};
+  for(const l of lists){
+    if(String(l.id).startsWith(MIX)) continue;
+    (perVak[l.subject || "Overig"] = perVak[l.subject || "Overig"] || []).push(l);
+  }
+  const uit = [];
+  for(const vak in perVak){
+    const ls = perVak[vak];
+    // alleen mengen wat dezelfde vorm heeft, anders klopt de vraagstelling niet
+    if(ls.length < 2) continue;
+    if(new Set(ls.map(l=>l.mode||"def")).size > 1) continue;
+    uit.push({
+      id: MIX + slug(vak), title: "Alles door elkaar", subject: vak, mix: true,
+      subtitle: ls.length + " lijsten samen",
+      bronnen: ls.map(l=>l.id),
+      mode: ls[0].mode, from: ls[0].from, to: ls[0].to,
+      classes: Array.from(new Set(ls.flatMap(l => l.classes || l.items.map(i=>i.cls)).filter(Boolean))),
+      items: ls.flatMap(l => l.items.map((it, idx) => Object.assign({}, it, { bron: { lid: l.id, idx } })))
+    });
+  }
+  return uit;
+}
+// de eerstvolgende toets van de onderliggende lijsten telt voor de mix
+function mixDeadline(l){
+  let beste = 0;
+  for(const lid of l.bronnen){
+    const bron = lists.find(x=>x.id===lid); if(!bron) continue;
+    const t = deadlineVan(bron);
+    if(t > Date.now() && (!beste || t < beste)) beste = t;
+  }
+  return beste;
+}
 function selectList(id){
-  list = lists.find(l=>l.id===id) || lists[0];
+  list = lists.concat(mixLijsten()).find(l=>l.id===id) || lists[0];
+  bronProgress = null;
+  if(list.mix){
+    // voortgang per referentie ophalen uit de bronlijsten
+    bronProgress = {};
+    for(const lid of list.bronnen){
+      const p = load(PKEY(lid), {items:{}, sessions:[]});
+      if(!p.items) p.items = {};
+      if(!p.sessions) p.sessions = [];
+      bronProgress[lid] = p;
+    }
+    const eigen = load(PKEY(list.id), {items:{}, sessions:[]});
+    progress = { items: {}, sessions: eigen.sessions || [] };
+    list.items.forEach((it, k) => { progress.items[k] = E.getState(bronProgress[it.bron.lid], it.bron.idx); });
+    loadAlts();
+    save(CKEY, list.id);
+    return;
+  }
   // eenmalige migratie van voortgang zonder oefenaar (eerste versie van de app)
   const legacy = load("overhoor:progress:"+list.id, null);
   if(legacy && !load(PKEY(list.id), null)){ save(PKEY(list.id), legacy); save("overhoor:progress:"+list.id, null); }
@@ -357,7 +420,16 @@ function selectList(id){
   save(CKEY, list.id);
   pullProgress();
 }
-function saveProgress(){ progress.updated = Date.now(); save(PKEY(list.id), progress); pushProgress(); }
+function saveProgress(){
+  progress.updated = Date.now();
+  if(bronProgress){
+    // de woordtoestanden zitten in de bronlijsten; hier alleen de rondes bewaren
+    for(const lid in bronProgress){ bronProgress[lid].updated = Date.now(); save(PKEY(lid), bronProgress[lid]); }
+    save(PKEY(list.id), { items: {}, sessions: progress.sessions, updated: progress.updated });
+    return;
+  }
+  save(PKEY(list.id), progress); pushProgress();
+}
 function setLearner(name){
   learner = String(name||"").trim() || "Pia";
   save(LEARNER_KEY, learner);
@@ -496,16 +568,45 @@ function show(id){ document.querySelectorAll(".screen").forEach(s=>s.hidden = s.
 
 function renderLessons(){
   $("learner-label").textContent = learner;
-  $("lessons").innerHTML = lists.map(l=>{
-    const p = load("overhoor:progress:"+slug(learner)+":"+l.id, {items:{}});
-    if(!p.items) p.items = {};
-    const c = counts(p, l, null); const pct = x=>Math.round(100*x/Math.max(1,c.total));
+  // een kaart tekenen, voor een gewone lijst of voor de gemengde
+  function kaart(l){
+    let c;
+    if(l.mix){
+      // de voortgang komt uit de bronlijsten, dus die tellen we bij elkaar op
+      c = { fresh:0, due:0, known:0, learning:0, total:0 };
+      for(const lid of l.bronnen){
+        const bron = lists.find(x=>x.id===lid); if(!bron) continue;
+        const p = load(PKEY(lid), {items:{}}); if(!p.items) p.items = {};
+        const d = counts(p, bron, null);
+        c.fresh+=d.fresh; c.due+=d.due; c.known+=d.known; c.learning+=d.learning; c.total+=d.total;
+      }
+    } else {
+      const p = load(PKEY(l.id), {items:{}});
+      if(!p.items) p.items = {};
+      c = counts(p, l, null);
+    }
     const dir = l.mode==="translate" ? (l.from||"")+" naar "+(l.to||"") : "woord, woordsoort en definitie";
     const dagen = dagenTot(deadlineVan(l));
-    return UI.LessonCard({ id: l.id, subject: l.subject, title: l.title,
+    return UI.LessonCard({ id: l.id, subject: l.subject, title: l.title, mix: !!l.mix,
       meta: (l.subtitle ? l.subtitle+" · " : "")+dir, due: c.due,
       known: c.known, learning: c.learning, total: c.total,
       deadline: deadlineLabel(dagen), deadlineDagen: dagen });
+  }
+  // per vak een map, met de gemengde ronde onderaan die map
+  const mixen = mixLijsten();
+  const vakken = [];
+  for(const l of lists){
+    const v = l.subject || "Overig";
+    let g = vakken.find(x=>x.vak===v);
+    if(!g){ g = { vak:v, lijsten:[] }; vakken.push(g); }
+    g.lijsten.push(l);
+  }
+  $("lessons").innerHTML = vakken.map(g=>{
+    const mix = mixen.find(m=>m.subject===g.vak);
+    return '<section class="vak">'
+      + '<h2 class="vak-kop">'+esc(g.vak)+'<span class="vak-aantal">'+g.lijsten.length+(g.lijsten.length===1?' lijst':' lijsten')+'</span></h2>'
+      + '<div class="vak-lijsten">' + g.lijsten.map(kaart).join("") + (mix ? kaart(mix) : "") + '</div>'
+      + '</section>';
   }).join("");
   $("lessons").querySelectorAll(".lesson").forEach(b=>b.addEventListener("click", ()=>{ selectList(b.dataset.id); renderHome(); show("scr-home"); }));
 }
@@ -558,6 +659,8 @@ function renderStudy(){
 }
 
 function renderProgress(){
+  // de gemengde lijst bezit geen eigen voortgang, dus wissen hoort daar niet
+  $("btn-reset").hidden = !!(list && list.mix);
   $("progress-title").textContent = list.title;
   $("progress-body").innerHTML = list.items.map((it,i)=>{
     const s = progress.items[i];
@@ -802,7 +905,9 @@ function applyResult(entry, item, ok){
 // goed gerekend wordt in plaats van opnieuw gecorrigeerd te moeten worden.
 function override(){
   const entry = current(); const item = list.items[entry.i];
-  if(ui.stateBefore) progress.items[entry.i] = JSON.parse(JSON.stringify(ui.stateBefore));
+  // in plaats van vervangen: de bestaande toestand terugzetten, zodat de
+  // koppeling met de bronlijst bij een gemengde ronde intact blijft
+  if(ui.stateBefore && progress.items[entry.i]) Object.assign(progress.items[entry.i], ui.stateBefore);
   session.attempts[entry.i] = Math.max(0, (session.attempts[entry.i]||1) - 1);
   if(!session.attempts[entry.i]) delete session.attempts[entry.i];
   delete session.firstTry[entry.i];

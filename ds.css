@@ -419,6 +419,25 @@
   .brand { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
   .brand .tag { color: var(--muted); }
 
+  /* --- vak: een map met de lijsten van een schoolvak --- */
+  .lessons { gap: var(--s5); }
+  .vak { display: flex; flex-direction: column; gap: var(--s3); }
+  .vak-kop {
+    display: flex; align-items: baseline; gap: var(--s2);
+    font-family: var(--display); font-size: 1.1rem; font-weight: 600; margin: 0;
+  }
+  .vak-aantal { font-family: var(--body); font-size: var(--t-label); font-weight: 400; color: var(--muted); }
+  .vak-lijsten { display: flex; flex-direction: column; gap: var(--s3); }
+
+  /* de gemengde ronde is geen les maar een manier van oefenen, dus
+     oogt hij anders: geen vlak, wel dezelfde maat */
+  .lesson.is-mix {
+    background: transparent;
+    border-style: dashed;
+    box-shadow: none;
+  }
+  .lesson.is-mix .subj { display: inline-flex; align-items: center; gap: 5px; color: var(--tertiary); }
+
   /* --- lesson: de kaart op het lessenoverzicht ---
      Twee kolommen: tekst links, voortgangsring rechts. De ring toont
      hoeveel er al geoefend is, niet alleen wat er "in zit", want dat
@@ -626,7 +645,8 @@
   @media (min-width: 900px) {
     body > .app { max-width: none; }
     #scr-lessons > .app, #scr-report > .app { max-width: 960px; margin-inline: auto; }
-    #scr-lessons .lessons { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s4); }
+    #scr-lessons .lessons { display: flex; }
+    #scr-lessons .vak-lijsten { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s4); }
     #scr-lessons .lesson { min-height: 150px; padding: 20px; }
     #report-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: var(--s4); align-items: start; max-width: none; }
   }
