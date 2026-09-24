@@ -260,7 +260,7 @@ const BLOK_MAX = 25*MIN, PAUZE_KORT = 5*MIN, PAUZE_LANG = 15*MIN, DAG_LANG_NA = 
 // blijft even lang (aandacht zakt nu eenmaal na een minuut of 25), maar de
 // pauze wordt korter en er mag meer op een dag.
 function pauzeDuur(){
-  const n = dagenTot(deadlineVan(list));
+  const n = komende(dagenTot(deadlineVan(list)));
   const t = tijdVandaag();
   const lang = t.dag >= dagBudget();
   if(n === null || n > 2) return lang ? PAUZE_LANG : PAUZE_KORT;
@@ -268,7 +268,7 @@ function pauzeDuur(){
   return lang ? 8*MIN : 3*MIN;                 // morgen of overmorgen
 }
 function dagBudget(){
-  const n = dagenTot(deadlineVan(list));
+  const n = komende(dagenTot(deadlineVan(list)));
   if(n === null || n > 2) return DAG_LANG_NA;  // 60 min
   return n <= 0 ? 120*MIN : 90*MIN;
 }
@@ -288,6 +288,9 @@ function dagenTot(ts){
   const d = new Date(ts); d.setHours(0,0,0,0);
   return Math.round((d-nu)/(24*60*60*1000));
 }
+// Een toets die geweest is telt niet meer mee voor de pauzes en het
+// dagbudget: die stonden anders op "toetsdag" en gaven dus de kortste pauzes.
+function komende(n){ return (n === null || n < 0) ? null : n; }
 function deadlineLabel(n){
   if(n===null) return "";
   if(n < 0) return "toets geweest";
@@ -656,7 +659,7 @@ function renderQuestion(){
   $("q-input-label").textContent = wd ? (tr ? lb.def : lb.def+" (in je eigen woorden)") : lb.word;
   $("q-class-field").hidden = !cs.length; $("fb-cls-row").hidden = !cs.length;
   const keyHints = ["Enter = controleren en volgende"];
-  if(cs.length) keyHints.push("Toetsen 1 tot 4 = woordsoort");
+  if(cs.length) keyHints.push("Toetsen 1 tot "+cs.length+" = woordsoort");
   if(canSkip()) keyHints.push("Esc = doe later");
   $("q-keys-hint").textContent = keyHints.join(". ")+".";
   $("fb-word-k").textContent = lb.word; $("fb-def-k").textContent = lb.def;
