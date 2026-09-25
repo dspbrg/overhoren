@@ -145,6 +145,31 @@
   }
   input[type=text] { font-size: 1.15rem; }
   input[type=date] { font-size: 1rem; color-scheme: light dark; }
+
+  /* schuifregelaar: zelfde taal als de rest, dus geen browser-eigen uiterlijk */
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; background: transparent; padding: 0; border: 0;
+    height: var(--tap); cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 8px; border-radius: var(--shape-full); background: var(--track);
+  }
+  input[type=range]::-moz-range-track {
+    height: 8px; border-radius: var(--shape-full); background: var(--track);
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 26px; height: 26px; margin-top: -9px;
+    border-radius: var(--shape-full);
+    background: var(--accent); border: 3px solid var(--surface);
+    box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 20px; height: 20px; border-radius: var(--shape-full);
+    background: var(--accent); border: 3px solid var(--surface);
+  }
+  input[type=range]:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
   /* de kalenderknop meekleuren met de rest */
   input[type=date]::-webkit-calendar-picker-indicator {
     opacity: .6; cursor: pointer; filter: grayscale(1);

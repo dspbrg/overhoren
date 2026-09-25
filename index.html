@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#F4F3F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16142A" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="ds.css?v=20260924114058">
+<link rel="stylesheet" href="ds.css?v=20260925200648">
 </head>
 <body>
 <div class="app">
@@ -51,6 +51,11 @@
           <button type="button" data-size="all">Lang · alles</button>
         </div>
         <p class="hint" id="size-hint"></p>
+      </div>
+      <div class="field" id="grens-field" hidden>
+        <span class="eyebrow">Hoeveel woorden leer je nu?</span>
+        <input type="range" id="grens-range" min="5" step="1">
+        <p class="hint" id="grens-hint"></p>
       </div>
       <div class="field">
         <span class="eyebrow">Wanneer is de overhoring?</span>
@@ -238,11 +243,11 @@
 
 </div>
 
-<script src="ui.js?v=20260924114058"></script>
-<script src="cats.js?v=20260924114058"></script>
-<script src="celebrate.js?v=20260924114058"></script>
-<script src="lists.js?v=20260924114058"></script>
-<script src="engine.js?v=20260924114058"></script>
+<script src="ui.js?v=20260925200648"></script>
+<script src="cats.js?v=20260925200648"></script>
+<script src="celebrate.js?v=20260925200648"></script>
+<script src="lists.js?v=20260925200648"></script>
+<script src="engine.js?v=20260925200648"></script>
 <script>
 (function(){
 "use strict";
@@ -274,6 +279,22 @@ function dagBudget(){
 }
 // De toetsdatum komt uit lists.js, maar is per apparaat aan te passen zonder
 // deploy. Einde van de schooldag als moment: 15:00 op de toetsdag.
+// Tot welk woord ze nu leert. Een lange lijst in een keer is geen leerstof
+// maar een muur, dus schuift ze de grens zelf op. Alles ervoor blijft
+// meedoen, zodat het herhaalschema gewoon zijn werk doet.
+const GKEY = id => "overhoor:grens:"+slug(learner)+":"+id;
+function grensVan(l){
+  if(!l || l.mix) return null;                    // door elkaar is altijd alles
+  const n = load(GKEY(l.id), null);
+  if(!n || n >= l.items.length) return null;
+  return Math.max(1, Math.min(l.items.length, n));
+}
+function allowedVoor(l){
+  const n = grensVan(l);
+  if(!n) return null;
+  return l.items.map((_, i) => i).slice(0, n);
+}
+function allowedIndices(){ return allowedVoor(list); }
 const DKEY = id => "overhoor:deadline:"+id;
 function deadlineVan(l){
   if(l && l.mix) return mixDeadline(l);
@@ -376,7 +397,12 @@ function mixLijsten(){
       bronnen: ls.map(l=>l.id),
       mode: ls[0].mode, from: ls[0].from, to: ls[0].to,
       classes: Array.from(new Set(ls.flatMap(l => l.classes || l.items.map(i=>i.cls)).filter(Boolean))),
-      items: ls.flatMap(l => l.items.map((it, idx) => Object.assign({}, it, { bron: { lid: l.id, idx } })))
+      // alleen wat binnen de grens van elke lijst valt: herhalen gaat over wat
+      // ze al onder handen heeft, niet over woorden die ze nog nooit zag
+      items: ls.flatMap(l => {
+        const g = grensVan(l) || l.items.length;
+        return l.items.slice(0, g).map((it, idx) => Object.assign({}, it, { bron: { lid: l.id, idx } }));
+      })
     });
   }
   return uit;
@@ -577,13 +603,13 @@ function renderLessons(){
       for(const lid of l.bronnen){
         const bron = lists.find(x=>x.id===lid); if(!bron) continue;
         const p = load(PKEY(lid), {items:{}}); if(!p.items) p.items = {};
-        const d = counts(p, bron, null);
+        const d = counts(p, bron, allowedVoor(bron));
         c.fresh+=d.fresh; c.due+=d.due; c.known+=d.known; c.learning+=d.learning; c.total+=d.total;
       }
     } else {
       const p = load(PKEY(l.id), {items:{}});
       if(!p.items) p.items = {};
-      c = counts(p, l, null);
+      c = counts(p, l, allowedVoor(l));
     }
     const dir = l.mode==="translate" ? (l.from||"")+" naar "+(l.to||"") : "woord, woordsoort en definitie";
     const dagen = dagenTot(deadlineVan(l));
@@ -614,9 +640,11 @@ function renderHome(){
   $("home-learner").textContent = "Wie oefent: "+learner;
   $("list-subject").textContent = list.subject || "";
   $("list-title").textContent = list.title;
-  $("list-sub").textContent = (list.subtitle?list.subtitle+" · ":"")+list.items.length+" woorden"+(isTranslate()?" · "+(list.from||"")+" naar "+(list.to||""):"");
+  const grensNu = grensVan(list);
+  const woordenTekst = grensNu ? grensNu+" van "+list.items.length+" woorden" : list.items.length+" woorden";
+  $("list-sub").textContent = (list.subtitle?list.subtitle+" · ":"")+woordenTekst+(isTranslate()?" · "+(list.from||"")+" naar "+(list.to||""):"");
   const now = Date.now();
-  const allowed = null; // hele lijst: geen deelselectie meer
+  const allowed = allowedIndices();
   const c = counts(progress, list, allowed);
   $("st-new").textContent=c.fresh; $("st-due").textContent=c.due; $("st-known").textContent=c.known;
   const pick = E.selectSession(list, progress, sizeChoice, now, {allowed});
@@ -628,6 +656,19 @@ function renderHome(){
   $("size-hint").innerHTML = esc(basis) +
     (kans !== null ? ' <span class="size-kans">' + UI.Icon("trophy") +
       ' Foutloos? Dan <b>' + kans + '%</b> kans op een bijzondere of zeldzame kat.</span>' : "");
+  // grens: alleen zinvol bij een lijst die te lang is om in een keer te doen
+  const totaal = list.items.length;
+  const toonGrens = !list.mix && totaal > 20;
+  $("grens-field").hidden = !toonGrens;
+  if(toonGrens){
+    const n = grensVan(list) || totaal;
+    const r = $("grens-range");
+    r.max = totaal; r.value = n;
+    const laatste = list.items[n-1];
+    $("grens-hint").innerHTML = n >= totaal
+      ? "De hele lijst: <b>"+totaal+" woorden</b>."
+      : "Tot en met <b>"+esc(laatste.word)+"</b> · "+n+" van "+totaal+" woorden. Schuif op als deze erin zitten.";
+  }
   const dl = deadlineVan(list), dagen = dagenTot(dl);
   $("deadline-input").value = dl ? new Date(dl).toISOString().slice(0,10) : "";
   // snelkeuze voor de drie gevallen die bijna altijd gelden, datumveld
@@ -648,7 +689,7 @@ function renderStudy(){
   $("study-title").textContent = list.title;
   const lb = labels(), hasCls = classes().length>0;
   $("study-head").innerHTML = '<th>'+esc(lb.word)+'</th>'+(hasCls?'<th>Woordsoort</th>':'')+'<th>'+esc(lb.def)+'</th>';
-  const allowed = null; // hele lijst: geen deelselectie meer
+  const allowed = allowedIndices();
   let lastSec = null, rows = [];
   list.items.forEach((it,i)=>{
     if(allowed && !allowed.includes(i)) return;
@@ -722,7 +763,7 @@ async function copyReport(){
 
 // ---------- ronde ----------
 function startSession(){
-  const pick = E.selectSession(list, progress, sizeChoice, Date.now(), {allowed: null});
+  const pick = E.selectSession(list, progress, sizeChoice, Date.now(), {allowed: allowedIndices()});
   session = { listId:list.id, queue: pick.indices.map(i=>({i, dir:null})), pos:0, total: pick.indices.length,
     attempts:{}, firstTry:{}, done:0, streak:0, skipped:0, startedAt: Date.now(), elapsedBefore:0, kind: pick.kind };
   save(SKEY(list.id), session);
@@ -1030,6 +1071,11 @@ function bind(){
   $("btn-progress-back").addEventListener("click", ()=>{ renderHome(); show("scr-home"); });
   $("btn-reset").addEventListener("click", ()=>{ if(confirm("Alle voortgang van '"+list.title+"' wissen?")){ progress={items:{},sessions:[]}; saveProgress(); save(SKEY(list.id),null); renderProgress(); } });
   $("btn-info").addEventListener("click", ()=>show("scr-info"));
+  $("grens-range").addEventListener("input", e=>{
+    const n = parseInt(e.target.value, 10);
+    save(GKEY(list.id), n >= list.items.length ? null : n);
+    renderHome();
+  });
   $("deadline-seg").addEventListener("click", e=>{
     const b = e.target.closest("button"); if(!b) return;
     if(b.dataset.d === "x"){
