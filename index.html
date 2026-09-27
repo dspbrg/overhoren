@@ -5,10 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Overhoren</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128218;</text></svg>">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Overhoren">
 <meta name="theme-color" content="#F4F3F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16142A" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="ds.css?v=20260927130806">
+<link rel="stylesheet" href="ds.css?v=20260927132710">
 </head>
 <body>
 <div class="app">
@@ -248,11 +253,11 @@
 
 </div>
 
-<script src="ui.js?v=20260927130806"></script>
-<script src="cats.js?v=20260927130806"></script>
-<script src="celebrate.js?v=20260927130806"></script>
-<script src="lists.js?v=20260927130806"></script>
-<script src="engine.js?v=20260927130806"></script>
+<script src="ui.js?v=20260927132710"></script>
+<script src="cats.js?v=20260927132710"></script>
+<script src="celebrate.js?v=20260927132710"></script>
+<script src="lists.js?v=20260927132710"></script>
+<script src="engine.js?v=20260927132710"></script>
 <script>
 (function(){
 "use strict";
@@ -1184,7 +1189,16 @@ function bind(){
   });
 }
 
+// De app draait volledig lokaal, dus met de bestanden in de cache werkt hij
+// ook zonder internet. Faalt de registratie, dan blijft alles gewoon werken.
+function registreerSW(){
+  if(!("serviceWorker" in navigator)) return;
+  if(location.protocol !== "https:" && location.hostname !== "localhost") return;
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+
 function init(){
+  registreerSW();
   UI.hydrateIcons(document);
   lists = allLists();
   if(!lists.length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
