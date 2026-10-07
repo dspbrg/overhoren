@@ -277,15 +277,21 @@
     return { indices: shuffle(picked, rnd), kind, dueCount: due.length, newCount: fresh.length };
   }
 
-  // Richting: eerste keer altijd woord -> definitie (herkennen), daarna gewogen naar de richting die vaker fout ging.
+  // Richting: eerste keer woord -> definitie (herkennen), daarna gewogen naar de richting die vaker fout ging.
   // wd = woord -> definitie, dw = definitie -> woord, ex = zin aanvullen.
+  // Zin aanvullen is de toetsvorm, dus die telt dubbel en mag ook al de eerste keer:
+  // zo is ongeveer de helft van de vragen een invulzin.
+  const BASIS = { wd: 1, dw: 1, ex: 2 };
   function pickDirection(state, rnd, directions) {
     rnd = rnd || Math.random;
     const dirs = Array.isArray(directions) && directions.length ? directions : ["wd", "dw"];
     if (dirs.length === 1) return dirs[0];
-    if (!state || state.seen === 0) return dirs.includes("wd") ? "wd" : dirs[0];
+    if (!state || state.seen === 0) {
+      if (dirs.includes("ex") && rnd() < 0.5) return "ex";
+      return dirs.includes("wd") ? "wd" : dirs[0];
+    }
     const wrong = state.dirWrong || {};
-    const w = dirs.map(d => 1 + (wrong[d] || 0));
+    const w = dirs.map(d => (BASIS[d] || 1) + (wrong[d] || 0));
     let r = rnd() * w.reduce((a, b) => a + b, 0);
     for (let k = 0; k < dirs.length; k++) { r -= w[k]; if (r < 0) return dirs[k]; }
     return dirs[dirs.length - 1];

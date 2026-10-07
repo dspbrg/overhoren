@@ -13,7 +13,7 @@
 <meta name="theme-color" content="#F4F3F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16142A" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="ds.css?v=20261007140000">
+<link rel="stylesheet" href="ds.css?v=20261007150000">
 </head>
 <body>
 <div class="app">
@@ -252,11 +252,11 @@
 
 </div>
 
-<script src="ui.js?v=20261007140000"></script>
-<script src="cats.js?v=20261007140000"></script>
-<script src="celebrate.js?v=20261007140000"></script>
-<script src="lists.js?v=20261007140000"></script>
-<script src="engine.js?v=20261007140000"></script>
+<script src="ui.js?v=20261007150000"></script>
+<script src="cats.js?v=20261007150000"></script>
+<script src="celebrate.js?v=20261007150000"></script>
+<script src="lists.js?v=20261007150000"></script>
+<script src="engine.js?v=20261007150000"></script>
 <script>
 (function(){
 "use strict";
@@ -902,8 +902,15 @@ function check(){
   const hasCls = vraagKlassen(entry).length>0;
   const zin = ex ? zinVan(entry, item) : null;
   const text = $("q-input").value.trim();
-  if(!ui.pick && !text && !ui.firstBlank){
-    ui.firstBlank = true; $("q-hint").textContent = (hasCls?"Kies een woordsoort en vul iets in.":"Vul iets in.")+" Weet je het niet? Druk dan nog een keer op Controleer."; $("q-hint").hidden=false; return;
+  // Ontbreekt er iets, dan eerst een waarschuwing. Nog een keer drukken
+  // controleert toch, voor als ze het echt niet weet.
+  const mist = [];
+  if(hasCls && !ui.pick) mist.push("woordsoort gekozen");
+  if(!text) mist.push("antwoord ingevuld");
+  if(mist.length && !ui.firstBlank){
+    ui.firstBlank = true;
+    $("q-hint").textContent = "Je hebt nog geen "+mist.join(" en geen ")+". Weet je zeker dat je wilt controleren? Druk dan nog een keer op Controleer.";
+    $("q-hint").hidden=false; return;
   }
   tikActief();
   ui.checked = true; $("q-hint").hidden = true; $("btn-check").hidden = true; $("btn-later").hidden = true; $("q-input").disabled = true;
