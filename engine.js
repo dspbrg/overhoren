@@ -148,11 +148,15 @@
 
   // Voorbeeldzin met het woord tussen [haken]. Geeft de zin met gaten zoals op de toets:
   // eerste letter plus een vaste streep, zodat de lengte niets verraadt.
+  // [minute|moment]: meer goede antwoorden; het eerste staat in de zin.
   function cloze(ex) {
     const parts = [];
-    const text = String(ex || "").replace(/\[([^\]]+)\]/g, (_, w) => { parts.push(w); return w[0] + "_______"; });
+    const text = String(ex || "").replace(/\[([^\]]+)\]/g, (_, w) => { parts.push(w.split("|")); return w[0] + "_______"; });
     if (!parts.length) return null;
-    return { text, answer: parts.join(" "), full: String(ex).replace(/[\[\]]/g, "") };
+    let answers = [""];
+    for (const alts of parts) answers = answers.flatMap(a => alts.map(w => (a ? a + " " : "") + w));
+    return { text, answer: parts.map(a => a[0]).join(" "), answers,
+      full: String(ex).replace(/\[([^\]|]+)[^\]]*\]/g, "$1") };
   }
 
   // ---------- Herhaalschema ----------

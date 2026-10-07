@@ -13,7 +13,7 @@
 <meta name="theme-color" content="#F4F3F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16142A" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="ds.css?v=20261007120000">
+<link rel="stylesheet" href="ds.css?v=20261007140000">
 </head>
 <body>
 <div class="app">
@@ -252,11 +252,11 @@
 
 </div>
 
-<script src="ui.js?v=20261007120000"></script>
-<script src="cats.js?v=20261007120000"></script>
-<script src="celebrate.js?v=20261007120000"></script>
-<script src="lists.js?v=20261007120000"></script>
-<script src="engine.js?v=20261007120000"></script>
+<script src="ui.js?v=20261007140000"></script>
+<script src="cats.js?v=20261007140000"></script>
+<script src="celebrate.js?v=20261007140000"></script>
+<script src="lists.js?v=20261007140000"></script>
+<script src="engine.js?v=20261007140000"></script>
 <script>
 (function(){
 "use strict";
@@ -540,10 +540,15 @@ function richtingen(item){
   if(list.directions) return list.directions;
   return item.ex ? ["wd","dw","ex"] : ["wd","dw"];
 }
+// goed als een van de toegestane antwoorden klopt, bijna als er een bijna klopt
+function gradeZin(zin, text){
+  const rs = zin.answers.map(w => E.gradeWord({ word: w }, text));
+  return rs.find(r => r.status==="correct") || rs.find(r => r.status==="near") || rs[0];
+}
 function zinVan(entry, item){
   const zinnen = [].concat(item.ex || []);
   if(entry.exi == null || entry.exi >= zinnen.length) entry.exi = Math.floor(Math.random()*zinnen.length);
-  return E.cloze(zinnen[entry.exi]);
+  return Object.assign(E.cloze(zinnen[entry.exi]), { bron: zinnen[entry.exi] });
 }
 function classes(){ if(isTranslate()) return []; return list.classes || Array.from(new Set(list.items.map(i=>i.cls).filter(Boolean))); }
 function labels(){ return { word: list.from || "Woord", def: list.to || "Definitie" }; }
@@ -924,8 +929,8 @@ function check(){
   } else {
     mark("fb-def-mark","ok");
     // bij zin aanvullen telt de vorm zoals hij in de zin staat (bakes, languages)
-    const r = E.gradeWord(ex ? { word: zin.answer } : item, text);
-    if(ex) $("fb-word").innerHTML = esc(zin.full).replace(esc(zin.answer), "<b>"+esc(zin.answer)+"</b>");
+    const r = ex ? gradeZin(zin, text) : E.gradeWord(item, text);
+    if(ex) $("fb-word").innerHTML = esc(zin.bron).replace(/\[([^\]|]+)[^\]]*\]/g, "<b>$1</b>");
     status = r.status==="correct" ? "correct" : "wrong";
     $("fb-word-yours").textContent = r.status==="near" ? "Bijna, let op de spelling" : text ? "" : "Niets ingevuld";
     mark("fb-word-mark", status==="correct"?"ok":"bad");
