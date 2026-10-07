@@ -122,7 +122,16 @@
   // Vertaling (bijv. Frans naar Nederlands): meerdere goede antwoorden gescheiden door / , ; of "of".
   // Resultaat: correct | maybe | wrong. Lidwoorden vooraan tellen niet mee, kleine typo's ook niet.
   const ARTICLES = /^(de|het|een|le|la|les|un|une|des|l|the|a|an|to) /;
-  function gradeTranslation(item, answer) {
+  // strict (grammatica): alleen precies goed telt, want "a" of "an" is net het verschil.
+  // Dan ook geen komma als scheiding, zodat een hele zin met komma's heel blijft.
+  function gradeTranslation(item, answer, opts) {
+    const strict = !!(opts && opts.strict);
+    if (strict) {
+      const a = norm(answer);
+      if (!a) return { status: "wrong", empty: true };
+      const alts = String(item.def).split(/\s*\/\s*/).map(norm).filter(Boolean);
+      return { status: alts.includes(a) ? "correct" : "wrong" };
+    }
     const a = norm(answer).replace(ARTICLES, "").trim();
     if (!a) return { status: "wrong", empty: true };
     const alts = String(item.def).split(/\s*[\/,;]\s*|\s+of\s+/).map(x => norm(x).replace(ARTICLES, "").trim()).filter(Boolean);
@@ -137,6 +146,15 @@
     return { status: partial ? "maybe" : "wrong" };
   }
 
+  // Voorbeeldzin met het woord tussen [haken]. Geeft de zin met gaten zoals op de toets:
+  // eerste letter plus een vaste streep, zodat de lengte niets verraadt.
+  function cloze(ex) {
+    const parts = [];
+    const text = String(ex || "").replace(/\[([^\]]+)\]/g, (_, w) => { parts.push(w); return w[0] + "_______"; });
+    if (!parts.length) return null;
+    return { text, answer: parts.join(" "), full: String(ex).replace(/[\[\]]/g, "") };
+  }
+
   // ---------- Herhaalschema ----------
   const MIN = 60 * 1000, DAY = 24 * 60 * MIN;
   // Interval na een goed antwoord, per box. Box 1 = leerstap van 10 minuten (dezelfde dag nog eens),
@@ -146,13 +164,14 @@
 
   function defaultState() {
     return { box: 0, due: 0, seen: 0, correct: 0, wrong: 0, lapses: 0, streak: 0, last: 0,
-      dirWrong: { wd: 0, dw: 0 }, partWrong: { cls: 0, def: 0, word: 0 } };
+      dirWrong: { wd: 0, dw: 0, ex: 0 }, partWrong: { cls: 0, def: 0, word: 0 } };
   }
 
   function getState(progress, i) {
     if (!progress.items[i]) progress.items[i] = defaultState();
     const s = progress.items[i];
     if (!s.dirWrong) s.dirWrong = { wd: 0, dw: 0 };
+    if (s.dirWrong.ex == null) s.dirWrong.ex = 0;
     if (!s.partWrong) s.partWrong = { cls: 0, def: 0, word: 0 };
     return s;
   }
@@ -223,6 +242,21 @@
       else if (s.due <= now) due.push({ i, w: weight(s, now) });
     });
 
+    // interleave: nieuwe items om en om uit elk onderdeel (section), zodat een
+    // ronde niet alleen uit het eerste onderwerp bestaat. Afwisselen leert ook beter.
+    if (opts.interleave) {
+      const groepen = new Map();
+      for (const i of fresh) {
+        const k = list.items[i].section || "";
+        if (!groepen.has(k)) groepen.set(k, []);
+        groepen.get(k).push(i);
+      }
+      const rij = [];
+      for (let r = 0; rij.length < fresh.length; r++)
+        for (const g of groepen.values()) if (r < g.length) rij.push(g[r]);
+      fresh.splice(0, fresh.length, ...rij);
+    }
+
     let picked = all ? due.map(e => e.i) : weightedSample(due, cap, rnd);
     const room = Math.min(cap - picked.length, all ? Infinity : newMax);
     const newPicked = fresh.slice(0, Math.max(0, room));
@@ -240,12 +274,17 @@
   }
 
   // Richting: eerste keer altijd woord -> definitie (herkennen), daarna gewogen naar de richting die vaker fout ging.
+  // wd = woord -> definitie, dw = definitie -> woord, ex = zin aanvullen.
   function pickDirection(state, rnd, directions) {
     rnd = rnd || Math.random;
-    if (Array.isArray(directions) && directions.length === 1) return directions[0];
-    if (!state || state.seen === 0) return "wd";
-    const pdw = (1 + state.dirWrong.dw) / (2 + state.dirWrong.dw + state.dirWrong.wd);
-    return rnd() < pdw ? "dw" : "wd";
+    const dirs = Array.isArray(directions) && directions.length ? directions : ["wd", "dw"];
+    if (dirs.length === 1) return dirs[0];
+    if (!state || state.seen === 0) return dirs.includes("wd") ? "wd" : dirs[0];
+    const wrong = state.dirWrong || {};
+    const w = dirs.map(d => 1 + (wrong[d] || 0));
+    let r = rnd() * w.reduce((a, b) => a + b, 0);
+    for (let k = 0; k < dirs.length; k++) { r -= w[k]; if (r < 0) return dirs[k]; }
+    return dirs[dirs.length - 1];
   }
 
   function boxLabel(state) {
@@ -256,7 +295,7 @@
     return "zit erin";
   }
 
-  const Engine = { norm, tokens, stem, lev, gradeDefinition, gradeWord, gradeTranslation, autoKeys,
+  const Engine = { norm, tokens, stem, lev, gradeDefinition, gradeWord, gradeTranslation, autoKeys, cloze,
     INTERVALS, MAX_BOX, defaultState, getState, applyAnswer, weight, selectSession, pickDirection, shuffle, boxLabel };
 
   if (typeof module !== "undefined" && module.exports) module.exports = Engine;

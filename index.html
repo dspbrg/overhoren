@@ -13,7 +13,7 @@
 <meta name="theme-color" content="#F4F3F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16142A" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="ds.css?v=20260927132710">
+<link rel="stylesheet" href="ds.css?v=20261007120000">
 </head>
 <body>
 <div class="app">
@@ -27,7 +27,6 @@
       <span class="row" id="learner-form" hidden><input type="text" id="learner-name" placeholder="Naam" autocomplete="off"><button class="btn" id="btn-learner-save">Opslaan</button></span>
       <span class="sync" id="sync-state">alleen op dit apparaat</span>
     </div>
-    <div><span class="eyebrow">Kies een les</span></div>
     <div class="lessons" id="lessons"></div>
     <p class="foot"><button class="link" data-icon="trophy" id="btn-cats">Mijn katten</button><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button><button class="link" id="btn-import">Lijst toevoegen</button></p>
   </div>
@@ -253,11 +252,11 @@
 
 </div>
 
-<script src="ui.js?v=20260927132710"></script>
-<script src="cats.js?v=20260927132710"></script>
-<script src="celebrate.js?v=20260927132710"></script>
-<script src="lists.js?v=20260927132710"></script>
-<script src="engine.js?v=20260927132710"></script>
+<script src="ui.js?v=20261007120000"></script>
+<script src="cats.js?v=20261007120000"></script>
+<script src="celebrate.js?v=20261007120000"></script>
+<script src="lists.js?v=20261007120000"></script>
+<script src="engine.js?v=20261007120000"></script>
 <script>
 (function(){
 "use strict";
@@ -407,16 +406,17 @@ function mixLijsten(){
   const perVak = {};
   for(const l of lists){
     if(String(l.id).startsWith(MIX)) continue;
-    (perVak[l.subject || "Overig"] = perVak[l.subject || "Overig"] || []).push(l);
+    // alleen mengen wat dezelfde vorm heeft, anders klopt de vraagstelling niet.
+    // Grammatica (vertaalvorm) naast woordenlijsten blijft dus apart.
+    const groep = (l.subject || "Overig") + "\u0000" + (l.mode || "def");
+    (perVak[groep] = perVak[groep] || []).push(l);
   }
   const uit = [];
-  for(const vak in perVak){
-    const ls = perVak[vak];
-    // alleen mengen wat dezelfde vorm heeft, anders klopt de vraagstelling niet
+  for(const groep in perVak){
+    const ls = perVak[groep], vak = ls[0].subject || "Overig";
     if(ls.length < 2) continue;
-    if(new Set(ls.map(l=>l.mode||"def")).size > 1) continue;
     uit.push({
-      id: MIX + slug(vak), title: "Alles door elkaar", subject: vak, mix: true,
+      id: MIX + slug(vak) + (ls[0].mode ? "-" + slug(ls[0].mode) : ""), title: "Alles door elkaar", subject: vak, mix: true,
       subtitle: ls.length + " lijsten samen",
       bronnen: ls.map(l=>l.id),
       mode: ls[0].mode, from: ls[0].from, to: ls[0].to,
@@ -533,6 +533,18 @@ async function allProgress(){
   return Array.from(out.values()).sort((a,b)=>(b.progress.updated||0)-(a.progress.updated||0));
 }
 function isTranslate(){ return list.mode==="translate"; }
+// Zin aanvullen vraagt geen woordsoort, net als op de toets.
+function vraagKlassen(entry){ return entry && entry.dir==="ex" ? [] : classes(); }
+// Welke vraagvormen een woord kan krijgen: zin aanvullen alleen met een voorbeeldzin.
+function richtingen(item){
+  if(list.directions) return list.directions;
+  return item.ex ? ["wd","dw","ex"] : ["wd","dw"];
+}
+function zinVan(entry, item){
+  const zinnen = [].concat(item.ex || []);
+  if(entry.exi == null || entry.exi >= zinnen.length) entry.exi = Math.floor(Math.random()*zinnen.length);
+  return E.cloze(zinnen[entry.exi]);
+}
 function classes(){ if(isTranslate()) return []; return list.classes || Array.from(new Set(list.items.map(i=>i.cls).filter(Boolean))); }
 function labels(){ return { word: list.from || "Woord", def: list.to || "Definitie" }; }
 function counts(p, l, allowed){
@@ -637,10 +649,11 @@ function renderLessons(){
       if(!p.items) p.items = {};
       c = counts(p, l, allowedVoor(l));
     }
-    const dir = l.mode==="translate" ? (l.from||"")+" naar "+(l.to||"") : "woord, woordsoort en definitie";
+    // grammatica heeft eigen onderdelen in de ondertitel; "Opdracht naar Antwoord" zegt niets
+    const dir = l.instructions ? "" : l.mode==="translate" ? (l.from||"")+" naar "+(l.to||"") : "woord, woordsoort en definitie";
     const dagen = dagenTot(deadlineVan(l));
     return UI.LessonCard({ id: l.id, subject: l.subject, title: l.title, mix: !!l.mix,
-      meta: (l.subtitle ? l.subtitle+" · " : "")+dir, due: c.due,
+      meta: [l.subtitle, dir].filter(Boolean).join(" · "), due: c.due,
       known: c.known, learning: c.learning, total: c.total,
       deadline: deadlineLabel(dagen), deadlineDagen: dagen });
   }
@@ -668,12 +681,12 @@ function renderHome(){
   $("list-title").textContent = list.title;
   const grensNu = grensVan(list);
   const woordenTekst = grensNu ? grensNu+" van "+list.items.length+" woorden" : list.items.length+" woorden";
-  $("list-sub").textContent = (list.subtitle?list.subtitle+" · ":"")+woordenTekst+(isTranslate()?" · "+(list.from||"")+" naar "+(list.to||""):"");
+  $("list-sub").textContent = (list.subtitle?list.subtitle+" · ":"")+woordenTekst+(isTranslate() && !list.instructions?" · "+(list.from||"")+" naar "+(list.to||""):"");
   const now = Date.now();
   const allowed = allowedIndices();
   const c = counts(progress, list, allowed);
   $("st-new").textContent=c.fresh; $("st-due").textContent=c.due; $("st-known").textContent=c.known;
-  const pick = E.selectSession(list, progress, sizeChoice, now, {allowed});
+  const pick = E.selectSession(list, progress, sizeChoice, now, {allowed, interleave: !!list.interleave});
   const basis = pick.kind==="extra"
     ? "Niets aan de beurt. Deze ronde oefent de "+pick.indices.length+" zwakste woorden extra."
     : "Deze ronde: "+pick.indices.length+" woorden ("+Math.min(pick.dueCount, pick.indices.length)+" herhalen, "+(pick.indices.length-Math.min(pick.dueCount,pick.indices.length))+" nieuw).";
@@ -789,7 +802,7 @@ async function copyReport(){
 
 // ---------- ronde ----------
 function startSession(){
-  const pick = E.selectSession(list, progress, sizeChoice, Date.now(), {allowed: allowedIndices()});
+  const pick = E.selectSession(list, progress, sizeChoice, Date.now(), {allowed: allowedIndices(), interleave: !!list.interleave});
   session = { listId:list.id, queue: pick.indices.map(i=>({i, dir:null})), pos:0, total: pick.indices.length,
     attempts:{}, firstTry:{}, done:0, streak:0, skipped:0, startedAt: Date.now(), elapsedBefore:0,
     actief:0, laatsteActie: Date.now(), kind: pick.kind };
@@ -839,14 +852,19 @@ function renderStreak(){
 }
 function renderQuestion(){
   const entry = current(); const item = list.items[entry.i];
-  if(!entry.dir) entry.dir = E.pickDirection(progress.items[entry.i], null, list.directions);
-  const wd = entry.dir==="wd", lb = labels(), tr = isTranslate(), cs = classes();
-  $("q-kind").textContent = wd ? lb.word : lb.def;
+  if(!entry.dir) entry.dir = E.pickDirection(progress.items[entry.i], null, richtingen(item));
+  const ex = entry.dir==="ex", wd = entry.dir==="wd", lb = labels(), tr = isTranslate(), cs = vraagKlassen(entry);
+  const opdracht = list.instructions && item.section && list.instructions[item.section];
+  $("q-kind").textContent = ex ? "Vul de zin aan" : opdracht || (wd ? lb.word : lb.def);
   const c0 = $("q-prompt").closest(".card"); if(c0) c0.classList.remove("is-good");
   renderStreak();
-  $("q-prompt").textContent = wd ? item.word : item.def;
-  $("q-prompt").className = "prompt"+(wd||tr?"":" def");
-  $("q-input-label").textContent = wd ? (tr ? lb.def : lb.def+" (in je eigen woorden)") : lb.word;
+  if(ex){
+    const z = zinVan(entry, item);
+    $("q-prompt").innerHTML = esc(z.text)+' <span class="zin-hint">('+esc(item.def)+')</span>';
+  } else $("q-prompt").textContent = wd ? item.word : item.def;
+  // zinnen (zin aanvullen, grammatica) in leesletter, losse woorden groot
+  $("q-prompt").className = "prompt"+((wd||tr) && !ex && !opdracht ? "" : " def");
+  $("q-input-label").textContent = ex ? lb.word : wd ? (tr ? lb.def : lb.def+" (in je eigen woorden)") : lb.word;
   $("q-class-field").hidden = !cs.length; $("fb-cls-row").hidden = !cs.length;
   const keyHints = ["Enter = controleren en volgende"];
   if(cs.length) keyHints.push("Toetsen 1 tot "+cs.length+" = woordsoort");
@@ -858,7 +876,7 @@ function renderQuestion(){
   $("q-bar").style.width = Math.round(100*session.done/Math.max(1,session.total))+"%";
   $("q-timer").textContent = fmtTime(elapsed());
   ui.pick = null; ui.checked=false; ui.verdictDef=null; ui.firstBlank=false;
-  $("q-classes").innerHTML = UI.Choices(classes());
+  $("q-classes").innerHTML = UI.Choices(cs);
   $("q-classes").querySelectorAll(".choice").forEach(b=>b.addEventListener("click", ()=>pickClass(b.dataset.cls)));
   $("q-hint").hidden = true; $("feedback").hidden = true; $("btn-check").hidden = false;
   $("btn-later").hidden = !canSkip();
@@ -875,8 +893,9 @@ function pickClass(c){
 
 function check(){
   if(ui.checked) return;
-  const entry = current(); const item = list.items[entry.i]; const wd = entry.dir==="wd";
-  const hasCls = classes().length>0;
+  const entry = current(); const item = list.items[entry.i]; const wd = entry.dir==="wd", ex = entry.dir==="ex";
+  const hasCls = vraagKlassen(entry).length>0;
+  const zin = ex ? zinVan(entry, item) : null;
   const text = $("q-input").value.trim();
   if(!ui.pick && !text && !ui.firstBlank){
     ui.firstBlank = true; $("q-hint").textContent = (hasCls?"Kies een woordsoort en vul iets in.":"Vul iets in.")+" Weet je het niet? Druk dan nog een keer op Controleer."; $("q-hint").hidden=false; return;
@@ -894,17 +913,19 @@ function check(){
   $("fb-def-alts").textContent = alts.length > 1 ? "ook goed: "+alts.slice(1).join(", ") : "";
   mark("fb-cls-mark", ui.clsOk?"ok":"bad");
   $("fb-word-yours").textContent = ""; $("fb-def-yours").textContent = "";
-  ui.typed = text; ui.official = officialAnswer(item, wd);
+  ui.typed = text; ui.official = ex ? zin.answer : officialAnswer(item, wd);
   let status;
   if(wd){
     mark("fb-word-mark","ok");
-    const r = isTranslate() ? E.gradeTranslation(withAlts(item, entry.i), text) : E.gradeDefinition(withAlts(item, entry.i), text);
+    const r = isTranslate() ? E.gradeTranslation(withAlts(item, entry.i), text, { strict: !!list.strict }) : E.gradeDefinition(withAlts(item, entry.i), text);
     status = r.status;
     $("fb-def-yours").textContent = text ? "" : "Niets ingevuld";
     mark("fb-def-mark", status==="correct"?"ok":status==="maybe"?"maybe":"bad");
   } else {
     mark("fb-def-mark","ok");
-    const r = E.gradeWord(item, text);
+    // bij zin aanvullen telt de vorm zoals hij in de zin staat (bakes, languages)
+    const r = E.gradeWord(ex ? { word: zin.answer } : item, text);
+    if(ex) $("fb-word").innerHTML = esc(zin.full).replace(esc(zin.answer), "<b>"+esc(zin.answer)+"</b>");
     status = r.status==="correct" ? "correct" : "wrong";
     $("fb-word-yours").textContent = r.status==="near" ? "Bijna, let op de spelling" : text ? "" : "Niets ingevuld";
     mark("fb-word-mark", status==="correct"?"ok":"bad");
@@ -972,7 +993,7 @@ function applyResult(entry, item, ok){
   ui.streakBefore = session.streak||0;
   E.applyAnswer(st, ok, Date.now());
   kortInTotDeadline(st);
-  if(!ui.clsOk && classes().length) st.partWrong.cls++;
+  if(!ui.clsOk && vraagKlassen(entry).length) st.partWrong.cls++;
   if(ui.verdictDef!==true){ if(entry.dir==="wd") st.partWrong.def++; else st.partWrong.word++; st.dirWrong[entry.dir]++; }
   session.attempts[entry.i] = (session.attempts[entry.i]||0)+1;
   if(session.attempts[entry.i]===1) session.firstTry[entry.i] = ok;
@@ -981,7 +1002,7 @@ function applyResult(entry, item, ok){
   if(ok) session.done++;
   else {
     const at = Math.min(session.queue.length, session.pos+1+GAP);
-    session.queue.splice(at, 0, {i:entry.i, dir:entry.dir});
+    session.queue.splice(at, 0, {i:entry.i, dir:entry.dir, exi:entry.exi});
   }
   saveProgress(); persistSession();
 }
@@ -1020,7 +1041,7 @@ function later(){
   tikActief();
   const entry = current();
   const at = Math.min(session.queue.length, session.pos+1+GAP);
-  session.queue.splice(at, 0, {i:entry.i, dir:entry.dir});
+  session.queue.splice(at, 0, {i:entry.i, dir:entry.dir, exi:entry.exi});
   session.skipped = (session.skipped||0)+1;
   session.pos++;
   persistSession(); renderQuestion();
@@ -1184,7 +1205,7 @@ function bind(){
     // Cijfers alleen als kiezer zolang het veld leeg is, anders kan ze geen
     // getal in een definitie typen.
     if(!ui.checked && /^[1-9]$/.test(e.key) && !$("q-input").value){
-      const cs=classes(); const k=parseInt(e.key,10)-1; if(cs[k]){ e.preventDefault(); pickClass(cs[k]); }
+      const cs=vraagKlassen(current()); const k=parseInt(e.key,10)-1; if(cs[k]){ e.preventDefault(); pickClass(cs[k]); }
     }
   });
 }

@@ -300,8 +300,11 @@
   .notice.row-between > :first-child { flex: 1 1 14rem; }
 
   /* --- choice: woordsoortknop --- */
-  .choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  /* elke knop zo breed als zijn tekst: nooit afbreken, dus nooit hoger.
+     "Phrasal verb" brak anders af in een vaste kolom (Chromebook). */
+  .choices { display: flex; flex-wrap: wrap; gap: 10px; }
   .choice {
+    flex: 0 0 auto; white-space: nowrap;
     font: inherit; font-weight: 700; cursor: pointer;
     border: 1.5px solid var(--line-strong); background: var(--control); color: var(--ink);
     border-radius: var(--shape-l); padding: 14px 12px; min-height: var(--tap);
@@ -445,11 +448,11 @@
   .brand .tag { color: var(--muted); }
 
   /* --- vak: een map met de lijsten van een schoolvak --- */
-  .lessons { gap: var(--s5); }
-  .vak { display: flex; flex-direction: column; gap: var(--s3); }
+  /* het vak is de bovenste laag: groter dan de kaarttitels eronder */
+  .vak { display: flex; flex-direction: column; gap: var(--s4); }
   .vak-kop {
-    display: flex; align-items: baseline; gap: var(--s2);
-    font-family: var(--display); font-size: 1.1rem; font-weight: 600; margin: 0;
+    display: flex; align-items: baseline; gap: var(--s3);
+    font-family: var(--display); font-size: var(--t-headline); font-weight: 700; margin: 0;
   }
   .vak-aantal { font-family: var(--body); font-size: var(--t-label); font-weight: 400; color: var(--muted); }
   .vak-lijsten { display: flex; flex-direction: column; gap: var(--s3); }
@@ -467,7 +470,7 @@
      Twee kolommen: tekst links, voortgangsring rechts. De ring toont
      hoeveel er al geoefend is, niet alleen wat er "in zit", want dat
      laatste beweegt pas na dagen en zou dus altijd nul lijken. --- */
-  .lessons { display: flex; flex-direction: column; gap: var(--s3); }
+  .lessons { display: flex; flex-direction: column; gap: var(--s6); }
   .lesson {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -483,7 +486,7 @@
   }
   .lesson-body { grid-area: body; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .lesson .subj { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--accent); }
-  .lesson h2 { font-size: var(--t-title); margin-top: 2px; }
+  .lesson h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; font-size: var(--t-title); line-height: 1.15; margin: 0; }
   /* een regel, geen onvoorspelbare afbreking die de kaarthoogte laat springen */
   .lesson-meta {
     font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -599,6 +602,7 @@
     font-family: var(--display); font-weight: 700; font-size: var(--t-display);
     line-height: 1.08; letter-spacing: -.01em; text-wrap: balance; margin-block: 2px 4px;
   }
+  .prompt .zin-hint { display: block; margin-top: 6px; font-size: .7em; color: var(--muted); font-style: italic; }
   .prompt.def { font-family: var(--body); font-weight: 400; font-size: clamp(1.3rem, 4.5vw, 1.7rem); line-height: 1.3; letter-spacing: 0; }
 
   #feedback { display: flex; flex-direction: column; gap: var(--s4); margin-top: var(--s2); padding-top: var(--s4); border-top: 1px solid var(--line); }
@@ -650,7 +654,6 @@
 @layer responsive {
   /* telefoon */
   @media (max-width: 420px) {
-    .choices { grid-template-columns: 1fr 1fr; }
     .stat b { font-size: 1.4rem; }
   }
   /* geen toetsenbord: hints zijn ruis */
@@ -702,7 +705,6 @@
   }
   /* weinig hoogte: hoogte winnen */
   @media (max-height: 760px) {
-    .choices { grid-template-columns: repeat(4, 1fr); }
     .choice { padding: 12px 10px; font-size: .95rem; }
     .card { padding: 18px 20px; gap: var(--s4); }
     #q-keys-hint { display: none; }

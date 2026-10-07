@@ -196,8 +196,9 @@
     if (!delen.length && nieuw) delen.push(nieuw + " nieuw");
     return '<button type="button" class="' + cls("lesson", o.mix && "is-mix") + '"' + attr("data-id", o.id) + '>' +
       '<div class="lesson-body">' +
-        '<span class="subj">' + (o.mix ? Icon("sparkle") + "<span>herhalen</span>" : esc(o.subject || "Woordenlijst")) + '</span>' +
-        '<h2>' + esc(o.title) + '</h2>' +
+        // het vak staat al als kop boven de kaarten; alleen de gemengde ronde krijgt een label
+        (o.mix ? '<span class="subj">' + Icon("sparkle") + "<span>herhalen</span></span>" : "") +
+        '<h3>' + esc(o.title) + '</h3>' +
         '<span class="muted lesson-meta">' + esc(o.meta) + '</span>' +
         '<span class="lesson-stats">' + esc(delen.join(" · ")) + '</span>' +
       '</div>' +
