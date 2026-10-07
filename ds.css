@@ -602,7 +602,9 @@
     font-family: var(--display); font-weight: 700; font-size: var(--t-display);
     line-height: 1.08; letter-spacing: -.01em; text-wrap: balance; margin-block: 2px 4px;
   }
-  .prompt .zin-hint { display: block; margin-top: 6px; font-size: .7em; color: var(--muted); font-style: italic; }
+  /* zin (invulzin, grammatica): zelfde lettertype als een los woord, maat van een zin */
+  .prompt.zin { font-size: clamp(1.3rem, 4.5vw, 1.7rem); line-height: 1.3; letter-spacing: 0; }
+  .prompt .zin-hint { display: block; margin-top: 6px; font-size: .75em; font-weight: 400; color: var(--muted); }
   .prompt.def { font-family: var(--body); font-weight: 400; font-size: clamp(1.3rem, 4.5vw, 1.7rem); line-height: 1.3; letter-spacing: 0; }
 
   #feedback { display: flex; flex-direction: column; gap: var(--s4); margin-top: var(--s2); padding-top: var(--s4); border-top: 1px solid var(--line); }

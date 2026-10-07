@@ -13,7 +13,7 @@
 <meta name="theme-color" content="#F4F3F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16142A" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="ds.css?v=20261007150000">
+<link rel="stylesheet" href="ds.css?v=20261007160000">
 </head>
 <body>
 <div class="app">
@@ -252,11 +252,11 @@
 
 </div>
 
-<script src="ui.js?v=20261007150000"></script>
-<script src="cats.js?v=20261007150000"></script>
-<script src="celebrate.js?v=20261007150000"></script>
-<script src="lists.js?v=20261007150000"></script>
-<script src="engine.js?v=20261007150000"></script>
+<script src="ui.js?v=20261007160000"></script>
+<script src="cats.js?v=20261007160000"></script>
+<script src="celebrate.js?v=20261007160000"></script>
+<script src="lists.js?v=20261007160000"></script>
+<script src="engine.js?v=20261007160000"></script>
 <script>
 (function(){
 "use strict";
@@ -533,8 +533,6 @@ async function allProgress(){
   return Array.from(out.values()).sort((a,b)=>(b.progress.updated||0)-(a.progress.updated||0));
 }
 function isTranslate(){ return list.mode==="translate"; }
-// Zin aanvullen vraagt geen woordsoort, net als op de toets.
-function vraagKlassen(entry){ return entry && entry.dir==="ex" ? [] : classes(); }
 // Welke vraagvormen een woord kan krijgen: zin aanvullen alleen met een voorbeeldzin.
 function richtingen(item){
   if(list.directions) return list.directions;
@@ -858,7 +856,7 @@ function renderStreak(){
 function renderQuestion(){
   const entry = current(); const item = list.items[entry.i];
   if(!entry.dir) entry.dir = E.pickDirection(progress.items[entry.i], null, richtingen(item));
-  const ex = entry.dir==="ex", wd = entry.dir==="wd", lb = labels(), tr = isTranslate(), cs = vraagKlassen(entry);
+  const ex = entry.dir==="ex", wd = entry.dir==="wd", lb = labels(), tr = isTranslate(), cs = classes();
   const opdracht = list.instructions && item.section && list.instructions[item.section];
   $("q-kind").textContent = ex ? "Vul de zin aan" : opdracht || (wd ? lb.word : lb.def);
   const c0 = $("q-prompt").closest(".card"); if(c0) c0.classList.remove("is-good");
@@ -868,7 +866,8 @@ function renderQuestion(){
     $("q-prompt").innerHTML = esc(z.text)+' <span class="zin-hint">('+esc(item.def)+')</span>';
   } else $("q-prompt").textContent = wd ? item.word : item.def;
   // zinnen (zin aanvullen, grammatica) in leesletter, losse woorden groot
-  $("q-prompt").className = "prompt"+((wd||tr) && !ex && !opdracht ? "" : " def");
+  // zinnen (zin aanvullen, grammatica) in het woordlettertype op zinsmaat; een definitie in leesletter
+  $("q-prompt").className = "prompt"+(ex || opdracht ? " zin" : wd || tr ? "" : " def");
   $("q-input-label").textContent = ex ? lb.word : wd ? (tr ? lb.def : lb.def+" (in je eigen woorden)") : lb.word;
   $("q-class-field").hidden = !cs.length; $("fb-cls-row").hidden = !cs.length;
   const keyHints = ["Enter = controleren en volgende"];
@@ -899,7 +898,7 @@ function pickClass(c){
 function check(){
   if(ui.checked) return;
   const entry = current(); const item = list.items[entry.i]; const wd = entry.dir==="wd", ex = entry.dir==="ex";
-  const hasCls = vraagKlassen(entry).length>0;
+  const hasCls = classes().length>0;
   const zin = ex ? zinVan(entry, item) : null;
   const text = $("q-input").value.trim();
   // Ontbreekt er iets, dan eerst een waarschuwing. Nog een keer drukken
@@ -1005,7 +1004,7 @@ function applyResult(entry, item, ok){
   ui.streakBefore = session.streak||0;
   E.applyAnswer(st, ok, Date.now());
   kortInTotDeadline(st);
-  if(!ui.clsOk && vraagKlassen(entry).length) st.partWrong.cls++;
+  if(!ui.clsOk && classes().length) st.partWrong.cls++;
   if(ui.verdictDef!==true){ if(entry.dir==="wd") st.partWrong.def++; else st.partWrong.word++; st.dirWrong[entry.dir]++; }
   session.attempts[entry.i] = (session.attempts[entry.i]||0)+1;
   if(session.attempts[entry.i]===1) session.firstTry[entry.i] = ok;
@@ -1217,7 +1216,7 @@ function bind(){
     // Cijfers alleen als kiezer zolang het veld leeg is, anders kan ze geen
     // getal in een definitie typen.
     if(!ui.checked && /^[1-9]$/.test(e.key) && !$("q-input").value){
-      const cs=vraagKlassen(current()); const k=parseInt(e.key,10)-1; if(cs[k]){ e.preventDefault(); pickClass(cs[k]); }
+      const cs=classes(); const k=parseInt(e.key,10)-1; if(cs[k]){ e.preventDefault(); pickClass(cs[k]); }
     }
   });
 }
