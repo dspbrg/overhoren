@@ -12,7 +12,7 @@
 // De versie wordt bij elke deploy door deploy.sh vervangen, zodat een
 // nieuwe versie gegarandeerd doorkomt in plaats van blijven hangen.
 // =============================================================
-const VERSIE = "20261007160000";
+const VERSIE = "20261007170000";
 const CACHE = "overhoren-" + VERSIE;
 
 const SCHIL = [

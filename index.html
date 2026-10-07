@@ -13,7 +13,7 @@
 <meta name="theme-color" content="#F4F3F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16142A" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<link rel="stylesheet" href="ds.css?v=20261007160000">
+<link rel="stylesheet" href="ds.css?v=20261007170000">
 </head>
 <body>
 <div class="app">
@@ -105,7 +105,7 @@
       <p class="prompt" id="q-prompt"></p>
       <div class="field" id="q-class-field"><span class="label">Woordsoort</span><div class="choices" id="q-classes"></div></div>
       <div class="field"><label class="label" for="q-input" id="q-input-label">Definitie</label><input type="text" id="q-input" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go"></div>
-      <p class="hint" id="q-hint" hidden></p>
+      <div class="hint" id="q-hint" role="alert" hidden></div>
       <button class="btn primary big" id="btn-check">Controleer</button>
       <button class="btn primary big" id="btn-next" hidden>Volgende</button>
       <button class="link" data-icon="clock" id="btn-later">Weet ik even niet, doe later</button>
@@ -252,11 +252,11 @@
 
 </div>
 
-<script src="ui.js?v=20261007160000"></script>
-<script src="cats.js?v=20261007160000"></script>
-<script src="celebrate.js?v=20261007160000"></script>
-<script src="lists.js?v=20261007160000"></script>
-<script src="engine.js?v=20261007160000"></script>
+<script src="ui.js?v=20261007170000"></script>
+<script src="cats.js?v=20261007170000"></script>
+<script src="celebrate.js?v=20261007170000"></script>
+<script src="lists.js?v=20261007170000"></script>
+<script src="engine.js?v=20261007170000"></script>
 <script>
 (function(){
 "use strict";
@@ -882,7 +882,8 @@ function renderQuestion(){
   ui.pick = null; ui.checked=false; ui.verdictDef=null; ui.firstBlank=false;
   $("q-classes").innerHTML = UI.Choices(cs);
   $("q-classes").querySelectorAll(".choice").forEach(b=>b.addEventListener("click", ()=>pickClass(b.dataset.cls)));
-  $("q-hint").hidden = true; $("feedback").hidden = true; $("btn-check").hidden = false;
+  $("q-hint").hidden = true; $("q-hint").className = "hint"; $("btn-check").textContent = "Controleer";
+  $("feedback").hidden = true; $("btn-check").hidden = false;
   $("btn-later").hidden = !canSkip();
   $("fb-assess").hidden = true; $("btn-override").hidden = true; $("btn-next").hidden = true;
   $("feedback").classList.remove("only-verdict"); $("fb-official").hidden = true;
@@ -908,8 +909,10 @@ function check(){
   if(!text) mist.push("antwoord ingevuld");
   if(mist.length && !ui.firstBlank){
     ui.firstBlank = true;
-    $("q-hint").textContent = "Je hebt nog geen "+mist.join(" en geen ")+". Weet je zeker dat je wilt controleren? Druk dan nog een keer op Controleer.";
-    $("q-hint").hidden=false; return;
+    // een echte melding, geen grijs regeltje: anders valt hij niet op
+    $("q-hint").className = "notice";
+    $("q-hint").innerHTML = '<span class="notice-icon">'+UI.Icon("alert")+'</span><span><b>Weet je het zeker?</b> Je hebt nog geen '+esc(mist.join(" en geen "))+'.</span>';
+    $("q-hint").hidden=false; $("btn-check").textContent = "Toch controleren"; return;
   }
   tikActief();
   ui.checked = true; $("q-hint").hidden = true; $("btn-check").hidden = true; $("btn-later").hidden = true; $("q-input").disabled = true;
