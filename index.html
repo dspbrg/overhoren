@@ -335,10 +335,16 @@
 const E = window.Engine;
 const $ = id => document.getElementById(id);
 const MIN = 60000, DAY = 86400000;
-// Foto-import: vul hier de URL van je Cloudflare Worker in na deployment.
-// Deploy: cd worker && wrangler deploy && wrangler secret put ANTHROPIC_API_KEY
-const WORKER_URL = load("overhoor:worker-url", "");
+const WORKER_URL = "https://overhoren-api.y8n876dtrq.workers.dev";
 const APP_SECRET = load("overhoor:app-secret", "");
+
+// Deellink: #sync=wachtwoord zet sync automatisch aan
+function checkSyncHash(){
+  var h = location.hash.match(/^#sync=(.+)$/);
+  if(h){ save("overhoor:app-secret", decodeURIComponent(h[1])); history.replaceState(null,"",location.pathname); location.reload(); }
+}
+checkSyncHash();
+window.addEventListener("hashchange", checkSyncHash);
 
 const GAP = 3;              // minimaal aantal andere woorden tussen twee keer hetzelfde woord
 const PAUSE_AFTER = 15*MIN;   // zachte hint tijdens een ronde
@@ -567,7 +573,7 @@ function canSync(){ return WORKER_URL && APP_SECRET; }
 function setSyncState(txt, on){ const el=$("sync-state"); el.textContent = txt; el.classList.toggle("on", !!on); }
 
 async function initDb(){
-  if(!canSync()){ setSyncState("alleen op dit apparaat", false); return; }
+  if(!canSync()){ setSyncState("niet gekoppeld", false); return; }
   setSyncState("synchroniseren...", false);
   try{ await cloudPull(); setSyncState("gesynchroniseerd", true); }
   catch(e){ setSyncState("sync mislukt, lokaal opgeslagen", false); }
@@ -1331,19 +1337,7 @@ function photoError(msg) {
 }
 
 function ensureWorkerUrl() {
-  if (WORKER_URL && APP_SECRET) return true;
-  if (!WORKER_URL) {
-    var url = prompt("Vul de URL van je Cloudflare Worker in:\n(bijv. https://overhoren-api.jouwdomain.workers.dev)");
-    if (!url) return false;
-    save("overhoor:worker-url", url.replace(/\/+$/, ""));
-  }
-  if (!APP_SECRET) {
-    var secret = prompt("Vul het wachtwoord in voor de foto-import:");
-    if (!secret) return false;
-    save("overhoor:app-secret", secret);
-  }
-  location.reload();
-  return false;
+  return !!(WORKER_URL && APP_SECRET);
 }
 
 var photoSubjectHint = "";
@@ -1528,8 +1522,10 @@ function bind(){
     renderHome();
   });
   $("sync-state").addEventListener("click", ()=>{
-    if(canSync()){ cloudPull().then(()=>{ renderLessons(); setSyncState("gesynchroniseerd", true); }).catch(()=>setSyncState("sync mislukt", false)); }
-    else if(ensureWorkerUrl()){ /* reloads */ }
+    if(canSync()){
+      var link = location.origin + location.pathname + "#sync=" + encodeURIComponent(APP_SECRET);
+      navigator.clipboard.writeText(link).then(()=>{ setSyncState("link gekopieerd!", true); setTimeout(()=>setSyncState("gesynchroniseerd", true), 2000); }).catch(()=>{ setSyncState("kopiëren lukt niet", false); });
+    }
   });
   $("btn-cats").addEventListener("click", ()=>{ show("scr-cats"); renderCats(); });
   $("btn-cats-back").addEventListener("click", ()=>{ show("scr-lessons"); renderLessons(); });
