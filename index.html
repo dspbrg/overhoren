@@ -25,7 +25,7 @@
     <div class="learner-row">
       <span id="learner-view">Wie oefent: <b id="learner-label"></b> <button class="link" id="btn-learner">wissel</button></span>
       <span class="row" id="learner-form" hidden><input type="text" id="learner-name" placeholder="Naam" autocomplete="off"><button class="btn" id="btn-learner-save">Opslaan</button></span>
-      <button class="sync" id="sync-state">alleen op dit apparaat</button>
+      <span class="sync" id="sync-state"></span>
     </div>
     <div class="lessons" id="lessons"></div>
     <p class="foot"><button class="link" data-icon="trophy" id="btn-cats">Mijn katten</button><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button></p>
@@ -573,10 +573,9 @@ function canSync(){ return WORKER_URL && APP_SECRET; }
 function setSyncState(txt, on){ const el=$("sync-state"); el.textContent = txt; el.classList.toggle("on", !!on); }
 
 async function initDb(){
-  if(!canSync()){ setSyncState("niet gekoppeld", false); return; }
-  setSyncState("synchroniseren...", false);
-  try{ await cloudPull(); setSyncState("gesynchroniseerd", true); }
-  catch(e){ setSyncState("sync mislukt, lokaal opgeslagen", false); }
+  if(!canSync()) return;
+  try{ await cloudPull(); setSyncState("", true); }
+  catch(e){ setSyncState("", false); }
 }
 
 function gatherLocal(){
@@ -645,9 +644,8 @@ function cloudPush(){
         headers: { "Content-Type": "application/json", "x-api-token": APP_SECRET },
         body: JSON.stringify(body)
       });
-      if(res.ok) setSyncState("gesynchroniseerd", true);
-      else setSyncState("sync mislukt", false);
-    } catch(e){ setSyncState("sync mislukt", false); }
+      if(res.ok) setSyncState("", true);
+    } catch(e){}
   }, 2000);
 }
 
@@ -1520,12 +1518,6 @@ function bind(){
   $("deadline-input").addEventListener("change", e=>{
     save(DKEY(list.id), e.target.value || null);
     renderHome();
-  });
-  $("sync-state").addEventListener("click", ()=>{
-    if(canSync()){
-      var link = location.origin + location.pathname + "#sync=" + encodeURIComponent(APP_SECRET);
-      navigator.clipboard.writeText(link).then(()=>{ setSyncState("link gekopieerd!", true); setTimeout(()=>setSyncState("gesynchroniseerd", true), 2000); }).catch(()=>{ setSyncState("kopiëren lukt niet", false); });
-    }
   });
   $("btn-cats").addEventListener("click", ()=>{ show("scr-cats"); renderCats(); });
   $("btn-cats-back").addEventListener("click", ()=>{ show("scr-lessons"); renderLessons(); });

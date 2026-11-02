@@ -563,9 +563,7 @@
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--line-strong); margin-right: 5px; vertical-align: middle; }
   .hard { color: var(--bad); font-weight: 700; font-size: .8rem; }
   .dots { letter-spacing: 2px; color: var(--accent); font-size: .8rem; }
-  .sync { font-size: .85rem; color: var(--muted); background: none; border: none; cursor: pointer; padding: 0; font-family: inherit; }
-  .sync:hover { text-decoration: underline; }
-  .sync.on { color: var(--ok); }
+  .sync { display: none; }
 
   /* --- beweging --- */
   .btn, .choice, .seg button, .lesson {
