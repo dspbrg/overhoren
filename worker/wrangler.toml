@@ -2,5 +2,9 @@ name = "overhoren-api"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
 
+[[kv_namespaces]]
+binding = "SYNC"
+id = "1eb8d2473fb947da974dcb358d1dcca0"
+
 [vars]
 ALLOWED_ORIGIN = "*"

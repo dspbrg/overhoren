@@ -58,12 +58,14 @@
     try { return JSON.parse(localStorage.getItem(KKEY()) || "{}"); } catch (e) { return {}; }
   }
   function bewaar(c) { try { localStorage.setItem(KKEY(), JSON.stringify(c)); } catch (e) {} }
+  let onVerdien = null;
   function verdien(src) {
     const c = collectie();
     const nu = Date.now();
     const nieuw = !c[src];
     c[src] = { aantal: (c[src] ? c[src].aantal : 0) + 1, eerst: nieuw ? nu : c[src].eerst, laatst: nu };
     bewaar(c);
+    if (onVerdien) onVerdien();
     return nieuw;
   }
   // Eerst een rang loten, dan een kat binnen die rang. Zo bepaalt de
@@ -242,5 +244,6 @@
   const BIJNA_CAPTIONS = ["Bijna foutloos", "Goed bezig", "Kat zegt goed zo"];
 
   root.Celebrate = { celebrate, confetti, cat, collectie, setLearner, loot, bijnaVlekkeloos, DREMPEL,
-                     kansen, kansOpBijzonder, CATS, CAPTIONS, PRAISE };
+                     kansen, kansOpBijzonder, CATS, CAPTIONS, PRAISE,
+                     set onVerdien(fn){ onVerdien = fn; } };
 })(typeof window === "object" ? window : globalThis);

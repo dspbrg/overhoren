@@ -25,7 +25,7 @@
     <div class="learner-row">
       <span id="learner-view">Wie oefent: <b id="learner-label"></b> <button class="link" id="btn-learner">wissel</button></span>
       <span class="row" id="learner-form" hidden><input type="text" id="learner-name" placeholder="Naam" autocomplete="off"><button class="btn" id="btn-learner-save">Opslaan</button></span>
-      <span class="sync" id="sync-state">alleen op dit apparaat</span>
+      <button class="sync" id="sync-state">alleen op dit apparaat</button>
     </div>
     <div class="lessons" id="lessons"></div>
     <p class="foot"><button class="link" data-icon="trophy" id="btn-cats">Mijn katten</button><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button></p>
@@ -460,7 +460,6 @@ function withAlts(item, i){
     : Object.assign({}, item, { accept: (item.accept||[]).concat(extra) });
 }
 let learner = load(LEARNER_KEY, "Pia");
-let db = null, syncChain = Promise.resolve(), syncTimer = null;
 
 // ---------- state ----------
 let lists = [], list = null, progress = null, session = null, sizeChoice = 15, timer = null;
@@ -544,7 +543,6 @@ function selectList(id){
   if(!progress.items) progress.items = {};
   if(!progress.sessions) progress.sessions = [];
   save(CKEY, list.id);
-  pullProgress();
 }
 function saveProgress(){
   progress.updated = Date.now();
@@ -552,6 +550,7 @@ function saveProgress(){
     // de woordtoestanden zitten in de bronlijsten; hier alleen de rondes bewaren
     for(const lid in bronProgress){ bronProgress[lid].updated = Date.now(); save(PKEY(lid), bronProgress[lid]); }
     save(PKEY(list.id), { items: {}, sessions: progress.sessions, updated: progress.updated });
+    pushProgress();
     return;
   }
   save(PKEY(list.id), progress); pushProgress();
@@ -560,51 +559,100 @@ function setLearner(name){
   learner = String(name||"").trim() || "Pia";
   save(LEARNER_KEY, learner);
   const names = load(LEARNERS_KEY, []); if(!names.includes(learner)){ names.push(learner); save(LEARNERS_KEY, names); }
-  if(db) syncChain = syncChain.then(()=>db.doc("learners/"+slug(learner)).set({name: learner, updated: Date.now()})).catch(()=>{});
 }
 
-// ---------- cloud-sync (alleen in de claude.ai-versie, ingelogd) ----------
-// localStorage blijft de bron op dit apparaat; de db is een spiegel per oefenaar en lijst.
-// Nieuwste versie wint, op basis van `updated`.
-function docId(){ return slug(learner)+"__"+list.id; }
-async function initDb(){
-  try{ db = (window.claude && typeof window.claude.use==="function") ? await window.claude.use("db") : null; }catch(e){ db = null; }
-  setSyncState(db ? "gesynchroniseerd via jouw account" : "alleen op dit apparaat", !!db);
-  if(db){ setLearner(learner); await pullProgress(); if(!$("scr-lessons").hidden) renderLessons(); else if(!$("scr-home").hidden) renderHome(); }
-}
+// ---------- cloud-sync via Worker KV ----------
+let syncTimer = null;
+function canSync(){ return WORKER_URL && APP_SECRET; }
 function setSyncState(txt, on){ const el=$("sync-state"); el.textContent = txt; el.classList.toggle("on", !!on); }
-async function pullProgress(){
-  if(!db) return;
-  try{
-    const snap = await db.doc("progress/"+docId()).get();
-    if(snap.exists){
-      const remote = snap.data();
-      if((remote.updated||0) > (progress.updated||0)){ progress = JSON.parse(JSON.stringify(remote)); save(PKEY(list.id), progress); }
-      else if((progress.updated||0) > (remote.updated||0)) pushProgress();
-    } else if(progress.updated) pushProgress();
-  }catch(e){ setSyncState("sync mislukt, lokaal opgeslagen", false); }
+
+async function initDb(){
+  if(!canSync()){ setSyncState("alleen op dit apparaat", false); return; }
+  setSyncState("synchroniseren...", false);
+  try{ await cloudPull(); setSyncState("gesynchroniseerd", true); }
+  catch(e){ setSyncState("sync mislukt, lokaal opgeslagen", false); }
 }
-function pushProgress(){
-  if(!db) return;
+
+function gatherLocal(){
+  const s = slug(learner);
+  var cats = load("overhoor:cats:" + s, {});
+  var prog = {};
+  for(var l of lists){
+    var p = load(PKEY(l.id), null);
+    if(p) prog[l.id] = p;
+  }
+  var customLists = load(LKEY, []);
+  return { cats: cats, progress: prog, lists: customLists, updated: Date.now() };
+}
+
+function applyRemote(remote){
+  var s = slug(learner);
+  if(remote.cats){
+    var localCats = load("overhoor:cats:" + s, {});
+    for(var src in remote.cats){
+      if(!localCats[src] || (remote.cats[src].laatst||0) > (localCats[src].laatst||0)){
+        localCats[src] = remote.cats[src];
+      } else if(localCats[src]){
+        localCats[src].aantal = Math.max(localCats[src].aantal||0, remote.cats[src].aantal||0);
+      }
+    }
+    save("overhoor:cats:" + s, localCats);
+  }
+  if(remote.progress){
+    for(var lid in remote.progress){
+      var local = load(PKEY(lid), null);
+      if(!local || (remote.progress[lid].updated||0) > (local.updated||0)){
+        save(PKEY(lid), remote.progress[lid]);
+        if(list && list.id === lid) progress = remote.progress[lid];
+      }
+    }
+  }
+  if(remote.lists && remote.lists.length){
+    var existing = load(LKEY, []);
+    var byId = {};
+    for(var el of existing) byId[el.id] = el;
+    for(var rl of remote.lists){
+      if(!byId[rl.id] || (rl.added||0) > (byId[rl.id].added||0)) byId[rl.id] = rl;
+    }
+    save(LKEY, Object.values(byId));
+  }
+}
+
+async function cloudPull(){
+  if(!canSync()) return;
+  var res = await fetch(WORKER_URL + "/sync/" + slug(learner), {
+    headers: { "x-api-token": APP_SECRET }
+  });
+  if(!res.ok) throw new Error("sync pull " + res.status);
+  var remote = await res.json();
+  if(remote && remote.updated) applyRemote(remote);
+}
+
+function cloudPush(){
+  if(!canSync()) return;
   clearTimeout(syncTimer);
-  const id = docId(), body = JSON.parse(JSON.stringify(progress));
-  body.learner = learner; body.listId = list.id; body.listTitle = list.title;
-  syncTimer = setTimeout(()=>{ syncChain = syncChain.then(()=>db.doc("progress/"+id).set(body)).catch(()=>setSyncState("sync mislukt, lokaal opgeslagen", false)); }, 1500);
+  syncTimer = setTimeout(async function(){
+    try{
+      var body = gatherLocal();
+      var res = await fetch(WORKER_URL + "/sync/" + slug(learner), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-api-token": APP_SECRET },
+        body: JSON.stringify(body)
+      });
+      if(res.ok) setSyncState("gesynchroniseerd", true);
+      else setSyncState("sync mislukt", false);
+    } catch(e){ setSyncState("sync mislukt", false); }
+  }, 2000);
 }
-// Alle voortgang (lokaal + cloud) voor het rapport.
+
+function pushProgress(){ cloudPush(); }
+
 async function allProgress(){
   const out = new Map();
   const names = load(LEARNERS_KEY, [learner]);
   for(const name of names) for(const l of lists){
     const p = load("overhoor:progress:"+slug(name)+":"+l.id, null);
     if(p && p.sessions && p.sessions.length) out.set(slug(name)+"__"+l.id, {learner:name, list:l, progress:p});
-  }
-  if(db){
-    try{
-      const q = await db.collection("progress").get();
-      q.docs.forEach(d=>{ const r=d.data(); if(!r||!r.sessions||!r.sessions.length) return; const l = lists.find(x=>x.id===r.listId) || {id:r.listId, title:r.listTitle||r.listId, items:[]};
-        const cur = out.get(d.id); if(!cur || (r.updated||0) > (cur.progress.updated||0)) out.set(d.id, {learner:r.learner||d.id.split("__")[0], list:l, progress:r}); });
-    }catch(e){}
   }
   return Array.from(out.values()).sort((a,b)=>(b.progress.updated||0)-(a.progress.updated||0));
 }
@@ -1479,13 +1527,17 @@ function bind(){
     save(DKEY(list.id), e.target.value || null);
     renderHome();
   });
+  $("sync-state").addEventListener("click", ()=>{
+    if(canSync()){ cloudPull().then(()=>{ renderLessons(); setSyncState("gesynchroniseerd", true); }).catch(()=>setSyncState("sync mislukt", false)); }
+    else if(ensureWorkerUrl()){ /* reloads */ }
+  });
   $("btn-cats").addEventListener("click", ()=>{ show("scr-cats"); renderCats(); });
   $("btn-cats-back").addEventListener("click", ()=>{ show("scr-lessons"); renderLessons(); });
   $("btn-report").addEventListener("click", ()=>{ show("scr-report"); renderReport(); });
   $("btn-report-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
   $("btn-report-copy").addEventListener("click", copyReport);
   $("btn-learner").addEventListener("click", ()=>{ $("learner-form").hidden=false; $("learner-view").hidden=true; $("learner-name").value=learner; $("learner-name").focus(); });
-  const saveLearner = ()=>{ setLearner($("learner-name").value); $("learner-form").hidden=true; $("learner-view").hidden=false; selectList(list.id); renderLessons(); };
+  const saveLearner = ()=>{ setLearner($("learner-name").value); $("learner-form").hidden=true; $("learner-view").hidden=false; selectList(list.id); renderLessons(); initDb(); };
   $("btn-learner-save").addEventListener("click", saveLearner);
   $("learner-name").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); saveLearner(); } });
   $("btn-info-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
@@ -1553,6 +1605,7 @@ function init(){
   if(!lists.length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
   setLearner(learner);
   selectList(load(CKEY, lists[0].id));
+  Celebrate.onVerdien = cloudPush;
   bind(); renderLessons(); show("scr-lessons");
   initDb();
 }

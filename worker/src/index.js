@@ -5,7 +5,7 @@ const API_URL = "https://api.anthropic.com/v1/messages";
 function cors(env) {
   return {
     "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, x-api-token",
   };
 }
@@ -138,6 +138,59 @@ async function handleExtract(request, env) {
   return json(result, 200, env);
 }
 
+async function handleSyncGet(learner, env) {
+  const data = await env.SYNC.get("learner:" + learner, "json");
+  return json(data || {}, 200, env);
+}
+
+async function handleSyncPut(learner, request, env) {
+  const body = await request.json();
+  const existing = await env.SYNC.get("learner:" + learner, "json") || {};
+  const merged = mergeSync(existing, body);
+  await env.SYNC.put("learner:" + learner, JSON.stringify(merged));
+  return json(merged, 200, env);
+}
+
+function mergeSync(remote, local) {
+  const out = {};
+  out.cats = mergeCats(remote.cats || {}, local.cats || {});
+  out.progress = mergeProgress(remote.progress || {}, local.progress || {});
+  out.lists = mergeLists(remote.lists || [], local.lists || []);
+  out.updated = Math.max(remote.updated || 0, local.updated || 0);
+  return out;
+}
+
+function mergeCats(a, b) {
+  const out = Object.assign({}, a);
+  for (const src in b) {
+    if (!out[src] || (b[src].laatst || 0) > (out[src].laatst || 0)) {
+      out[src] = b[src];
+    } else if (out[src]) {
+      out[src].aantal = Math.max(out[src].aantal || 0, b[src].aantal || 0);
+    }
+  }
+  return out;
+}
+
+function mergeProgress(a, b) {
+  const out = Object.assign({}, a);
+  for (const key in b) {
+    if (!out[key] || (b[key].updated || 0) > (out[key].updated || 0)) {
+      out[key] = b[key];
+    }
+  }
+  return out;
+}
+
+function mergeLists(a, b) {
+  const byId = {};
+  for (const l of a) byId[l.id] = l;
+  for (const l of b) {
+    if (!byId[l.id] || (l.added || 0) > (byId[l.id].added || 0)) byId[l.id] = l;
+  }
+  return Object.values(byId);
+}
+
 async function handleEnrich(request, env) {
   const { items, mode, subject } = await request.json();
   if (!items || !items.length) return json({ error: "Geen items meegegeven" }, 400, env);
@@ -182,6 +235,11 @@ export default {
       }
       if (url.pathname === "/enrich" && request.method === "POST") {
         return await handleEnrich(request, env);
+      }
+      const syncMatch = url.pathname.match(/^\/sync\/([a-z0-9-]+)$/);
+      if (syncMatch) {
+        if (request.method === "GET") return await handleSyncGet(syncMatch[1], env);
+        if (request.method === "PUT") return await handleSyncPut(syncMatch[1], request, env);
       }
       return json({ error: "Niet gevonden" }, 404, env);
     } catch (e) {
