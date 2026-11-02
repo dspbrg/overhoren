@@ -1,8 +1,10 @@
 // =============================================================
 // Overhoren viering
 //
-// Gaat alleen af bij een vlekkeloze ronde: alles in een keer goed.
-// Zeldzaam houden is het hele punt, anders betekent het niets meer.
+// Gaat af bij een vlekkeloze ronde: alles in een keer goed. Dan confetti
+// en kans op een bijzondere of zeldzame kat. Bij 90% of meer (bijna
+// vlekkeloos) valt er een gewone kat, zonder confetti. Zo is er een
+// haalbare trede, en blijft foutloos het echte doel.
 //
 // Confetti is met de hand getekend op een canvas, geen library.
 // De katten zijn gewone bestanden in cats/. Eentje erbij zetten is
@@ -66,7 +68,9 @@
   }
   // Eerst een rang loten, dan een kat binnen die rang. Zo bepaalt de
   // zeldzaamheid de kans, niet het aantal plaatjes per rang.
-  function loot(woorden) {
+  // alleenRang: vaste rang, bijvoorbeeld "gewoon" bij bijna vlekkeloos.
+  function loot(woorden, alleenRang) {
+    if (alleenRang && CATS.some(k => k.rang === alleenRang)) return pick(CATS.filter(k => k.rang === alleenRang));
     const KANS = kansen(woorden);
     const beschikbaar = Object.keys(KANS).filter(r => CATS.some(k => k.rang === r));
     const totaal = beschikbaar.reduce((s, r) => s + KANS[r], 0);
@@ -187,9 +191,9 @@
   // Vaste beeldverhouding met object-fit, zodat elke foto er even
   // netjes uitziet ongeacht het bronformaat.
   // Laadt het plaatje niet, dan verschijnt er niets en breekt er niets.
-  function cat(woorden) {
+  function cat(woorden, alleenRang, captions) {
     if (!CATS.length) return null;
-    const kat = loot(woorden);
+    const kat = loot(woorden, alleenRang);
     const nieuw = verdien(kat.src);
     const img = new Image();
     img.src = kat.src;
@@ -205,7 +209,7 @@
       fig.dataset.rang = kat.rang;
       const cap = document.createElement("figcaption");
       cap.innerHTML = '<b>' + kat.naam + '</b>' +
-        '<span class="fx-cat-sub">' + (nieuw ? "Nieuwe kat!" : pick(CAPTIONS)) + '</span>';
+        '<span class="fx-cat-sub">' + (nieuw ? "Nieuwe kat!" : pick(captions || CAPTIONS)) + '</span>';
       fig.appendChild(cap);
       document.body.appendChild(fig);
       requestAnimationFrame(() => fig.classList.add("is-in"));
@@ -220,11 +224,23 @@
   // perfect: alles in een keer goed. Alleen dan gaat dit af.
   function celebrate(opts) {
     opts = opts || {};
+    if (opts.bijna) {
+      cat(opts.woorden, "gewoon", BIJNA_CAPTIONS);
+      return pick(BIJNA);
+    }
     if (!reduced()) confetti(opts.duration);
     cat(opts.woorden);
     return pick(PRAISE);
   }
 
-  root.Celebrate = { celebrate, confetti, cat, collectie, setLearner, loot,
+  // 90% of meer in een keer goed, maar niet alles.
+  const DREMPEL = 0.9;
+  function bijnaVlekkeloos(woorden, eersteKeerGoed) {
+    return woorden > 0 && eersteKeerGoed < woorden && eersteKeerGoed / woorden >= DREMPEL;
+  }
+  const BIJNA = ["Bijna alles goed!", "Op een haar na foutloos.", "Sterk gedaan.", "Net niet foutloos, wel een kat."];
+  const BIJNA_CAPTIONS = ["Bijna foutloos", "Goed bezig", "Kat zegt goed zo"];
+
+  root.Celebrate = { celebrate, confetti, cat, collectie, setLearner, loot, bijnaVlekkeloos, DREMPEL,
                      kansen, kansOpBijzonder, CATS, CAPTIONS, PRAISE };
 })(typeof window === "object" ? window : globalThis);

@@ -28,7 +28,8 @@
       <span class="sync" id="sync-state">alleen op dit apparaat</span>
     </div>
     <div class="lessons" id="lessons"></div>
-    <p class="foot"><button class="link" data-icon="trophy" id="btn-cats">Mijn katten</button><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button><button class="link" id="btn-import">Lijst toevoegen</button></p>
+    <p class="foot"><button class="link" data-icon="trophy" id="btn-cats">Mijn katten</button><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button></p>
+    <button class="btn add-list-btn" id="btn-import">+ Nieuwe lijst</button>
   </div>
 </section>
 
@@ -230,8 +231,21 @@
 <section id="scr-import" class="screen" hidden>
   <div class="app">
     <div class="topbar"><button class="link" data-icon="back" id="btn-import-back">Terug</button></div>
-    <div class="card">
-      <h2>Lijst toevoegen</h2>
+    <h2>Nieuwe lijst</h2>
+    <div class="import-choices" id="import-choices">
+      <button class="card import-choice" id="btn-photo-start">
+        <span class="import-choice-icon">&#128247;</span>
+        <b>Fotografeer</b>
+        <span class="hint">Maak een foto van je boek</span>
+      </button>
+      <button class="card import-choice" id="btn-type-start">
+        <span class="import-choice-icon">&#9997;</span>
+        <b>Typ zelf</b>
+        <span class="hint">Voer woorden handmatig in</span>
+      </button>
+    </div>
+    <div class="card" id="import-form" hidden>
+      <div class="topbar"><button class="link" data-icon="back" id="btn-import-form-back">Andere methode</button></div>
       <div class="field"><span class="label">Soort les</span>
         <div class="radio">
           <label><input type="radio" name="imp-mode" value="translate" checked><span><b>Vertaling, één kant op</b><br><span class="hint">Bijvoorbeeld Frans naar Nederlands. Per regel: vreemd woord | Nederlands. Meerdere goede vertalingen scheiden met /</span></span></label>
@@ -250,6 +264,64 @@
   </div>
 </section>
 
+<!-- FOTO IMPORT -->
+<section id="scr-photo" class="screen" hidden>
+  <div class="app">
+    <div class="topbar"><button class="link" data-icon="back" id="btn-photo-back">Terug</button><span class="muted" id="photo-step"></span></div>
+
+    <div class="card" id="photo-capture">
+      <h2>Fotografeer een bladzijde</h2>
+      <p class="hint">Zorg dat de tekst scherp en goed leesbaar is.</p>
+      <label class="btn primary big photo-label" id="photo-label">
+        <input type="file" accept="image/*" capture="environment" id="photo-input">
+        Maak een foto
+      </label>
+      <img id="photo-preview" class="photo-preview" hidden alt="">
+      <div id="photo-actions" hidden>
+        <p class="label">Wat voor overhoring is dit?</p>
+        <div class="photo-type-grid">
+          <button class="btn photo-type-btn" data-type="wd">Woordjes<span class="hint">[taal] → Nederlands</span></button>
+          <button class="btn photo-type-btn" data-type="dw">Woordjes<span class="hint">Nederlands → [taal]</span></button>
+          <button class="btn photo-type-btn" data-type="zinnen">Zinnen<span class="hint">Grammatica / invullen</span></button>
+          <button class="btn photo-type-btn" data-type="anders">Iets anders<span class="hint">AI bepaalt het type</span></button>
+        </div>
+        <div id="photo-lang-pick" class="photo-lang-pick" hidden>
+          <label class="label" for="photo-lang">Welke taal?</label>
+          <div class="row">
+            <input type="text" id="photo-lang" placeholder="bijv. Frans" value="Frans">
+            <button class="btn primary" id="btn-photo-go-lang">Ga door</button>
+          </div>
+        </div>
+        <button class="link" id="btn-photo-retry">Andere foto</button>
+      </div>
+    </div>
+
+    <div class="card" id="photo-loading" hidden>
+      <div class="photo-wait">
+        <div class="spinner"></div>
+        <p id="photo-loading-text">Even kijken wat er op staat...</p>
+      </div>
+    </div>
+
+    <div class="card" id="photo-review" hidden>
+      <h2>Controleer de lijst</h2>
+      <p class="hint">Klopt alles? Pas aan of verwijder wat niet klopt.</p>
+      <div class="two"><div class="field"><label class="label" for="photo-subject">Vak</label><input type="text" id="photo-subject"></div><div class="field"><label class="label" for="photo-title">Naam</label><input type="text" id="photo-title"></div></div>
+      <div class="two" id="photo-langs" hidden><div class="field"><label class="label" for="photo-from">Van</label><input type="text" id="photo-from"></div><div class="field"><label class="label" for="photo-to">Naar</label><input type="text" id="photo-to"></div></div>
+      <div class="photo-items" id="photo-items"></div>
+      <p class="hint" id="photo-count"></p>
+      <div class="row"><button class="btn primary big" id="btn-photo-save">Opslaan</button></div>
+    </div>
+
+    <div class="card" id="photo-done" hidden>
+      <div class="empty"><span class="glyph">&#10003;</span><p><b>Lijst opgeslagen!</b></p><p class="muted" id="photo-done-text"></p></div>
+      <button class="btn primary big" id="btn-photo-go">Naar de lijst</button>
+    </div>
+
+    <p class="hint" id="photo-error" hidden></p>
+  </div>
+</section>
+
 </div>
 
 <script src="ui.js?v=20261007170000"></script>
@@ -263,6 +335,11 @@
 const E = window.Engine;
 const $ = id => document.getElementById(id);
 const MIN = 60000, DAY = 86400000;
+// Foto-import: vul hier de URL van je Cloudflare Worker in na deployment.
+// Deploy: cd worker && wrangler deploy && wrangler secret put ANTHROPIC_API_KEY
+const WORKER_URL = load("overhoor:worker-url", "");
+const APP_SECRET = load("overhoor:app-secret", "");
+
 const GAP = 3;              // minimaal aantal andere woorden tussen twee keer hetzelfde woord
 const PAUSE_AFTER = 15*MIN;   // zachte hint tijdens een ronde
 // Aandacht zakt na ongeveer 25 minuten. Een blok van die lengte vraagt een
@@ -414,10 +491,9 @@ function mixLijsten(){
   const uit = [];
   for(const groep in perVak){
     const ls = perVak[groep], vak = ls[0].subject || "Overig";
-    if(ls.length < 2) continue;
     uit.push({
       id: MIX + slug(vak) + (ls[0].mode ? "-" + slug(ls[0].mode) : ""), title: "Alles door elkaar", subject: vak, mix: true,
-      subtitle: ls.length + " lijsten samen",
+      subtitle: ls.length === 1 ? "alles herhalen" : ls.length + " lijsten samen",
       bronnen: ls.map(l=>l.id),
       mode: ls[0].mode, from: ls[0].from, to: ls[0].to,
       classes: Array.from(new Set(ls.flatMap(l => l.classes || l.items.map(i=>i.cls)).filter(Boolean))),
@@ -581,7 +657,7 @@ function renderCats(){
   $("cats-count").textContent = aantal+" van "+alle.length;
   $("cats-intro").textContent = aantal===alle.length
     ? "Je hebt ze allemaal. Blijf oefenen, dan komen ze vaker langs."
-    : "Elke ronde die je in een keer helemaal goed hebt, levert een kat op.";
+    : "Een ronde met 90% of meer in één keer goed levert een kat op. Helemaal foutloos geeft kans op een bijzondere of zeldzame.";
   $("cats-grid").innerHTML = alle.map(function(k){
     const h = have[k.src];
     const rangLabel = k.rang.charAt(0).toUpperCase()+k.rang.slice(1);
@@ -697,7 +773,7 @@ function renderHome(){
   const kans = window.Celebrate ? Celebrate.kansOpBijzonder(pick.indices.length) : null;
   $("size-hint").innerHTML = esc(basis) +
     (kans !== null ? ' <span class="size-kans">' + UI.Icon("trophy") +
-      ' Foutloos? Dan <b>' + kans + '%</b> kans op een bijzondere of zeldzame kat.</span>' : "");
+      ' 90% goed: een kat. Foutloos: <b>' + kans + '%</b> kans op een bijzondere of zeldzame.</span>' : "");
   // grens: alleen zinvol bij een lijst die te lang is om in een keer te doen
   const totaal = list.items.length;
   const toonGrens = !list.mix && totaal > 20;
@@ -1088,12 +1164,14 @@ function finish(stopped){
   saveProgress(); save(SKEY(list.id), null); finalized=false;
   // Vlekkeloos: alles in een keer goed, en niet halverwege gestopt.
   const perfect = !stopped && ids.length > 0 && first === ids.length && !session.skipped;
-  $("sum-title").textContent = stopped ? "Ronde gestopt" : (perfect ? "Vlekkeloos" : "Ronde klaar");
+  // Bijna vlekkeloos: 90% of meer in een keer goed, ook zonder stoppen of overslaan.
+  const bijna = !perfect && !stopped && !session.skipped && window.Celebrate && Celebrate.bijnaVlekkeloos(ids.length, first);
+  $("sum-title").textContent = stopped ? "Ronde gestopt" : (perfect ? "Vlekkeloos" : bijna ? "Bijna vlekkeloos" : "Ronde klaar");
   $("sum-n").textContent = ids.length; $("sum-time").textContent = fmtTime(ms);
-  $("sum-first").innerHTML = perfect ? UI.Icon("trophy") + "<span>" + first + "</span>" : String(first);
-  $("sum-perfect").hidden = !perfect;
-  if(perfect && window.Celebrate){
-    $("sum-perfect").innerHTML = UI.Icon("sparkle") + "<span>" + esc(Celebrate.celebrate({ woorden: ids.length })) + "</span>";
+  $("sum-first").innerHTML = perfect || bijna ? UI.Icon("trophy") + "<span>" + first + "</span>" : String(first);
+  $("sum-perfect").hidden = !(perfect || bijna);
+  if((perfect || bijna) && window.Celebrate){
+    $("sum-perfect").innerHTML = UI.Icon("sparkle") + "<span>" + esc(Celebrate.celebrate({ woorden: ids.length, bijna })) + "</span>";
   }
   $("sum-hard-wrap").hidden = !hard.length; $("sum-hard").textContent = hard.join(", ");
   const now = Date.now();
@@ -1138,6 +1216,227 @@ function deleteList(){
   if(!confirm("Lijst '"+list.title+"' en de voortgang ervan verwijderen?")) return;
   save(LKEY, load(LKEY, []).filter(l=>l.id!==list.id)); save(PKEY(list.id), null); save(SKEY(list.id), null);
   lists = allLists(); selectList(lists[0].id); renderLessons(); show("scr-lessons");
+}
+
+// ---------- foto-import ----------
+let photoData = null;   // {data, mediaType, preview}
+let photoResult = null; // extractie-resultaat
+
+function resizeImage(file, maxPx) {
+  return new Promise(function(resolve) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onload = function() {
+        var w = img.width, h = img.height;
+        if (w > maxPx || h > maxPx) {
+          if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+          else { w = Math.round(w * maxPx / h); h = maxPx; }
+        }
+        var c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        var url = c.toDataURL("image/jpeg", 0.85);
+        resolve({ data: url.split(",")[1], mediaType: "image/jpeg", preview: url });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function photoShowStep(step) {
+  ["photo-capture","photo-loading","photo-review","photo-done"].forEach(function(id) {
+    $(id).hidden = id !== step;
+  });
+  $("photo-error").hidden = true;
+  var labels = { "photo-capture":"Stap 1 van 3", "photo-loading":"Stap 2 van 3", "photo-review":"Stap 3 van 3", "photo-done":"Klaar" };
+  $("photo-step").textContent = labels[step] || "";
+}
+
+function photoReset() {
+  photoData = null; photoResult = null; photoTypeChoice = "";
+  $("photo-preview").hidden = true;
+  $("photo-actions").hidden = true;
+  $("photo-label").hidden = false;
+  $("photo-lang-pick").hidden = true;
+  $("photo-input").value = "";
+  photoShowStep("photo-capture");
+}
+
+function photoOnFile(e) {
+  var file = e.target.files && e.target.files[0];
+  if (!file) return;
+  resizeImage(file, 1500).then(function(result) {
+    photoData = result;
+    $("photo-preview").src = result.preview;
+    $("photo-preview").hidden = false;
+    $("photo-actions").hidden = false;
+    $("photo-label").hidden = true;
+  });
+}
+
+function photoError(msg) {
+  $("photo-error").textContent = msg;
+  $("photo-error").hidden = false;
+  photoShowStep("photo-capture");
+}
+
+function ensureWorkerUrl() {
+  if (WORKER_URL && APP_SECRET) return true;
+  if (!WORKER_URL) {
+    var url = prompt("Vul de URL van je Cloudflare Worker in:\n(bijv. https://overhoren-api.jouwdomain.workers.dev)");
+    if (!url) return false;
+    save("overhoor:worker-url", url.replace(/\/+$/, ""));
+  }
+  if (!APP_SECRET) {
+    var secret = prompt("Vul het wachtwoord in voor de foto-import:");
+    if (!secret) return false;
+    save("overhoor:app-secret", secret);
+  }
+  location.reload();
+  return false;
+}
+
+var photoSubjectHint = "";
+var photoTypeChoice = "";
+
+function photoPickType(type) {
+  photoTypeChoice = type;
+  if (type === "wd" || type === "dw") {
+    $("photo-lang-pick").hidden = false;
+    $("photo-lang").focus();
+    return;
+  }
+  photoSubjectHint = type;
+  photoExtract();
+}
+
+function photoGoWithLang() {
+  var lang = $("photo-lang").value.trim();
+  if (!lang) { $("photo-lang").focus(); return; }
+  photoSubjectHint = photoTypeChoice + ":" + lang;
+  photoExtract();
+}
+
+async function photoExtract() {
+  if (!photoData) return;
+  if (!ensureWorkerUrl()) return;
+  photoShowStep("photo-loading");
+  $("photo-loading-text").textContent = "Even kijken wat er op staat...";
+  try {
+    var res = await fetch(WORKER_URL + "/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-token": APP_SECRET },
+      body: JSON.stringify({ image: photoData.data, mediaType: photoData.mediaType, subjectHint: photoSubjectHint })
+    });
+    if (!res.ok) throw new Error("Server gaf fout " + res.status);
+    photoResult = await res.json();
+    if (photoResult.error) throw new Error(photoResult.error);
+    if (!photoResult.items || !photoResult.items.length) throw new Error("Geen woorden gevonden op de foto.");
+    photoShowReview();
+  } catch (e) {
+    photoError("Herkenning mislukt: " + e.message);
+  }
+}
+
+function photoShowReview() {
+  var r = photoResult;
+  $("photo-subject").value = r.subject || "";
+  $("photo-title").value = r.title || "";
+  var isTr = r.mode === "translate";
+  $("photo-langs").hidden = !isTr;
+  if (isTr) { $("photo-from").value = r.from || ""; $("photo-to").value = r.to || ""; }
+  photoRenderItems();
+  photoShowStep("photo-review");
+}
+
+function photoRenderItems() {
+  var r = photoResult, isTr = r.mode === "translate";
+  $("photo-items").innerHTML = r.items.map(function(it, i) {
+    return '<div class="photo-row" data-idx="'+i+'">' +
+      '<input type="text" class="photo-word" value="'+esc(it.word)+'" placeholder="Woord">' +
+      '<input type="text" class="photo-def" value="'+esc(it.def||"")+'" placeholder="'+(isTr?"Vertaling":"Definitie")+'">' +
+      '<button type="button" class="link photo-del" title="Verwijder">' + UI.Icon("close") + '</button>' +
+      '</div>';
+  }).join("");
+  $("photo-count").textContent = r.items.length + " woorden gevonden";
+  $("photo-items").querySelectorAll(".photo-del").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var idx = parseInt(btn.closest(".photo-row").dataset.idx, 10);
+      photoResult.items.splice(idx, 1);
+      photoRenderItems();
+    });
+  });
+}
+
+function photoSyncEdits() {
+  $("photo-items").querySelectorAll(".photo-row").forEach(function(row) {
+    var idx = parseInt(row.dataset.idx, 10);
+    var it = photoResult.items[idx]; if (!it) return;
+    it.word = row.querySelector(".photo-word").value.trim();
+    it.def = row.querySelector(".photo-def").value.trim();
+  });
+}
+
+async function photoSave() {
+  photoSyncEdits();
+  var r = photoResult;
+  var items = r.items.filter(function(it) { return it.word && it.def; });
+  if (items.length < 1) { $("photo-error").textContent = "Minstens één woord nodig."; $("photo-error").hidden = false; return; }
+
+  var title = $("photo-title").value.trim() || "Foto-import";
+  var subject = $("photo-subject").value.trim() || (r.mode==="translate" ? ($("photo-from").value.trim()||"Vreemde taal") : "Engels");
+  var nl = { id: "custom-"+Date.now(), title: title, subtitle: items.length+" woorden (foto)", subject: subject, items: items };
+  if (r.mode === "translate") {
+    nl.mode = "translate";
+    nl.from = $("photo-from").value.trim() || "Vreemd";
+    nl.to = $("photo-to").value.trim() || "Nederlands";
+    nl.directions = r.directions || ["wd","dw"];
+    if (r.strict) nl.strict = true;
+  }
+  if (r.sections) {
+    var secMap = {};
+    items.forEach(function(it) { if (it.section) secMap[it.section] = it.section; });
+    if (Object.keys(secMap).length) nl.sections = secMap;
+  }
+  var custom = load(LKEY, []);
+  custom.push(nl); save(LKEY, custom);
+  lists = allLists(); selectList(nl.id);
+
+  $("photo-done-text").textContent = nl.title + " · " + items.length + " woorden opgeslagen.";
+  photoShowStep("photo-done");
+
+  // verrijking op de achtergrond
+  if (WORKER_URL) photoEnrich(nl.id, items, r.mode, subject);
+}
+
+async function photoEnrich(listId, items, mode, subject) {
+  try {
+    $("photo-done-text").textContent += " Verrijking loopt...";
+    var res = await fetch(WORKER_URL + "/enrich", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-token": APP_SECRET },
+      body: JSON.stringify({ items: items, mode: mode, subject: subject })
+    });
+    if (!res.ok) return;
+    var data = await res.json();
+    if (!data.items || !data.items.length) return;
+    var custom = load(LKEY, []);
+    var idx = custom.findIndex(function(l) { return l.id === listId; });
+    if (idx < 0) return;
+    data.items.forEach(function(enriched, i) {
+      if (i >= custom[idx].items.length) return;
+      if (enriched.keys) custom[idx].items[i].keys = enriched.keys;
+      if (enriched.ex) custom[idx].items[i].ex = enriched.ex;
+      if (enriched.accept) custom[idx].items[i].accept = enriched.accept;
+    });
+    save(LKEY, custom);
+    lists = allLists();
+    if (!$("photo-done").hidden) {
+      $("photo-done-text").textContent = custom[idx].title + " · " + custom[idx].items.length + " woorden opgeslagen en verrijkt.";
+    }
+  } catch (e) { /* verrijking is optioneel, slik fouten */ }
 }
 
 // ---------- events ----------
@@ -1222,6 +1521,21 @@ function bind(){
       const cs=classes(); const k=parseInt(e.key,10)-1; if(cs[k]){ e.preventDefault(); pickClass(cs[k]); }
     }
   });
+  // import keuze
+  $("btn-type-start").addEventListener("click", ()=>{ $("import-choices").hidden=true; $("import-form").hidden=false; });
+  $("btn-import-form-back").addEventListener("click", ()=>{ $("import-choices").hidden=false; $("import-form").hidden=true; });
+  // foto-import
+  $("btn-photo-start").addEventListener("click", ()=>{ photoReset(); show("scr-photo"); });
+  $("btn-photo-back").addEventListener("click", ()=>{ $("import-choices").hidden=false; $("import-form").hidden=true; show("scr-import"); });
+  $("photo-input").addEventListener("change", photoOnFile);
+  document.querySelectorAll(".photo-type-btn").forEach(function(b) {
+    b.addEventListener("click", function() { photoPickType(b.dataset.type); });
+  });
+  $("btn-photo-go-lang").addEventListener("click", photoGoWithLang);
+  $("photo-lang").addEventListener("keydown", function(e) { if(e.key==="Enter"){ e.preventDefault(); photoGoWithLang(); } });
+  $("btn-photo-retry").addEventListener("click", photoReset);
+  $("btn-photo-save").addEventListener("click", photoSave);
+  $("btn-photo-go").addEventListener("click", ()=>{ renderHome(); show("scr-home"); });
 }
 
 // De app draait volledig lokaal, dus met de bestanden in de cache werkt hij
