@@ -18,7 +18,13 @@ const CACHE = "overhoren-" + VERSIE;
 const SCHIL = [
   "./", "./index.html", "./ds.css", "./ui.js", "./cats.js",
   "./celebrate.js", "./engine.js", "./lists.js", "./manifest.json",
-  "./icons/icoon-192.png", "./icons/icoon-512.png"
+  "./icons/icoon-192.png", "./icons/icoon-512.png",
+  "./fonts/fredoka-latin-wght-normal.woff2",
+  "./fonts/fredoka-latin-ext-wght-normal.woff2",
+  "./fonts/atkinson-hyperlegible-latin-400-normal.woff2",
+  "./fonts/atkinson-hyperlegible-latin-ext-400-normal.woff2",
+  "./fonts/atkinson-hyperlegible-latin-700-normal.woff2",
+  "./fonts/atkinson-hyperlegible-latin-ext-700-normal.woff2"
 ];
 
 self.addEventListener("install", e => {
@@ -38,7 +44,7 @@ self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;   // fonts en sync gaan gewoon naar het net
+  if (url.origin !== self.location.origin) return;   // sync gaat gewoon naar het net
 
   e.respondWith(
     caches.match(req, { ignoreSearch: true }).then(hit => {
