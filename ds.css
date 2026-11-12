@@ -24,6 +24,11 @@
 
 @layer tokens, base, components, screens, responsive;
 
+/* --drop is de schaduw van een vorm en hoort bij dat ene element. Niet
+   laten erven: anders krijgt een vorm binnen een kaart de kaartschaduw.
+   --surf en --cut moeten wel erven, want ::before leest ze van zijn element. */
+@property --drop { syntax: "*"; inherits: false; }
+
 /* =============================================================
    0. FONTS
    Zelf gehost, zodat de app ook offline in de juiste letter staat
@@ -353,7 +358,8 @@
      Per component zet je alleen --surf (vlak), --cut (vorm) en
      --drop (schaduw). */
   .card, .lesson, .btn, .seg button, .choice, .empty .glyph {
-    /* standaard: geen schaduw, zodat --drop nooit van een voorouder lekt */
+    /* --drop erft niet (zie @property hieronder), dus een vorm binnen een
+       kaart krijgt nooit per ongeluk de kaartschaduw */
     position: relative; isolation: isolate;
     background: none; border: 0; border-radius: 0;
     filter: var(--drop, none);
@@ -865,7 +871,7 @@
     .lesson.is-mix:hover { --surf: color-mix(in srgb, var(--accent) 10%, var(--card-1)); }
     .btn:hover:not(:disabled):not(.primary):not(.ok),
     .choice:hover:not(:disabled):not(.on):not(.right):not(.wrong),
-    .seg button:hover:not(.on) { --surf: var(--mark); }
+    .seg button:hover:not(.on) { --surf: var(--control-hover); }
     .btn.primary:hover:not(:disabled), .seg button.on:hover { --surf: color-mix(in srgb, var(--accent) 88%, white); }
     .link:hover { text-decoration-thickness: 3px; }
   }
@@ -913,7 +919,11 @@
   /* Hoog contrast (Windows): ::before-vlakken verdwijnen, dus echte randen */
   @media (forced-colors: active) {
     .btn, .choice, .seg button, .lesson, .card, .notice { border: 2px solid ButtonText; filter: none; }
-    .seg button.on, .choice.on { border-color: Highlight; outline: 2px solid Highlight; }
+    /* gekozen: dikke rand, zodat de focusrand er nog los van te zien is */
+    .seg button.on, .choice.on { border: 4px solid Highlight; }
+    .choice.right { border-style: double; border-width: 5px; }
+    .choice.wrong { border-style: dashed; }
+    .q-card.is-good { animation: none; }
     .card, .notice, .stat, .empty, .chip, .due-chip, .deadline-chip, .meter, .streak, .verdict { clip-path: none; }
     .ring-arc { stroke: Highlight; }
     input[type=range]::-webkit-slider-runnable-track { background: ButtonText; }
