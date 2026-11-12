@@ -130,7 +130,8 @@
     --accent:        light-dark(#6B3FD1, #A88BF0);
     --accent-ink:    light-dark(#FFFFFF, #16142A);
     --accent-strong: light-dark(#4B2A99, #C9B8F7);   /* labels */
-    --accent-shadow: light-dark(#4B2A99, #4B2A99);   /* harde schaduw onder de primaire knop */
+    --accent-shadow: #4B2A99;                        /* harde schaduw onder de primaire knop, in beide thema's */
+    --accent-shadow-ink: #FFFFFF;                    /* tekst op --accent-shadow */
     --accent-soft:   var(--mark);
 
     /* warm, toetsdatum */
@@ -312,6 +313,9 @@
   }
   input[type=date]:hover::-webkit-calendar-picker-indicator { opacity: 1; }
   textarea { min-height: 160px; resize: vertical; font-size: .95rem; }
+  /* voorbeeldtekst: zelfde zachte kleur als meta, anders kiest de browser
+     een grijs dat in donker maar 3,1:1 haalt */
+  ::placeholder { color: var(--muted); opacity: 1; }
 
   /* Focus is overal gelijk en wint altijd van hover. De outline hoort bij
      het element zelf; de vorm zit op ::before, dus clip-path knipt hem niet. */
@@ -488,7 +492,7 @@
     color: var(--muted); background: var(--mark);
     clip-path: var(--cut-chip); padding: 4px 9px;
   }
-  .choice.on kbd { color: #FFFFFF; background: var(--accent-shadow); }
+  .choice.on kbd { color: var(--accent-shadow-ink); background: var(--accent-shadow); }
   .choice:disabled kbd { opacity: 0; }
 
   /* --- verdict: de feedbacktitel. Chakra Petch 700, 22px.
@@ -591,7 +595,8 @@
   }
   .cat-card .cat-meta { font-size: var(--t-label-sm); color: var(--muted); }
   /* nog niet gevonden: gedempt, zodat de verzameling zichtbaar incompleet is */
-  .cat-card:not(.is-verdiend) { opacity: .55; }
+  /* alleen het plaatje dimmen: tekst met opacity haalt geen 4,5:1 meer */
+  .cat-card:not(.is-verdiend) img, .cat-card:not(.is-verdiend) .cat-locked { opacity: .55; }
   .cat-card:not(.is-verdiend) figcaption b { color: var(--muted); font-weight: 400; }
   /* rang kleurt alleen wat je al hebt */
   .cat-card.is-verdiend[data-rang="bijzonder"] { border-color: var(--adj); }

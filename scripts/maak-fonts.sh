@@ -10,6 +10,9 @@
 # I, l en 1). Daarom subsetten we hier zelf, met alle features erin.
 #
 # Vereist: npm, python3 met fonttools en brotli (pip install fonttools brotli).
+# Python draait in een lege werkmap, zodat er geen vreemde modules meeliften.
+# Alles wordt eerst in een tijdelijke map gebouwd en pas aan het eind naar
+# fonts/ gekopieerd: mislukt een stap, dan blijft fonts/ zoals hij was.
 # Gebruik: bash scripts/maak-fonts.sh
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -30,21 +33,27 @@ mkdir chakra inter
 tar xzf "fontsource-chakra-petch-$CHAKRA_VERSIE.tgz" -C chakra
 tar xzf "inter-ui-$INTER_VERSIE.tgz" -C inter
 
-mkdir -p "$FONTS"
+OUT="$TMP/out"
+mkdir -p "$OUT" "$TMP/py"
 for w in 600 700; do
   for s in latin latin-ext; do
-    cp "chakra/package/files/chakra-petch-$s-$w-normal.woff2" "$FONTS/"
+    cp "chakra/package/files/chakra-petch-$s-$w-normal.woff2" "$OUT/"
   done
 done
 
 # Inter: eerst de gewichtas inperken tot 400-700, dan per subset knippen.
 # --layout-features='*' houdt ss02 en de andere stylistic sets erin.
-python3 -I -m fontTools.varLib.instancer inter/package/variable/InterVariable.woff2 \
-  wght=400:700 -o inter-400-700.ttf --quiet
-python3 -I -m fontTools.subset inter-400-700.ttf --unicodes="$LATIN" \
-  --layout-features='*' --flavor=woff2 --output-file="$FONTS/inter-latin-wght-normal.woff2"
-python3 -I -m fontTools.subset inter-400-700.ttf --unicodes="$LATIN_EXT" \
-  --layout-features='*' --flavor=woff2 --output-file="$FONTS/inter-latin-ext-wght-normal.woff2"
+# Geen python3 -I: dat slaat ook de pip-map van de gebruiker over, en daar
+# staat fonttools op een Mac met de systeem-python.
+(
+  cd "$TMP/py"
+  python3 -m fontTools.varLib.instancer "$TMP/inter/package/variable/InterVariable.woff2" \
+    wght=400:700 -o "$TMP/inter-400-700.ttf" --quiet
+  python3 -m fontTools.subset "$TMP/inter-400-700.ttf" --unicodes="$LATIN" \
+    --layout-features='*' --flavor=woff2 --output-file="$OUT/inter-latin-wght-normal.woff2"
+  python3 -m fontTools.subset "$TMP/inter-400-700.ttf" --unicodes="$LATIN_EXT" \
+    --layout-features='*' --flavor=woff2 --output-file="$OUT/inter-latin-ext-wght-normal.woff2"
+)
 
 # licenties
 {
@@ -52,7 +61,11 @@ python3 -I -m fontTools.subset inter-400-700.ttf --unicodes="$LATIN_EXT" \
   cat chakra/package/LICENSE; echo; echo
   echo "Inter"; echo "====="
   cat inter/package/LICENSE.txt
-} > "$FONTS/OFL.txt"
+} > "$OUT/OFL.txt"
+
+# pas nu alles tegelijk naar fonts/
+mkdir -p "$FONTS"
+cp "$OUT"/* "$FONTS/"
 
 echo "Fonts staan in $FONTS"
 ls -l "$FONTS"

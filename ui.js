@@ -131,11 +131,9 @@
       : "";
     const pct = Math.round(100 * geoefend / total);
     return '<svg class="ring" viewBox="0 0 64 64" aria-hidden="true" focusable="false">' +
-      '<g>' +
-        '<path class="ring-track" d="' + HEX + '"/>' +
-        arc("learning", geoefend) +
-        arc("known", known) +
-      '</g>' +
+      '<path class="ring-track" d="' + HEX + '"/>' +
+      arc("learning", geoefend) +
+      arc("known", known) +
       '<text class="ring-pct" x="32" y="32">' + pct + '<tspan class="ring-sign">%</tspan></text>' +
       '</svg>';
   }

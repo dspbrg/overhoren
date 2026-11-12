@@ -200,7 +200,7 @@
       ["--control", "Invoervelden"]
     ],
     "sg-text": [["--ink", "Tekst"], ["--muted", "Tekst zacht, meta"], ["--ink-feedback", "Lopende tekst in feedback"]],
-    "sg-accent": [["--accent", "Actie"], ["--accent-ink", "Tekst op accent"], ["--accent-strong", "Labels"], ["--accent-shadow", "Schaduw primaire knop"],
+    "sg-accent": [["--accent", "Actie"], ["--accent-ink", "Tekst op accent"], ["--accent-strong", "Labels"], ["--accent-shadow", "Schaduw primaire knop"], ["--accent-shadow-ink", "Tekst op die schaduwkleur"],
                   ["--track", "Spoor van ring en meter"], ["--line", "Scheiding"], ["--mark", "Markering"], ["--line-strong", "Rand van invoer, 3:1"]],
     "sg-warm": [["--warm", "Toetsdatum, vlak"], ["--warm-ink", "Toetsdatum, tekst"],
                 ["--reward", "Beloning, drie banen", "115deg · --reward-1 … --reward-3"], ["--reward-1"], ["--reward-2"], ["--reward-3"],
@@ -276,7 +276,7 @@
     ]),
 
     block("Choice and Choices", "Woordsoortknop met toetshint. Parallellogram.", [
-      ['UI.Choices(["Noun", "Verb", "Adjective"])', '<div class="choices">' + UI.Choices(["Noun", "Verb", "Adjective"]) + '</div>'],
+      ['UI.Choices(["Noun", "Verb", "Adjective"]) · per knop UI.Choice({ value, label, key })', '<div class="choices">' + UI.Choices(["Noun", "Verb", "Adjective"]) + '</div>'],
       ['.choice.on · .choice.right · .choice.wrong',
         '<div class="choices">' +
           UI.Choice({ value: "on", label: "Selected", key: 1 }).replace('class="choice"', 'class="choice on"') +
