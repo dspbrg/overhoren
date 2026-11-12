@@ -44,7 +44,7 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       <span class="sync" id="sync-state"></span>
     </div>
     <div class="lessons" id="lessons"></div>
-    <p class="foot"><button class="link" data-icon="trophy" id="btn-cats">Mijn katten</button><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button></p>
+    <p class="foot"><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button></p>
     <div class="theme-row" role="group" aria-labelledby="theme-label">
       <span class="eyebrow" id="theme-label">Thema</span>
       <div class="seg" id="theme-seg">
@@ -135,7 +135,6 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       <button class="btn primary big" id="btn-next" hidden>Volgende</button>
       <button class="link" data-icon="clock" id="btn-later">Weet ik even niet, doe later</button>
       <div id="feedback" hidden>
-        <div class="verdict" id="fb-verdict"></div>
         <p id="fb-official" hidden></p>
         <ul class="fb-list">
           <li><span class="mark" id="fb-word-mark"></span><div><div class="k" id="fb-word-k">Woord</div><div id="fb-word"></div><div class="yours" id="fb-word-yours"></div></div></li>
@@ -151,6 +150,8 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       </div>
       <p class="hint" id="q-keys-hint"></p>
     </div>
+    <!-- de kat met het oordeel; UI.KatRij vult en vervangt dit element -->
+    <div class="kat-rij" id="q-kat" hidden></div>
   </div>
 </section>
 
@@ -158,6 +159,8 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
 <section id="scr-summary" class="screen" hidden>
   <div class="app">
     <header class="brand"><h1 id="sum-title">Ronde klaar</h1></header>
+    <!-- de kat van de ronde na een vlekkeloze ronde; UI.KatBeloning -->
+    <figure class="kat-beloning" id="sum-beloning" hidden></figure>
     <div class="card">
       <div class="summary-grid">
         <div class="stat"><b id="sum-first">0</b><span>in één keer goed</span><p id="sum-perfect" hidden></p></div>
@@ -168,6 +171,8 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       <div><span class="eyebrow">Volgende ronde</span><p id="sum-next"></p></div>
       <div class="row"><button class="btn primary" id="btn-sum-home">Nog een ronde</button><button class="btn" id="btn-sum-lessons">Alle lessen</button></div>
     </div>
+    <!-- kat bij een lastige ronde; UI.KatRij -->
+    <div class="kat-rij" id="sum-kat" hidden></div>
   </div>
 </section>
 
@@ -184,15 +189,6 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
 </section>
 
 <!-- RAPPORT -->
-<section id="scr-cats" class="screen" hidden>
-  <div class="app">
-    <div class="topbar"><button class="link" data-icon="back" id="btn-cats-back">Terug</button><span class="muted" id="cats-count"></span></div>
-    <header class="brand"><h1>Mijn katten</h1></header>
-    <p class="hint" id="cats-intro"></p>
-    <div class="cat-grid" id="cats-grid"></div>
-  </div>
-</section>
-
 <section id="scr-report" class="screen" hidden>
   <div class="app">
     <div class="topbar"><button class="link" data-icon="back" id="btn-report-back">Terug</button><button class="link" id="btn-report-copy">Kopieer als tekst</button></div>
@@ -349,7 +345,6 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
 </div>
 
 <script src="ui.js?v=20261112104108"></script>
-<script src="cats.js?v=20261112104108"></script>
 <script src="celebrate.js?v=20261112104108"></script>
 <script src="lists.js?v=20261112104108"></script>
 <script src="engine.js?v=20261112104108"></script>
@@ -611,50 +606,75 @@ function gatherLocal(){
     if(p) prog[l.id] = p;
   }
   var customLists = load(LKEY, []);
+  // De katten zelf gaan niet mee: er valt niets te verzamelen. De oude
+  // cats gaan ongewijzigd mee, zodat ze in de worker niet verdwijnen.
   return { cats: cats, progress: prog, lists: customLists, updated: Date.now() };
 }
 
-function applyRemote(remote){
-  var s = slug(learner);
-  if(remote.cats){
-    var localCats = load("overhoor:cats:" + s, {});
-    for(var src in remote.cats){
-      if(!localCats[src] || (remote.cats[src].laatst||0) > (localCats[src].laatst||0)){
-        localCats[src] = remote.cats[src];
-      } else if(localCats[src]){
-        localCats[src].aantal = Math.max(localCats[src].aantal||0, remote.cats[src].aantal||0);
+// Wat de worker terugstuurt, komt van buiten. Elk onderdeel apart:
+// alleen een gewoon object telt, en een kapot onderdeel houdt de rest
+// niet tegen. s: de oefenaar voor wie het antwoord is opgehaald.
+const isObject = x => !!x && typeof x === "object" && !Array.isArray(x);
+function applyRemote(remote, s){
+  if(!isObject(remote)) return;
+  s = s || slug(learner);
+  if(isObject(remote.cats)){
+    try{
+      var localCats = load("overhoor:cats:" + s, {});
+      if(!isObject(localCats)) localCats = {};
+      for(var src in remote.cats){
+        var rc = remote.cats[src];
+        if(!isObject(rc)) continue;
+        if(!isObject(localCats[src]) || (Number(rc.laatst)||0) > (Number(localCats[src].laatst)||0)){
+          localCats[src] = rc;
+        } else {
+          localCats[src].aantal = Math.max(Number(localCats[src].aantal)||0, Number(rc.aantal)||0);
+        }
       }
-    }
-    save("overhoor:cats:" + s, localCats);
+      save("overhoor:cats:" + s, localCats);
+    } catch(e){ /* oude katten kapot: de rest gaat door */ }
   }
-  if(remote.progress){
-    for(var lid in remote.progress){
-      var local = load(PKEY(lid), null);
-      if(!local || (remote.progress[lid].updated||0) > (local.updated||0)){
-        save(PKEY(lid), remote.progress[lid]);
-        if(list && list.id === lid) progress = remote.progress[lid];
+  if(isObject(remote.progress)){
+    try{
+      for(var lid in remote.progress){
+        var rp = remote.progress[lid];
+        if(!isObject(rp)) continue;
+        var key = "overhoor:progress:" + s + ":" + lid;
+        var local = load(key, null);
+        if(!isObject(local) || (Number(rp.updated)||0) > (Number(local.updated)||0)){
+          save(key, rp);
+          if(list && list.id === lid && s === slug(learner)) progress = rp;
+        }
       }
-    }
+    } catch(e){ /* voortgang kapot: de rest gaat door */ }
   }
-  if(remote.lists && remote.lists.length){
-    var existing = load(LKEY, []);
-    var byId = {};
-    for(var el of existing) byId[el.id] = el;
-    for(var rl of remote.lists){
-      if(!byId[rl.id] || (rl.added||0) > (byId[rl.id].added||0)) byId[rl.id] = rl;
-    }
-    save(LKEY, Object.values(byId));
+  if(Array.isArray(remote.lists) && remote.lists.length){
+    try{
+      var existing = load(LKEY, []);
+      if(!Array.isArray(existing)) existing = [];
+      var byId = {};
+      for(var el of existing) if(isObject(el) && el.id != null) byId[el.id] = el;
+      for(var rl of remote.lists){
+        if(!isObject(rl) || rl.id == null) continue;
+        if(!byId[rl.id] || (Number(rl.added)||0) > (Number(byId[rl.id].added)||0)) byId[rl.id] = rl;
+      }
+      save(LKEY, Object.values(byId));
+    } catch(e){ /* lijsten kapot: de rest gaat door */ }
   }
 }
 
+// De slug gaat mee: wisselt ze van oefenaar terwijl het antwoord nog
+// onderweg is, dan hoort het niet bij de nieuwe oefenaar en slaan we het over.
 async function cloudPull(){
   if(!canSync()) return;
-  var res = await fetch(WORKER_URL + "/sync/" + slug(learner), {
+  var voor = slug(learner);
+  var res = await fetch(WORKER_URL + "/sync/" + voor, {
     headers: { "x-api-token": APP_SECRET }
   });
   if(!res.ok) throw new Error("sync pull " + res.status);
   var remote = await res.json();
-  if(remote && remote.updated) applyRemote(remote);
+  if(voor !== slug(learner)) return;
+  if(isObject(remote) && remote.updated) applyRemote(remote, voor);
 }
 
 function cloudPush(){
@@ -719,32 +739,12 @@ function fmtRel(ms){
 }
 
 // ---------- schermen ----------
-// Verdiende katten in kleur, de rest als silhouet. Zeldzaamheid staat
-// erbij, zodat duidelijk is waarom sommige zelden vallen.
-function renderCats(){
-  Celebrate.setLearner(learner);
-  const have = Celebrate.collectie();
-  // Vaste volgorde op zeldzaamheid, zodat een kaart niet verspringt zodra
-  // ze hem verdient. Leest als een verzamelalbum: het zeldzame achteraan.
-  const RANGORDE = { gewoon: 0, bijzonder: 1, zeldzaam: 2 };
-  const alle = Celebrate.CATS.slice().sort((a,b)=>
-    (RANGORDE[a.rang]-RANGORDE[b.rang]) || a.naam.localeCompare(b.naam));
-  const aantal = alle.filter(k=>have[k.src]).length;
-  $("cats-count").textContent = aantal+" van "+alle.length;
-  $("cats-intro").textContent = aantal===alle.length
-    ? "Je hebt ze allemaal. Blijf oefenen, dan komen ze vaker langs."
-    : "Een ronde met 90% of meer in één keer goed levert een kat op. Helemaal foutloos geeft kans op een bijzondere of zeldzame.";
-  $("cats-grid").innerHTML = alle.map(function(k){
-    const h = have[k.src];
-    const rangLabel = k.rang.charAt(0).toUpperCase()+k.rang.slice(1);
-    return '<figure class="cat-card'+(h?" is-verdiend":"")+'" data-rang="'+esc(k.rang)+'">'
-      + (h ? '<img src="'+esc(k.src)+'" alt="">' : '<div class="cat-locked">'+UI.Icon("help")+'</div>')
-      + '<figcaption>'
-        + '<b>'+(h?esc(k.naam):"Nog niet gevonden")+'</b>'
-        + '<span class="cat-rang">'+esc(rangLabel)+'</span>'
-        + (h ? '<span class="cat-meta">'+h.aantal+(h.aantal===1?" keer":" keer")+' · sinds '+fmtDate(h.eerst)+'</span>' : '')
-      + '</figcaption></figure>';
-  }).join("");
+// De kat van de ronde in een KatRij op de plek van element id.
+// o: { text, lead, oordeel, textId }, zie UI.KatRij. Alles wordt ontsnapt.
+function toonKat(id, stand, o, kat){
+  const b = Celebrate.beeld(kat || (session && session.kat), stand);
+  if(!b){ $(id).hidden = true; return; }
+  $(id).outerHTML = UI.KatRij(Object.assign({}, o, { id, beeld: b }));
 }
 
 // Tijdens een afgedwongen pauze kan er geen nieuwe ronde starten. De
@@ -845,11 +845,9 @@ function renderHome(){
   const basis = pick.kind==="extra"
     ? "Niets aan de beurt. Deze ronde oefent de "+pick.indices.length+" zwakste woorden extra."
     : "Deze ronde: "+pick.indices.length+" woorden ("+Math.min(pick.dueCount, pick.indices.length)+" herhalen, "+(pick.indices.length-Math.min(pick.dueCount,pick.indices.length))+" nieuw).";
-  // De prikkel expliciet maken, anders kiest ze altijd de kortste ronde.
-  const kans = window.Celebrate ? Celebrate.kansOpBijzonder(pick.indices.length) : null;
-  $("size-hint").innerHTML = esc(basis) +
-    (kans !== null ? ' <span class="size-kans">' + UI.Icon("trophy") +
-      ' 90% goed: een kat. Foutloos: <b>' + kans + '%</b> kans op een bijzondere of zeldzame.</span>' : "");
+  // Wat een vlekkeloze ronde oplevert. De kat is er altijd, die is geen prijs.
+  $("size-hint").innerHTML = esc(basis) + ' <span class="size-kans">' + UI.Icon("trophy") +
+    ' Alles in één keer goed: confetti.</span>';
   // grens: alleen zinvol bij een lijst die te lang is om in een keer te doen
   const totaal = list.items.length;
   const toonGrens = !list.mix && totaal > 20;
@@ -899,9 +897,12 @@ function renderProgress(){
   $("progress-title").textContent = list.title;
   $("progress-body").innerHTML = list.items.map((it,i)=>{
     const s = progress.items[i];
-    const dots = s ? "●".repeat(s.box)+"○".repeat(E.MAX_BOX-s.box) : "○".repeat(E.MAX_BOX);
-    const hard = s && s.lapses>=2 ? ' <span class="hard">moeilijk</span>' : "";
-    return '<tr><td class="word">'+esc(it.word)+'</td><td>'+E.boxLabel(s)+hard+'<br><span class="dots">'+dots+'</span></td><td>'+(s?s.lapses:0)+'</td></tr>';
+    // getallen uit opslag of sync: altijd via Number(), nooit rauw in HTML
+    const box = s ? Math.max(0, Math.min(E.MAX_BOX, Number(s.box)||0)) : 0;
+    const lapses = s ? Number(s.lapses)||0 : 0;
+    const dots = "●".repeat(box)+"○".repeat(E.MAX_BOX-box);
+    const hard = lapses>=2 ? ' <span class="hard">moeilijk</span>' : "";
+    return '<tr><td class="word">'+esc(it.word)+'</td><td>'+esc(E.boxLabel(s))+hard+'<br><span class="dots">'+dots+'</span></td><td>'+lapses+'</td></tr>';
   }).join("");
 }
 
@@ -912,10 +913,10 @@ function reportData(entry){
   const n = l.items.length; let ready=0, learning=0, fresh=0, dueNow=0, minDue=Infinity;
   const hard = [];
   l.items.forEach((it,i)=>{ const s=p.items[i]; if(!s||s.seen===0){ fresh++; return; } if(s.box>=3) ready++; else learning++; if(s.due<=now) dueNow++; else minDue=Math.min(minDue,s.due);
-    if(s.lapses>=2){ const pw=s.partWrong||{}; const parts=[]; if(pw.word) parts.push("woord "+pw.word+"×"); if(pw.def) parts.push("definitie "+pw.def+"×"); if(pw.cls) parts.push("woordsoort "+pw.cls+"×"); hard.push({word:it.word, lapses:s.lapses, parts:parts.join(", "), box:s.box}); } });
+    if(s.lapses>=2){ const pw=s.partWrong||{}; const parts=[]; if(pw.word) parts.push("woord "+pw.word+"×"); if(pw.def) parts.push("definitie "+pw.def+"×"); if(pw.cls) parts.push("woordsoort "+pw.cls+"×"); hard.push({word:it.word, lapses:Number(s.lapses)||0, parts:parts.join(", "), box:Number(s.box)||0}); } });
   hard.sort((a,b)=>b.lapses-a.lapses || a.box-b.box);
   const sessions = p.sessions.slice(-8).reverse();
-  const totalMs = p.sessions.reduce((a,s)=>a+(s.ms||0),0);
+  const totalMs = p.sessions.reduce((a,s)=>a+(Number(s.ms)||0),0);
   const last = p.sessions[p.sessions.length-1];
   let advice = dueNow ? dueNow+" woorden staan klaar om te herhalen." : fresh ? fresh+" woorden zijn nog nooit geoefend." : minDue<Infinity ? "Niets aan de beurt. Volgende ronde "+fmtRel(minDue-now)+"." : "";
   if(ready===n) advice = "Alle woorden zitten erin. "+advice;
@@ -929,13 +930,13 @@ async function renderReport(){
   body.innerHTML = entries.map(e=>{
     const r = reportData(e); const pct = x=>Math.round(100*x/Math.max(1,r.n));
     return '<div class="card rep">'+
-      '<h3><span>'+esc(e.learner)+' · '+esc((e.list.subject?e.list.subject+" · ":"")+e.list.title)+'</span><span class="muted">'+r.ready+' van '+r.n+' zit erin</span></h3>'+
+      '<h3><span>'+esc(e.learner)+' · '+esc((e.list.subject?e.list.subject+" · ":"")+e.list.title)+'</span><span class="muted">'+Number(r.ready)+' van '+Number(r.n)+' zit erin</span></h3>'+
       '<div class="meter lg"><i class="a" style="width:'+pct(r.ready)+'%"></i><i class="b" style="width:'+pct(r.learning)+'%"></i></div>'+
       '<div class="legend"><span><i style="background:var(--ok)"></i>zit erin '+r.ready+'</span><span><i style="background:var(--accent)"></i>aan het leren '+r.learning+'</span><span><i style="background:var(--line)"></i>nog niet geoefend '+r.fresh+'</span></div>'+
-      '<div class="stats-row"><div class="stat"><b>'+r.rounds+'</b><span>rondes</span></div><div class="stat"><b>'+Math.round(r.totalMs/MIN)+'</b><span>minuten totaal</span></div><div class="stat"><b>'+(r.last?Math.round(100*r.last.first/Math.max(1,r.last.n))+'%':'–')+'</b><span>laatste ronde in één keer goed</span></div></div>'+
+      '<div class="stats-row"><div class="stat"><b>'+r.rounds+'</b><span>rondes</span></div><div class="stat"><b>'+Math.round(r.totalMs/MIN)+'</b><span>minuten totaal</span></div><div class="stat"><b>'+(r.last?Math.round(100*(Number(r.last.first)||0)/Math.max(1,Number(r.last.n)||0))+'%':'–')+'</b><span>laatste ronde in één keer goed</span></div></div>'+
       (r.advice?'<p>'+esc(r.advice)+'</p>':'')+
-      '<div><span class="eyebrow">Laatste rondes</span><div class="sessions">'+r.sessions.map(s=>'<div class="s"><span>'+fmtDate(s.date)+'</span><span class="meter md"><i class="a" style="width:'+Math.round(100*s.first/Math.max(1,s.n))+'%"></i></span><span>'+s.first+'/'+s.n+' · '+fmtTime(s.ms||0)+(s.stopped?" (gestopt)":"")+'</span></div>').join("")+'</div></div>'+
-      (r.hard.length?'<div><span class="eyebrow">Moeilijke woorden</span><div class="hardlist">'+r.hard.map(h=>'<div><span class="word">'+esc(h.word)+'</span><span class="muted">'+h.lapses+'× fout'+(h.parts?' ('+esc(h.parts)+')':'')+'</span></div>').join("")+'</div></div>':'<p class="muted">Geen woorden die vaak fout gaan.</p>')+
+      '<div><span class="eyebrow">Laatste rondes</span><div class="sessions">'+r.sessions.map(s=>{ const f = Number(s.first)||0, n = Number(s.n)||0; return '<div class="s"><span>'+esc(fmtDate(s.date))+'</span><span class="meter md"><i class="a" style="width:'+UI.pct(f, n)+'%"></i></span><span>'+f+'/'+n+' · '+esc(fmtTime(Number(s.ms)||0))+(s.stopped?" (gestopt)":"")+'</span></div>'; }).join("")+'</div></div>'+
+      (r.hard.length?'<div><span class="eyebrow">Moeilijke woorden</span><div class="hardlist">'+r.hard.map(h=>'<div><span class="word">'+esc(h.word)+'</span><span class="muted">'+(Number(h.lapses)||0)+'× fout'+(h.parts?' ('+esc(h.parts)+')':'')+'</span></div>').join("")+'</div></div>':'<p class="muted">Geen woorden die vaak fout gaan.</p>')+
     '</div>';
   }).join("");
   body.dataset.text = entries.map(e=>{
@@ -960,7 +961,9 @@ function startSession(){
   const pick = E.selectSession(list, progress, sizeChoice, Date.now(), {allowed: allowedIndices(), interleave: !!list.interleave});
   session = { listId:list.id, queue: pick.indices.map(i=>({i, dir:null})), pos:0, total: pick.indices.length,
     attempts:{}, firstTry:{}, done:0, streak:0, skipped:0, startedAt: Date.now(), elapsedBefore:0,
-    actief:0, laatsteActie: Date.now(), kind: pick.kind };
+    actief:0, laatsteActie: Date.now(), kind: pick.kind,
+    // elke ronde een andere kat, binnen de ronde steeds dezelfde
+    kat: Celebrate.nieuweRonde() };
   save(SKEY(list.id), session);
   ui.pauseShown = false;
   show("scr-quiz"); renderQuestion(); startTimer();
@@ -969,6 +972,11 @@ function resumeSession(){
   session = load(SKEY(list.id), null);
   if(session) session.laatsteActie = Date.now();   // wachttijd telt niet mee
   if(!session){ renderHome(); return; }
+  // hervat: dezelfde kat. Een ronde van voor de katten krijgt er nu een.
+  // De hervatte kat telt als de laatst getoonde, zodat de volgende ronde
+  // hem niet meteen herhaalt.
+  if(Celebrate.bestaat(session.kat)) Celebrate.onthoud(session.kat);
+  else { session.kat = Celebrate.nieuweRonde(); save(SKEY(list.id), session); }
   session.startedAt = Date.now();
   ui.pauseShown = false;
   show("scr-quiz"); renderQuestion(); startTimer();
@@ -1035,7 +1043,7 @@ function renderQuestion(){
   $("q-classes").innerHTML = UI.Choices(cs);
   $("q-classes").querySelectorAll(".choice").forEach(b=>b.addEventListener("click", ()=>pickClass(b.dataset.cls)));
   $("q-hint").hidden = true; $("q-hint").className = "hint"; $("btn-check").textContent = "Controleer";
-  $("feedback").hidden = true; $("btn-check").hidden = false;
+  $("feedback").hidden = true; $("q-kat").hidden = true; $("btn-check").hidden = false;
   $("btn-later").hidden = !canSkip();
   $("fb-assess").hidden = true; $("btn-override").hidden = true; $("btn-next").hidden = true;
   $("feedback").classList.remove("only-verdict"); $("fb-official").hidden = true;
@@ -1119,7 +1127,13 @@ function sameAsOfficial(a, b){
   return clean(a) !== "" && clean(a) === clean(b);
 }
 function mark(id, kind){ const el=$(id); el.className="mark "+kind; el.innerHTML = UI.Icon(UI.MARK_ICON[kind]||"help"); }
-function setVerdict(kind, txt){ const v=$("fb-verdict"); v.className="verdict "+(kind==="correct"?"good":kind==="maybe"?"maybe":"bad"); v.textContent = txt; v.style.animation="none"; void v.offsetWidth; v.style.animation=""; }
+// Het oordeel staat naast de kat, onder de vraagkaart: goed in de
+// goed-stand, fout en twijfel in de bijna-stand. De details blijven in
+// de kaart (#feedback), dus nergens staat iets dubbel.
+function setVerdict(kind, txt){
+  const k = kind==="correct" ? "good" : kind==="maybe" ? "maybe" : "bad";
+  toonKat("q-kat", kind==="correct" ? "goed" : "bijna", { oordeel: k, text: txt, textId: "fb-verdict" });
+}
 
 let finalized = false;
 function finalize(){
@@ -1133,6 +1147,8 @@ function finalize(){
   // goedgekeurd tonen we het officiele antwoord, want dat heeft ze dan niet ingetypt.
   $("feedback").classList.toggle("only-verdict", ok);
   const anders = ok && ui.official && !sameAsOfficial(ui.typed, ui.official);
+  // goed en niets toe te voegen: het oordeel naast de kat zegt genoeg
+  $("feedback").hidden = ok && !anders;
   $("fb-official").hidden = !anders;
   if(anders) $("fb-official").innerHTML = 'Ook goed. Officieel is het: <b>'+esc(ui.official)+'</b>';
   if(finalized) return; // override na een eerder oordeel: alleen het oordeel bijwerken
@@ -1192,6 +1208,7 @@ function override(){
   ui.verdictDef = true; finalized = false; $("btn-override").hidden = true;
   finalize();
   if(entry.dir==="wd" && String(ui.typed||"").trim()){
+    $("feedback").hidden = false;
     $("fb-official").hidden = false;
     $("fb-official").innerHTML = 'Onthouden. <b>'+esc(String(ui.typed).trim())+'</b> telt voortaan ook goed.';
   }
@@ -1240,15 +1257,23 @@ function finish(stopped){
   saveProgress(); save(SKEY(list.id), null); finalized=false;
   // Vlekkeloos: alles in een keer goed, en niet halverwege gestopt.
   const perfect = !stopped && ids.length > 0 && first === ids.length && !session.skipped;
-  // Bijna vlekkeloos: 90% of meer in een keer goed, ook zonder stoppen of overslaan.
-  const bijna = !perfect && !stopped && !session.skipped && window.Celebrate && Celebrate.bijnaVlekkeloos(ids.length, first);
-  $("sum-title").textContent = stopped ? "Ronde gestopt" : (perfect ? "Vlekkeloos" : bijna ? "Bijna vlekkeloos" : "Ronde klaar");
+  $("sum-title").textContent = stopped ? "Ronde gestopt" : (perfect ? "Vlekkeloos" : "Ronde klaar");
   $("sum-n").textContent = ids.length; $("sum-time").textContent = fmtTime(ms);
-  $("sum-first").innerHTML = perfect || bijna ? UI.Icon("trophy") + "<span>" + first + "</span>" : String(first);
-  $("sum-perfect").hidden = !(perfect || bijna);
-  if((perfect || bijna) && window.Celebrate){
-    $("sum-perfect").innerHTML = UI.Icon("sparkle") + "<span>" + esc(Celebrate.celebrate({ woorden: ids.length, bijna })) + "</span>";
-  }
+  $("sum-first").innerHTML = perfect ? UI.Icon("trophy") + "<span>" + first + "</span>" : String(first);
+  $("sum-perfect").hidden = !perfect;
+  // Vlekkeloos: confetti, en de kat van deze ronde blij op de beloningskaart.
+  const kat = session.kat;
+  if(perfect){
+    $("sum-perfect").innerHTML = UI.Icon("sparkle") + "<span>" + esc(Celebrate.celebrate({ woorden: ids.length })) + "</span>";
+    const b = Celebrate.beeld(kat, "goed");
+    if(b) $("sum-beloning").outerHTML = UI.KatBeloning({ id: "sum-beloning", beeld: b, title: Celebrate.blij(kat) });
+    else $("sum-beloning").hidden = true;
+  } else $("sum-beloning").hidden = true;
+  // Meer dan de helft fout bij de eerste poging: de kat in de bijna-stand,
+  // met een zin die vooruit kijkt. Nooit verdrietig, nooit "kom terug".
+  const lastig = !perfect && ids.length > 0 && (ids.length - first) > ids.length / 2;
+  if(lastig) toonKat("sum-kat", "bijna", { lead: "Lastige ronde.", text: "Deze woorden komen vaker terug, zo gaan ze erin." }, kat);
+  else $("sum-kat").hidden = true;
   $("sum-hard-wrap").hidden = !hard.length; $("sum-hard").textContent = hard.join(", ");
   const now = Date.now();
   let fresh=0, dueNow=0, minDue=Infinity;
@@ -1547,8 +1572,6 @@ function bind(){
     save(DKEY(list.id), e.target.value || null);
     renderHome();
   });
-  $("btn-cats").addEventListener("click", ()=>{ show("scr-cats"); renderCats(); });
-  $("btn-cats-back").addEventListener("click", ()=>{ show("scr-lessons"); renderLessons(); });
   $("btn-report").addEventListener("click", ()=>{ show("scr-report"); renderReport(); });
   $("btn-report-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
   $("btn-report-copy").addEventListener("click", copyReport);
@@ -1621,7 +1644,6 @@ function init(){
   if(!lists.length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
   setLearner(learner);
   selectList(load(CKEY, lists[0].id));
-  Celebrate.onVerdien = cloudPush;
   bind(); renderLessons(); show("scr-lessons");
   initDb();
 }

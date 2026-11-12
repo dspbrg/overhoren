@@ -213,6 +213,51 @@
       '</button>';
   }
 
+  // --- Katten -------------------------------------------------
+  // Elke kat komt binnen als beeld-object uit Celebrate.beeld(id, stand):
+  // { naam, karakter, src, width, height, alt }. Vaste width en height,
+  // zodat er niets verspringt als het plaatje binnenkomt.
+  function katImg(b, alt) {
+    return '<img class="kat" src="' + esc(b.src) + '"' +
+      ' width="' + (Number(b.width) || 0) + '" height="' + (Number(b.height) || 0) + '"' +
+      ' alt="' + esc(alt) + '" decoding="async">';
+  }
+  // oordeel naast de kat: alleen deze drie kleuren bestaan
+  const KAT_OORDEEL = ["good", "maybe", "bad"];
+
+  // KatRij: kat met tekst ernaast, onder een kaart. Het oortje steekt
+  // over de onderrand van de kaart erboven. De kat is hier versiering
+  // (alt leeg): de tekst zegt wat er te zeggen is.
+  // Geen vrije HTML: alles gaat door esc().
+  //   text      de zin naast de kat
+  //   lead      optioneel, vet ervoor ("Lastige ronde.")
+  //   oordeel   optioneel "good" | "maybe" | "bad": de tekst wordt dan
+  //             een oordeel (.verdict) in die kleur
+  //   textId    optioneel id op de tekstregel
+  //   kant      "links" (standaard) of "rechts". Rechts wordt de kat
+  //             gespiegeld, zodat hij altijd naar de tekst kijkt.
+  function KatRij(o) {
+    o = o || {};
+    if (!o.beeld) return "";
+    const oordeel = KAT_OORDEEL.includes(o.oordeel) ? o.oordeel : null;
+    const regel = '<p' + attr("class", oordeel ? "verdict " + oordeel : null) + attr("id", o.textId) + '>' +
+      (o.lead ? '<b>' + esc(o.lead) + '</b> ' : '') + esc(o.text) + '</p>';
+    return '<div class="' + esc(cls("kat-rij", o.kant === "rechts" && "is-rechts", o.className)) + '"' + attr("id", o.id) + '>' +
+      katImg(o.beeld, "") +
+      '<div class="kat-rij-tekst">' + regel + '</div></div>';
+  }
+
+  // KatBeloning: de kat van de ronde na een vlekkeloze ronde, iets
+  // gedraaid, met een zin en het karakter.
+  function KatBeloning(o) {
+    o = o || {};
+    if (!o.beeld) return "";
+    return '<figure class="' + esc(cls("kat-beloning", o.className)) + '"' + attr("id", o.id) + '>' +
+      katImg(o.beeld, o.beeld.alt) +
+      '<figcaption><b>' + esc(o.title || o.beeld.naam) + '</b>' +
+      '<span class="kat-karakter">' + esc(o.beeld.karakter) + '</span></figcaption></figure>';
+  }
+
   // --- hydrateIcons -------------------------------------------
   // Zet een icoon voor elk element met data-icon="naam", zodat de
   // HTML leesbaar blijft en de iconen toch uit een bron komen.
@@ -236,5 +281,5 @@
   }
 
   root.UI = { esc, cls, pct, Icon, ICONS, Button, Link, TopBar, Stat, StatsRow, Meter, Ring, Chip,
-              Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, hydrateIcons };
+              Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, KatRij, KatBeloning, hydrateIcons };
 })(typeof window === "object" ? window : globalThis);
