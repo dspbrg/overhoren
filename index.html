@@ -396,8 +396,9 @@ function dagBudget(){
 const GKEY = id => "overhoor:grens:"+slug(learner)+":"+id;
 function grensVan(l){
   if(!l || l.mix) return null;                    // door elkaar is altijd alles
-  const n = load(GKEY(l.id), null);
-  if(!n || n >= l.items.length) return null;
+  // uit opslag: alleen een heel getal telt, anders wijst items[n-1] nergens naar
+  const n = Math.floor(Number(load(GKEY(l.id), null)));
+  if(!Number.isFinite(n) || n < 1 || n >= l.items.length) return null;
   return Math.max(1, Math.min(l.items.length, n));
 }
 function allowedVoor(l){
@@ -462,7 +463,8 @@ function load(key, fallback){ try{ const v = localStorage.getItem(key); return v
 function save(key, val){ try{ if(val==null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
 const LKEY = "overhoor:lists", CKEY = "overhoor:current", LEARNER_KEY = "overhoor:learner", LEARNERS_KEY = "overhoor:learners";
 const slug = s => String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "leerling";
-const PKEY = id => "overhoor:progress:"+slug(learner)+":"+id, SKEY = id => "overhoor:session:"+slug(learner)+":"+id;
+// s: slug van een andere oefenaar dan de huidige (optioneel)
+const PKEY = (id, s) => "overhoor:progress:"+(s || slug(learner))+":"+id, SKEY = id => "overhoor:session:"+slug(learner)+":"+id;
 const AKEY = id => "overhoor:alts:"+slug(learner)+":"+id;
 // Antwoorden die Pia zelf goed heeft laten rekenen. De app onthoudt ze,
 // zodat dezelfde vertaling de volgende keer meteen goed is.
@@ -490,7 +492,8 @@ let learner = load(LEARNER_KEY, "Pia");
 let lists = [], list = null, progress = null, session = null, sizeChoice = 15, timer = null;
 const ui = { pick:null, checked:false, verdictDef:null, clsOk:false, firstBlank:false, pauseShown:false };
 
-function allLists(){ return (window.WORDLISTS||[]).concat(load(LKEY, [])); }
+// eigen lijsten uit opslag alleen in de goede vorm (zie schoneLijst)
+function allLists(){ return (window.WORDLISTS||[]).concat(schoneLijsten(load(LKEY, []))); }
 
 // --- gemengde lijst per vak -------------------------------------------
 // Per vak een extra "lijst" met alle woorden van dat vak door elkaar. Dat is
@@ -548,13 +551,10 @@ function selectList(id){
     // voortgang per referentie ophalen uit de bronlijsten
     bronProgress = {};
     for(const lid of list.bronnen){
-      const p = load(PKEY(lid), {items:{}, sessions:[]});
-      if(!p.items) p.items = {};
-      if(!p.sessions) p.sessions = [];
-      bronProgress[lid] = p;
+      bronProgress[lid] = laadVoortgang(lid) || legeVoortgang();
     }
-    const eigen = load(PKEY(list.id), {items:{}, sessions:[]});
-    progress = { items: {}, sessions: eigen.sessions || [] };
+    const eigen = laadVoortgang(list.id) || legeVoortgang();
+    progress = { items: {}, sessions: eigen.sessions };
     list.items.forEach((it, k) => { progress.items[k] = E.getState(bronProgress[it.bron.lid], it.bron.idx); });
     loadAlts();
     save(CKEY, list.id);
@@ -563,10 +563,8 @@ function selectList(id){
   // eenmalige migratie van voortgang zonder oefenaar (eerste versie van de app)
   const legacy = load("overhoor:progress:"+list.id, null);
   if(legacy && !load(PKEY(list.id), null)){ save(PKEY(list.id), legacy); save("overhoor:progress:"+list.id, null); }
-  progress = load(PKEY(list.id), {items:{}, sessions:[]});
+  progress = laadVoortgang(list.id) || legeVoortgang();
   loadAlts();
-  if(!progress.items) progress.items = {};
-  if(!progress.sessions) progress.sessions = [];
   save(CKEY, list.id);
 }
 function saveProgress(){
@@ -611,54 +609,177 @@ function gatherLocal(){
   return { cats: cats, progress: prog, lists: customLists, updated: Date.now() };
 }
 
-// Wat de worker terugstuurt, komt van buiten. Elk onderdeel apart:
-// alleen een gewoon object telt, en een kapot onderdeel houdt de rest
-// niet tegen. s: de oefenaar voor wie het antwoord is opgehaald.
+// ---------- vorm van voortgang, eigen lijsten en oude cats ----------
+// Dezelfde regels staan in worker/src/merge.js. Pas ze samen aan.
+// Wat uit localStorage of van de worker komt, gaat hierdoor voordat de app
+// het leest. Elk onderdeel wordt nieuw opgebouwd met alleen de bekende
+// velden; wat de verkeerde vorm heeft, valt weg op het kleinste niveau dat
+// veilig is. Een woord zonder geldige word/def laat de hele lijst vallen,
+// want een woord weglaten verschuift de nummering van de voortgang.
 const isObject = x => !!x && typeof x === "object" && !Array.isArray(x);
+const VORM = {
+  grens: { id: 100, sleutel: 200, tekst: 200, woord: 1000, woorden: 5000, lijstje: 50 },
+  verboden: ["__proto__", "constructor", "prototype"],
+  staat: ["box", "due", "seen", "correct", "wrong", "lapses", "streak", "last"],
+  richtingen: ["wd", "dw", "ex"], delen: ["cls", "def", "word"],
+  ronde: ["date", "n", "first", "ms"], cat: ["aantal", "eerst", "laatst"],
+  lijstTeksten: ["subtitle", "subject", "mode", "from", "to", "deadline"], lijstVlaggen: ["strict", "interleave"],
+  woordTeksten: ["cls", "section"]
+};
+const isGetal = v => typeof v === "number" && Number.isFinite(v);
+const isTekst = (v, max) => typeof v === "string" && v.length <= max;
+const veiligeSleutel = (k, max) => typeof k === "string" && k.length > 0 && k.length <= max && !VORM.verboden.includes(k);
+function tekstLijst(v, max){
+  if(!Array.isArray(v) || v.length > VORM.grens.lijstje) return undefined;
+  return v.filter(x => isTekst(x, max));
+}
+function tekstMap(v){
+  if(!isObject(v)) return undefined;
+  const out = {};
+  for(const k of Object.keys(v)) if(veiligeSleutel(k, VORM.grens.tekst) && isTekst(v[k], VORM.grens.tekst)) out[k] = v[k];
+  return out;
+}
+// ontbrekend wordt 0, aanwezig maar kapot: null
+function getallen(v, namen){
+  const out = {};
+  for(const n of namen){
+    if(v[n] === undefined) out[n] = 0;
+    else if(isGetal(v[n])) out[n] = v[n];
+    else return null;
+  }
+  return out;
+}
+function tellers(v, namen){
+  const out = {};
+  for(const n of namen) out[n] = isObject(v) && isGetal(v[n]) ? v[n] : 0;
+  return out;
+}
+function schoneStaat(s){
+  if(!isObject(s)) return null;
+  const out = getallen(s, VORM.staat); if(!out) return null;
+  out.dirWrong = tellers(s.dirWrong, VORM.richtingen);
+  out.partWrong = tellers(s.partWrong, VORM.delen);
+  return out;
+}
+function schoneRonde(r){
+  if(!isObject(r)) return null;
+  const out = getallen(r, VORM.ronde); if(!out) return null;
+  out.stopped = r.stopped === true;
+  return out;
+}
+// Voortgang van een lijst: altijd een object met items (object) en sessions (array).
+function schoneVoortgang(p){
+  if(!isObject(p)) return null;
+  const items = {}, sessions = [];
+  if(isObject(p.items)) for(const k of Object.keys(p.items)){
+    if(!/^\d{1,5}$/.test(k)) continue;
+    const st = schoneStaat(p.items[k]); if(st) items[k] = st;
+  }
+  if(Array.isArray(p.sessions)) for(const r of p.sessions){ const x = schoneRonde(r); if(x) sessions.push(x); }
+  const out = { items, sessions };
+  if(isGetal(p.updated)) out.updated = p.updated;
+  return out;
+}
+function schoneCat(c){
+  if(!isObject(c)) return null;
+  const out = {};
+  for(const n of VORM.cat){
+    if(c[n] === undefined) continue;
+    if(!isGetal(c[n])) return null;
+    out[n] = c[n];
+  }
+  return out;
+}
+function schoonWoord(it){
+  const g = VORM.grens;
+  if(!isObject(it) || !isTekst(it.word, g.woord) || !isTekst(it.def, g.woord)) return null;
+  const out = { word: it.word, def: it.def };
+  for(const n of VORM.woordTeksten) if(isTekst(it[n], g.tekst)) out[n] = it[n];
+  if(isTekst(it.ex, g.woord)) out.ex = it.ex;
+  else { const ex = tekstLijst(it.ex, g.woord); if(ex && ex.length) out.ex = ex; }
+  if(Array.isArray(it.keys) && it.keys.length <= g.lijstje){
+    const keys = [];
+    for(const groep of it.keys){ const x = tekstLijst(groep, g.woord); if(x && x.length) keys.push(x); }
+    if(keys.length) out.keys = keys;
+  }
+  const accept = tekstLijst(it.accept, g.woord); if(accept && accept.length) out.accept = accept;
+  return out;
+}
+// Een eigen lijst. id, title en items zijn verplicht; mix en bronnen komen er niet in.
+function schoneLijst(l){
+  const g = VORM.grens;
+  if(!isObject(l)) return null;
+  if(typeof l.id === "number" ? !isGetal(l.id) : !veiligeSleutel(l.id, g.id)) return null;
+  if(!isTekst(l.title, g.tekst) || !Array.isArray(l.items) || l.items.length > g.woorden) return null;
+  const items = [];
+  for(const it of l.items){ const x = schoonWoord(it); if(!x) return null; items.push(x); }
+  const out = { id: l.id, title: l.title };
+  for(const n of VORM.lijstTeksten) if(isTekst(l[n], g.tekst)) out[n] = l[n];
+  for(const n of VORM.lijstVlaggen) if(typeof l[n] === "boolean") out[n] = l[n];
+  if(isGetal(l.added)) out.added = l.added;
+  const dirs = (tekstLijst(l.directions, g.tekst) || []).filter(d => VORM.richtingen.includes(d));
+  if(dirs.length) out.directions = dirs;
+  const classes = tekstLijst(l.classes, g.tekst); if(classes && classes.length) out.classes = classes;
+  for(const n of ["sections", "instructions"]){ const m = tekstMap(l[n]); if(m) out[n] = m; }
+  out.items = items;
+  return out;
+}
+function schoneLijsten(d){
+  if(!Array.isArray(d)) return [];
+  const out = [];
+  for(const l of d){ const x = schoneLijst(l); if(x) out.push(x); }
+  return out;
+}
+// Voortgang uit opslag, altijd in de goede vorm. s: slug van de oefenaar (optioneel).
+function laadVoortgang(id, s){ return schoneVoortgang(load(PKEY(id, s), null)); }
+const legeVoortgang = () => ({ items: {}, sessions: [] });
+
+// Wat de worker terugstuurt, komt van buiten. Elk onderdeel apart: een
+// kapot onderdeel houdt de rest niet tegen. s: de oefenaar voor wie het
+// antwoord is opgehaald (cloudPull heeft al gecontroleerd dat dat de
+// huidige is).
 function applyRemote(remote, s){
   if(!isObject(remote)) return;
   s = s || slug(learner);
   if(isObject(remote.cats)){
     try{
-      var localCats = load("overhoor:cats:" + s, {});
-      if(!isObject(localCats)) localCats = {};
-      for(var src in remote.cats){
-        var rc = remote.cats[src];
-        if(!isObject(rc)) continue;
-        if(!isObject(localCats[src]) || (Number(rc.laatst)||0) > (Number(localCats[src].laatst)||0)){
-          localCats[src] = rc;
-        } else {
-          localCats[src].aantal = Math.max(Number(localCats[src].aantal)||0, Number(rc.aantal)||0);
-        }
+      const lokaal = load("overhoor:cats:" + s, {});
+      const localCats = {};
+      if(isObject(lokaal)) for(const k of Object.keys(lokaal)){
+        const c = veiligeSleutel(k, VORM.grens.sleutel) && schoneCat(lokaal[k]); if(c) localCats[k] = c;
+      }
+      for(const src of Object.keys(remote.cats)){
+        const rc = veiligeSleutel(src, VORM.grens.sleutel) && schoneCat(remote.cats[src]);
+        if(!rc) continue;
+        if(!localCats[src] || (rc.laatst||0) > (localCats[src].laatst||0)) localCats[src] = rc;
+        else localCats[src].aantal = Math.max(localCats[src].aantal||0, rc.aantal||0);
       }
       save("overhoor:cats:" + s, localCats);
     } catch(e){ /* oude katten kapot: de rest gaat door */ }
   }
   if(isObject(remote.progress)){
     try{
-      for(var lid in remote.progress){
-        var rp = remote.progress[lid];
-        if(!isObject(rp)) continue;
-        var key = "overhoor:progress:" + s + ":" + lid;
-        var local = load(key, null);
-        if(!isObject(local) || (Number(rp.updated)||0) > (Number(local.updated)||0)){
-          save(key, rp);
-          if(list && list.id === lid && s === slug(learner)) progress = rp;
+      for(const lid of Object.keys(remote.progress)){
+        if(!veiligeSleutel(lid, VORM.grens.id)) continue;
+        const rp = schoneVoortgang(remote.progress[lid]);
+        if(!rp) continue;
+        const local = laadVoortgang(lid, s);
+        if(!local || (rp.updated||0) > (local.updated||0)){
+          save(PKEY(lid, s), rp);
+          if(list && list.id === lid) progress = rp;
         }
       }
     } catch(e){ /* voortgang kapot: de rest gaat door */ }
   }
   if(Array.isArray(remote.lists) && remote.lists.length){
     try{
-      var existing = load(LKEY, []);
-      if(!Array.isArray(existing)) existing = [];
-      var byId = {};
-      for(var el of existing) if(isObject(el) && el.id != null) byId[el.id] = el;
-      for(var rl of remote.lists){
-        if(!isObject(rl) || rl.id == null) continue;
-        if(!byId[rl.id] || (Number(rl.added)||0) > (Number(byId[rl.id].added)||0)) byId[rl.id] = rl;
+      const byId = new Map();
+      for(const el of schoneLijsten(load(LKEY, []))) byId.set(String(el.id), el);
+      for(const rl of schoneLijsten(remote.lists)){
+        const oud = byId.get(String(rl.id));
+        if(!oud || (rl.added||0) > (oud.added||0)) byId.set(String(rl.id), rl);
       }
-      save(LKEY, Object.values(byId));
+      save(LKEY, Array.from(byId.values()));
     } catch(e){ /* lijsten kapot: de rest gaat door */ }
   }
 }
@@ -699,8 +820,8 @@ async function allProgress(){
   const out = new Map();
   const names = load(LEARNERS_KEY, [learner]);
   for(const name of names) for(const l of lists){
-    const p = load("overhoor:progress:"+slug(name)+":"+l.id, null);
-    if(p && p.sessions && p.sessions.length) out.set(slug(name)+"__"+l.id, {learner:name, list:l, progress:p});
+    const p = laadVoortgang(l.id, slug(name));
+    if(p && p.sessions.length) out.set(slug(name)+"__"+l.id, {learner:name, list:l, progress:p});
   }
   return Array.from(out.values()).sort((a,b)=>(b.progress.updated||0)-(a.progress.updated||0));
 }
@@ -795,13 +916,12 @@ function renderLessons(){
       c = { fresh:0, due:0, known:0, learning:0, total:0 };
       for(const lid of l.bronnen){
         const bron = lists.find(x=>x.id===lid); if(!bron) continue;
-        const p = load(PKEY(lid), {items:{}}); if(!p.items) p.items = {};
+        const p = laadVoortgang(lid) || legeVoortgang();
         const d = counts(p, bron, allowedVoor(bron));
         c.fresh+=d.fresh; c.due+=d.due; c.known+=d.known; c.learning+=d.learning; c.total+=d.total;
       }
     } else {
-      const p = load(PKEY(l.id), {items:{}});
-      if(!p.items) p.items = {};
+      const p = laadVoortgang(l.id) || legeVoortgang();
       c = counts(p, l, allowedVoor(l));
     }
     // grammatica heeft eigen onderdelen in de ondertitel; "Opdracht naar Antwoord" zegt niets
@@ -859,7 +979,7 @@ function renderHome(){
     const laatste = list.items[n-1];
     $("grens-hint").innerHTML = n >= totaal
       ? "De hele lijst: <b>"+totaal+" woorden</b>."
-      : "Tot en met <b>"+esc(laatste.word)+"</b> · "+n+" van "+totaal+" woorden. Schuif op als deze erin zitten.";
+      : "Tot en met <b>"+esc(laatste.word)+"</b> · "+Number(n)+" van "+Number(totaal)+" woorden. Schuif op als deze erin zitten.";
   }
   const dl = deadlineVan(list), dagen = dagenTot(dl);
   $("deadline-input").value = dl ? new Date(dl).toISOString().slice(0,10) : "";
@@ -909,7 +1029,10 @@ function renderProgress(){
 // ---------- rapport ----------
 function fmtDate(ts){ const d=new Date(ts); return d.toLocaleDateString("nl-NL",{day:"numeric",month:"short"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); }
 function reportData(entry){
-  const {list:l, progress:p} = entry; const now = Date.now();
+  const l = entry.list, now = Date.now();
+  // voortgang komt via laadVoortgang, maar het rapport mag nooit vastlopen op een rare vorm
+  const p = { items: isObject(entry.progress && entry.progress.items) ? entry.progress.items : {},
+    sessions: Array.isArray(entry.progress && entry.progress.sessions) ? entry.progress.sessions.filter(isObject) : [] };
   const n = l.items.length; let ready=0, learning=0, fresh=0, dueNow=0, minDue=Infinity;
   const hard = [];
   l.items.forEach((it,i)=>{ const s=p.items[i]; if(!s||s.seen===0){ fresh++; return; } if(s.box>=3) ready++; else learning++; if(s.due<=now) dueNow++; else minDue=Math.min(minDue,s.due);
@@ -1008,9 +1131,9 @@ function current(){ return session.queue[session.pos]; }
 
 function renderStreak(){
   const el = $("q-streak"); if(!el) return;
-  const n = session.streak||0;
+  const n = Number(session.streak)||0;   // uit opslag: nooit rauw in HTML
   if(n < 2){ el.hidden = true; el.classList.remove("is-up"); return; }
-  el.hidden = false; el.innerHTML = UI.Icon("flame") + "<span>" + n + " op rij</span>";
+  el.hidden = false; el.innerHTML = UI.Icon("flame") + "<span>" + Number(n) + " op rij</span>";
   el.classList.remove("is-up"); void el.offsetWidth; el.classList.add("is-up");
 }
 function renderQuestion(){
