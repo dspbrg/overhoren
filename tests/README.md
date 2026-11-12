@@ -25,6 +25,7 @@ al het andere externe verkeer wordt geblokkeerd en als fout gemeld.
 | `schermen.test.mjs` | Alle schermen van de app, door te klikken, in licht en donker, op 360 en 1280 px: geen JS-fouten, geen horizontale overloop, contrast van alle zichtbare tekst minstens 4,5:1. |
 | `fonts.test.mjs` | Fonts staan in de service worker, laden offline uit de cache, de browser tekent echt Chakra Petch en Inter, geen verzoeken naar Google. |
 | `styleguide.test.mjs` | styleguide.html laadt zonder fouten, toont elk component uit `window.UI`, themaknop werkt, overloop en contrast. |
+| `thema.test.mjs` | Themaknop op het startscherm: elke stand (data-theme, aria-pressed, theme-color), keuze blijft na herladen en staat er al voor de app-scripts, afwijkend thema op alle schermen (contrast, overloop, JS-fouten), datumveld volgt de stand, werkt zonder localStorage, toetsenbord en tikdoelen. |
 | `ui.test.mjs` | De zeshoekige Ring en de confettikleuren, zonder browser. |
 
 Contrast wordt gemeten in de levende pagina: per tekst worden alle lagen

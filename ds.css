@@ -279,7 +279,8 @@
     padding: 12px 14px; width: 100%;
   }
   input[type=text] { font-size: 1.15rem; }
-  input[type=date] { font-size: 1rem; color-scheme: light dark; }
+  /* geen eigen color-scheme: het veld erft de themakeuze van :root */
+  input[type=date] { font-size: 1rem; }
 
   /* schuifregelaar: zelfde taal als de rest, dus geen browser-eigen uiterlijk */
   input[type=range] {
@@ -618,6 +619,8 @@
   /* --- topbar en foot --- */
   .topbar { margin-block: -10px; display: flex; justify-content: space-between; align-items: center; gap: var(--s3); font-variant-numeric: tabular-nums; }
   .foot { display: flex; gap: var(--s2) var(--s4); justify-content: center; flex-wrap: wrap; color: var(--muted); margin-block: -10px; }
+  /* themakeuze onder de foot: label en segmenten op een rij, gecentreerd */
+  .theme-row { display: flex; gap: var(--s2) var(--s3); justify-content: center; align-items: center; flex-wrap: wrap; }
   .brand { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
   .brand .tag { color: var(--muted); font-size: var(--t-meta); }
 
