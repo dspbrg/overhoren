@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "overhoren",
+  "compatibility_date": "2026-11-02",
+  "observability": {
+    "enabled": true
+  },
+  "workers_dev": true,
+  "assets": {
+    "directory": "."
+  },
+  "routes": [
+    { "pattern": "overhoren.vandaan.net", "custom_domain": true }
+  ]
+}

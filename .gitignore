@@ -1,2 +1,8 @@
-# lokale Cloudflare/Wrangler-staat, hoort niet in de repo
+# lokale Cloudflare/Wrangler-staat en geheimen, horen niet in de repo
 .wrangler/
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
+# losse zip-bestanden (bv. aangeleverde beelden)
+*.zip
