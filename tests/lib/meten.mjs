@@ -57,6 +57,10 @@ export function contrastMeting(opts) {
     const lagen = [];
     let onbekend = false;
     const bg = parseKleur(cs.backgroundColor);
+    // een kleur die we niet kunnen lezen (bijvoorbeeld oklab() midden in
+    // een overgang) nooit stil overslaan: dan zou de tekst tegen wit gemeten
+    // worden. Melden als niet meetbaar.
+    if (!bg) onbekend = true;
     if (bg && bg[3] > 0) lagen.push({ opties: [[bg[0], bg[1], bg[2], bg[3] * alphaFactor]], bron: bron + " background-color" });
     if (cs.backgroundImage && cs.backgroundImage !== "none") {
       // meerdere achtergronden: de eerste ligt bovenop
@@ -218,9 +222,24 @@ export function overloopMeting() {
 
 // Animaties afronden, zodat we de eindtoestand meten en niet een frame
 // halverwege een fade-in.
+//
+// Eerst een paar frames wachten. Verschijnt er een knop onder de muis
+// (bijvoorbeeld "Maak een foto" op de plek waar net "Foto" stond), dan
+// zet de browser :hover pas een frame later aan en start er dan pas een
+// overgang. Zonder wachten liep de meting soms midden in die overgang,
+// waar Chromium de kleur als oklab() geeft.
 export async function rondAnimatiesAf() {
   await document.fonts.ready;
-  for (const a of document.getAnimations()) {
-    try { if (a.effect && a.effect.getTiming().iterations !== Infinity) a.finish(); } catch (_) { /* oneindig */ }
-  }
+  const frame = () => new Promise(r => requestAnimationFrame(() => r()));
+  const rond = () => {
+    for (const a of document.getAnimations()) {
+      try { if (a.effect && a.effect.getTiming().iterations !== Infinity) a.finish(); } catch (_) { /* oneindig */ }
+    }
+  };
+  rond();
+  await frame(); await frame();
+  await new Promise(r => setTimeout(r, 50));
+  rond();
+  await frame();
+  rond();
 }

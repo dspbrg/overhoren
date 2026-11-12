@@ -70,6 +70,8 @@
         <li><b>2026-11-08</b> Titels in Chakra Petch, functionele tekst in een rustige sans-serif: Inter.</li>
         <li><b>2026-11-08</b> Fonts lokaal laden, geen Google Fonts.</li>
         <li><b>2026-11-08</b> Later: themakleur instelbaar. Nu nog niet.</li>
+        <li><b>2026-11-12</b> Zes vaste katten met een eigen karakter, in twee standen (goed en bijna). De kat kijkt altijd naar binnen: links zoals hij is, rechts gespiegeld.</li>
+        <li><b>2026-11-12</b> Eén kat maakt het leuk, niet verzamelen. Elke ronde komt er vanzelf een andere kat langs, binnen de ronde steeds dezelfde. Niets te verdienen, geen Mijn katten. De kat is nooit verdrietig en vraagt nooit om terug te komen.</li>
       </ul>
       <span class="eyebrow">Rules</span>
       <ul class="sg-decisions">
@@ -153,6 +155,7 @@
 </div>
 
 <script src="ui.js?v=dev"></script>
+<script src="celebrate.js?v=dev"></script>
 <script>
 (function () {
   "use strict";
@@ -321,8 +324,32 @@
     ], { col: true }),
 
     block("hydrateIcons", "Zet een icoon voor elk element met data-icon, zodat de HTML leesbaar blijft.", [
-      ['<button class="link" data-icon="trophy">', '<button class="link" data-icon="trophy" type="button">Mijn katten</button>']
+      ['<button class="link" data-icon="trophy">', '<button class="link" data-icon="trophy" type="button">Rapport</button>']
     ]),
+
+    // De katten: de beelden en namen komen uit celebrate.js, net als in de app.
+    block("KatRij", "Kat met tekst, direct onder een kaart (canvas K7d). 120 px hoog, het oortje steekt 30 px over de onderrand. In de rij is de kat versiering: alt is leeg, de tekst zegt het. Rechts van de tekst gespiegeld, zodat hij naar binnen kijkt. Geen vrije HTML: text, lead en oordeel (good, maybe, bad) gaan door esc().", [
+      ['UI.KatRij({ beeld: Celebrate.beeld(id, "goed"), oordeel: "good", text })',
+        '<div class="app" style="width:100%"><div class="card"><span class="eyebrow">Woord</span><p class="prompt">awesome</p></div>' +
+        UI.KatRij({ beeld: Celebrate.beeld("strepen", "goed"), oordeel: "good", text: "Precies!" }) + '</div>'],
+      ['UI.KatRij({ beeld: Celebrate.beeld(id, "bijna"), oordeel: "bad", text })',
+        '<div class="app" style="width:100%"><div class="card"><span class="eyebrow">Definitie</span><p class="prompt">very good</p></div>' +
+        UI.KatRij({ beeld: Celebrate.beeld("tuxedo", "bijna"), oordeel: "bad", text: "Nog niet" }) + '</div>'],
+      ['UI.KatRij({ beeld: Celebrate.beeld(id, "bijna"), oordeel: "maybe", text })',
+        '<div class="app" style="width:100%"><div class="card"><span class="eyebrow">Woord</span><p class="prompt">la maison</p></div>' +
+        UI.KatRij({ beeld: Celebrate.beeld("stippen", "bijna"), oordeel: "maybe", text: "Bijna?" }) + '</div>'],
+      ['UI.KatRij({ beeld: Celebrate.beeld(id, "bijna"), lead, text }) · samenvatting',
+        '<div class="app" style="width:100%"><div class="card"><p>Ronde klaar: 4 van 12 in één keer goed.</p></div>' +
+        UI.KatRij({ beeld: Celebrate.beeld("lapjes", "bijna"), lead: "Lastige ronde.", text: "Deze woorden komen vaker terug, zo gaan ze erin." }) + '</div>'],
+      ['UI.KatRij({ beeld, oordeel, text, kant: "rechts" })',
+        '<div class="app" style="width:100%"><div class="card"><p>Kat rechts van de tekst.</p></div>' +
+        UI.KatRij({ beeld: Celebrate.beeld("sokjes", "goed"), kant: "rechts", oordeel: "good", text: "Yes!" }) + '</div>']
+    ], { col: true }),
+
+    block("KatBeloning", "Na een vlekkeloze ronde: de kat van die ronde in de goed-stand, op een warm vlak, iets gedraaid, met een blije zin en het karakter eronder. Alt met naam, karakter en houding.", [
+      ['UI.KatBeloning({ beeld: Celebrate.beeld(id, "goed"), title: Celebrate.blij(id) })',
+        '<div class="app" style="width:100%">' + UI.KatBeloning({ beeld: Celebrate.beeld("stippen", "goed"), title: Celebrate.blij("stippen") }) + '</div>']
+    ], { col: true }),
 
     block("Card", "Alleen CSS: .card. Hetzelfde vlak als LessonCard, met kaarttitel.", [
       ['.card > h2', '<div class="card" style="width:100%"><h2>Hoe werkt het?</h2><p>Lopende tekst in een kaart.</p></div>']

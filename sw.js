@@ -27,7 +27,7 @@ const VERSIE = "20261112104108";
 const CACHE = "overhoren-" + VERSIE;
 
 const SCHIL = [
-  "./", "./ds.css", "./ui.js", "./cats.js",
+  "./", "./ds.css", "./ui.js",
   "./celebrate.js", "./engine.js", "./lists.js", "./manifest.json",
   "./icons/icoon-192.png", "./icons/icoon-512.png",
   "./fonts/chakra-petch-latin-600-normal.woff2",
@@ -35,7 +35,14 @@ const SCHIL = [
   "./fonts/chakra-petch-latin-700-normal.woff2",
   "./fonts/chakra-petch-latin-ext-700-normal.woff2",
   "./fonts/inter-latin-wght-normal.woff2",
-  "./fonts/inter-latin-ext-wght-normal.woff2"
+  "./fonts/inter-latin-ext-wght-normal.woff2",
+  // de zes katten, elk in twee standen (zie KATTEN in celebrate.js)
+  "./katten/strepen-goed.webp", "./katten/strepen-bijna.webp",
+  "./katten/tuxedo-goed.webp", "./katten/tuxedo-bijna.webp",
+  "./katten/lapjes-goed.webp", "./katten/lapjes-bijna.webp",
+  "./katten/sokjes-goed.webp", "./katten/sokjes-bijna.webp",
+  "./katten/stippen-goed.webp", "./katten/stippen-bijna.webp",
+  "./katten/rodestreep-goed.webp", "./katten/rodestreep-bijna.webp"
 ];
 
 // Alleen gewone, directe antwoorden bewaren. De kopie wordt meteen

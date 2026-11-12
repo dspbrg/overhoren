@@ -1,85 +1,91 @@
 // =============================================================
-// Overhoren viering
+// Overhoren katten en viering
 //
-// Gaat af bij een vlekkeloze ronde: alles in een keer goed. Dan confetti
-// en kans op een bijzondere of zeldzame kat. Bij 90% of meer (bijna
-// vlekkeloos) valt er een gewone kat, zonder confetti. Zo is er een
-// haalbare trede, en blijft foutloos het echte doel.
+// Zes vaste katten, elk met een eigen karakter en twee standen:
+//   goed   blij, bij een goed antwoord en na een vlekkeloze ronde
+//   bijna  rustig, bij een fout of bijna-goed antwoord
+// De beelden staan in katten/<id>-<stand>.webp, vrijstaand, 480 px hoog.
+// Ze kijken naar rechts of recht vooruit. Regel: de kat kijkt naar
+// binnen. Links van de inhoud zoals hij is, rechts gespiegeld (ds.css).
+//
+// Er valt niets te verdienen of te verzamelen. Elke ronde komt er
+// vanzelf een kat langs, binnen de ronde steeds dezelfde, en nooit twee
+// rondes achter elkaar dezelfde. Het enige dat bewaard wordt is welke
+// kat het laatst langskwam (overhoor:kat:vorige, voor alle oefenaars
+// samen). De app zet de kat van een ronde in die ronde zelf, zodat een
+// hervatte ronde dezelfde kat houdt.
+//
+// Oude data van eerdere versies (overhoor:cats:* en de kattenopslag
+// per oefenaar) blijft ongemoeid staan en wordt niet meer gelezen.
 //
 // Confetti is met de hand getekend op een canvas, geen library.
-// De katten zijn gewone bestanden in cats/. Eentje erbij zetten is
-// genoeg, CATS hieronder aanvullen en klaar.
-//
-// Respecteert prefers-reduced-motion: dan geen beweging, wel de kat.
+// Respecteert prefers-reduced-motion: dan geen confetti.
 // =============================================================
 (function (root) {
   "use strict";
 
-  // De kattencatalogus. Een kat erbij? Zet het bestand in app/cats/ en
-  // voeg hier een regel toe met een naam en een zeldzaamheid.
-  //   gewoon    valt vaak
-  //   bijzonder valt af en toe
-  //   zeldzaam  valt bijna nooit, met gouden randje in de collectie
-  // De catalogus komt uit cats.js, dat door maak-catalogus.sh uit de map
-  // app/cats/ wordt gebouwd. Ontbreekt dat bestand, dan valt de app terug
-  // op deze minimale lijst zodat er nooit niets is.
-  const CATS = (root.CAT_CATALOG && root.CAT_CATALOG.length) ? root.CAT_CATALOG : [
-    { src: "cats/gewoon-de-spionnen.jpg", naam: "De Spionnen", rang: "gewoon" }
+  // --- de zes katten -----------------------------------------------
+  // breed: breedte in pixels per stand bij een hoogte van HOOG, zodat
+  // elk <img> vaste afmetingen krijgt en er niets verspringt.
+  const HOOG = 480;
+  const KATTEN = [
+    { id: "strepen",    naam: "Strepen",     karakter: "knus",         breed: { goed: 275, bijna: 347 } },
+    { id: "tuxedo",     naam: "Tuxedo",      karakter: "muziek",       breed: { goed: 360, bijna: 335 } },
+    { id: "lapjes",     naam: "Lapjes",      karakter: "leergierig",   breed: { goed: 315, bijna: 366 } },
+    { id: "sokjes",     naam: "Sokjes",      karakter: "sportief",     breed: { goed: 368, bijna: 341 } },
+    { id: "stippen",    naam: "Stippen",     karakter: "avontuurlijk", breed: { goed: 339, bijna: 346 } },
+    { id: "rodestreep", naam: "Rode streep", karakter: "ondeugend",    breed: { goed: 338, bijna: 339 } }
   ];
-  // Kans per zeldzaamheid, afhankelijk van hoeveel woorden er in de ronde
-  // zaten. Zonder dat verband is een korte ronde de goedkoopste manier om
-  // katten te verzamelen, en dan doet ze alleen nog rondes van tien.
-  // Een vlekkeloze ronde van 70 woorden hoort echt iets anders waard te zijn.
-  const KANS_KLEIN = { gewoon: 88, bijzonder: 11, zeldzaam: 1 };   // 10 woorden
-  const KANS_GROOT = { gewoon: 25, bijzonder: 45, zeldzaam: 30 };  // 50+ woorden
-  function kansen(woorden) {
-    const n = Number(woorden) || 10;
-    const f = Math.max(0, Math.min(1, (n - 10) / 40));   // 0 bij 10, 1 vanaf 50
-    const uit = {};
-    for (const rang in KANS_KLEIN) uit[rang] = KANS_KLEIN[rang] + f * (KANS_GROOT[rang] - KANS_KLEIN[rang]);
-    return uit;
-  }
-  // Voor de uitleg in de app: kans op iets beters dan gewoon.
-  function kansOpBijzonder(woorden) {
-    const k = kansen(woorden);
-    const totaal = k.gewoon + k.bijzonder + k.zeldzaam;
-    return Math.round(100 * (k.bijzonder + k.zeldzaam) / totaal);
+  const STANDEN = ["goed", "bijna"];
+  // houding voor de alt-tekst: "Strepen, knus, blij"
+  const HOUDING = { goed: "blij", bijna: "rustig" };
+
+  function zoek(id) { return KATTEN.find(k => k.id === id) || null; }
+  function bestaat(id) { return !!zoek(id); }
+
+  // Alles wat nodig is om een kat te tekenen. ui.js kent de catalogus
+  // niet; die krijgt dit object en tekent het.
+  function beeld(id, stand) {
+    const k = zoek(id);
+    if (!k) return null;
+    const s = STANDEN.includes(stand) ? stand : "goed";
+    return {
+      id: k.id, naam: k.naam, karakter: k.karakter, stand: s, houding: HOUDING[s],
+      src: "katten/" + k.id + "-" + s + ".webp",
+      width: k.breed[s], height: HOOG,
+      alt: k.naam + ", " + k.karakter + ", " + HOUDING[s]
+    };
   }
 
-  // Onderschriften bij de foto. Willekeurig gekozen, los van de kat.
-  const CAPTIONS = ["Foutloos!", "Nul fouten", "Kat is trots", "Hoedje af", "Helemaal goed"];
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 
-  // --- verzameling -------------------------------------------------
-  // Per oefenaar bijhouden welke katten al gevallen zijn en hoe vaak.
-  let wieVerzamelt = "pia";
-  function setLearner(naam) { wieVerzamelt = String(naam || "pia").toLowerCase().replace(/[^a-z0-9]+/g, "-"); }
-  const KKEY = () => "overhoor:cats:" + wieVerzamelt;
-  function collectie() {
-    try { return JSON.parse(localStorage.getItem(KKEY()) || "{}"); } catch (e) { return {}; }
+  // --- de kat van een ronde -----------------------------------------
+  // Een sleutel: het id van de laatst getoonde kat. Lukt localStorage
+  // niet, dan onthouden we het in het geheugen voor deze sessie.
+  const VORIGE = "overhoor:kat:vorige";
+  let vorigeGeheugen = null;
+  function vorige() {
+    if (bestaat(vorigeGeheugen)) return vorigeGeheugen;
+    try {
+      const v = JSON.parse(localStorage.getItem(VORIGE));
+      if (bestaat(v)) return v;
+    } catch (e) { /* geen opslag of kapotte data */ }
+    return null;
   }
-  function bewaar(c) { try { localStorage.setItem(KKEY(), JSON.stringify(c)); } catch (e) {} }
-  let onVerdien = null;
-  function verdien(src) {
-    const c = collectie();
-    const nu = Date.now();
-    const nieuw = !c[src];
-    c[src] = { aantal: (c[src] ? c[src].aantal : 0) + 1, eerst: nieuw ? nu : c[src].eerst, laatst: nu };
-    bewaar(c);
-    if (onVerdien) onVerdien();
-    return nieuw;
+  // Kiest de kat voor een nieuwe ronde: willekeurig, maar nooit de vorige.
+  // Geeft het id terug en onthoudt het als de vorige.
+  function nieuweRonde() {
+    const v = vorige();
+    const keus = KATTEN.filter(k => k.id !== v);
+    const id = pick(keus).id;
+    onthoud(id);
+    return id;
   }
-  // Eerst een rang loten, dan een kat binnen die rang. Zo bepaalt de
-  // zeldzaamheid de kans, niet het aantal plaatjes per rang.
-  // alleenRang: vaste rang, bijvoorbeeld "gewoon" bij bijna vlekkeloos.
-  function loot(woorden, alleenRang) {
-    if (alleenRang && CATS.some(k => k.rang === alleenRang)) return pick(CATS.filter(k => k.rang === alleenRang));
-    const KANS = kansen(woorden);
-    const beschikbaar = Object.keys(KANS).filter(r => CATS.some(k => k.rang === r));
-    const totaal = beschikbaar.reduce((s, r) => s + KANS[r], 0);
-    let n = Math.random() * totaal;
-    let rang = beschikbaar[beschikbaar.length - 1];
-    for (const r of beschikbaar) { if (n < KANS[r]) { rang = r; break; } n -= KANS[r]; }
-    return pick(CATS.filter(k => k.rang === rang));
+  // Een hervatte ronde houdt zijn kat; die telt dan als de laatst getoonde.
+  function onthoud(id) {
+    if (!bestaat(id)) return;
+    vorigeGeheugen = id;
+    try { localStorage.setItem(VORIGE, JSON.stringify(id)); } catch (e) {}
   }
 
   const PRAISE = [
@@ -93,7 +99,6 @@
   function reduced() {
     return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
-  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 
   // --- confetti ---------------------------------------------------
   // Snippers vallen met zwaartekracht en wat luchtweerstand, en
@@ -186,63 +191,20 @@
     requestAnimationFrame(frame);
   }
 
-  // --- kat --------------------------------------------------------
-  // De foto's zijn niet vrijstaand, dus ze krijgen een lijstje: een
-  // scheef hangend fotokaartje dat midden in beeld opklapt.
-  // Vaste beeldverhouding met object-fit, zodat elke foto er even
-  // netjes uitziet ongeacht het bronformaat.
-  // Laadt het plaatje niet, dan verschijnt er niets en breekt er niets.
-  function cat(woorden, alleenRang, captions) {
-    if (!CATS.length) return null;
-    const kat = loot(woorden, alleenRang);
-    const nieuw = verdien(kat.src);
-    const img = new Image();
-    img.src = kat.src;
-    img.onerror = function () { /* stil overslaan */ };
-    img.onload = function () {
-      const fig = document.createElement("figure");
-      fig.className = "fx-cat";
-      // lichte willekeurige scheefstand, zodat het niet klinisch recht hangt
-      fig.style.setProperty("--tilt", (Math.random() < .5 ? -1 : 1) * (3 + Math.random() * 3) + "deg");
-      fig.setAttribute("aria-hidden", "true");
-      img.alt = "";
-      fig.appendChild(img);
-      fig.dataset.rang = kat.rang;
-      const cap = document.createElement("figcaption");
-      cap.innerHTML = '<b>' + kat.naam + '</b>' +
-        '<span class="fx-cat-sub">' + (nieuw ? "Nieuwe kat!" : pick(captions || CAPTIONS)) + '</span>';
-      fig.appendChild(cap);
-      document.body.appendChild(fig);
-      requestAnimationFrame(() => fig.classList.add("is-in"));
-      setTimeout(function () {
-        fig.classList.remove("is-in");
-        setTimeout(() => fig.remove(), 700);
-      }, 3600);
-    };
-  }
-
   // --- viering ----------------------------------------------------
-  // perfect: alles in een keer goed. Alleen dan gaat dit af.
+  // Alleen na een vlekkeloze ronde: confetti (niet bij reduced motion)
+  // en een korte lofzin. De kat van de ronde tekent de app zelf.
   function celebrate(opts) {
     opts = opts || {};
-    if (opts.bijna) {
-      cat(opts.woorden, "gewoon", BIJNA_CAPTIONS);
-      return pick(BIJNA);
-    }
     if (!reduced()) confetti(opts.duration);
-    cat(opts.woorden);
     return pick(PRAISE);
   }
 
-  // 90% of meer in een keer goed, maar niet alles.
-  const DREMPEL = 0.9;
-  function bijnaVlekkeloos(woorden, eersteKeerGoed) {
-    return woorden > 0 && eersteKeerGoed < woorden && eersteKeerGoed / woorden >= DREMPEL;
+  // De zin op de beloningskaart: blij, en nooit "nieuwe kat".
+  function blij(id) {
+    const k = zoek(id);
+    return k ? k.naam + " is helemaal blij: alles in één keer goed!" : "";
   }
-  const BIJNA = ["Bijna alles goed!", "Op een haar na foutloos.", "Sterk gedaan.", "Net niet foutloos, wel een kat."];
-  const BIJNA_CAPTIONS = ["Bijna foutloos", "Goed bezig", "Kat zegt goed zo"];
 
-  root.Celebrate = { celebrate, confetti, cat, collectie, setLearner, loot, bijnaVlekkeloos, DREMPEL,
-                     kansen, kansOpBijzonder, CATS, CAPTIONS, PRAISE,
-                     set onVerdien(fn){ onVerdien = fn; } };
+  root.Celebrate = { celebrate, confetti, KATTEN, STANDEN, HOUDING, beeld, bestaat, nieuweRonde, onthoud, vorige, blij, PRAISE, VORIGE };
 })(typeof window === "object" ? window : globalThis);

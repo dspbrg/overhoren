@@ -1,13 +1,13 @@
 // Loopt alle schermen van index.html af door te klikken, zoals een
 // gebruiker dat doet. Bij elk scherm roept hij bijScherm(naam) aan.
 
-async function wachtOpScherm(page, id) {
+export async function wachtOpScherm(page, id) {
   await page.locator("#" + id).waitFor({ state: "visible", timeout: 5000 });
 }
 
 // Beantwoordt de huidige vraag. goed=true: met het officiele antwoord uit
 // window.WORDLISTS. goed=false: met onzin.
-async function beantwoord(page, goed) {
+export async function beantwoord(page, goed) {
   const antwoord = await page.evaluate(goed => {
     const prompt = document.getElementById("q-prompt").textContent.trim();
     const label = document.getElementById("q-input-label").textContent.trim();
@@ -47,10 +47,6 @@ export async function loopSchermen(page, basis, bijScherm) {
   await page.click("#btn-report"); await wachtOpScherm(page, "scr-report");
   await bijScherm("rapport (leeg)");
   await page.click("#btn-report-back"); await wachtOpScherm(page, "scr-lessons");
-
-  await page.click("#btn-cats"); await wachtOpScherm(page, "scr-cats");
-  await bijScherm("mijn katten (leeg)");
-  await page.click("#btn-cats-back"); await wachtOpScherm(page, "scr-lessons");
 
   await page.click("#btn-import"); await wachtOpScherm(page, "scr-import");
   await bijScherm("nieuwe lijst: keuze");
@@ -93,7 +89,9 @@ export async function loopSchermen(page, basis, bijScherm) {
   await page.locator("#btn-next").waitFor({ state: "visible" });
   await bijScherm("overhoren: feedback fout");
   await page.click("#btn-quit"); await wachtOpScherm(page, "scr-summary");
-  await bijScherm("samenvatting (gestopt)");
+  // een fout op een vraag: lastige ronde, de kat in de bijna-stand
+  await page.locator("#sum-kat .kat").waitFor({ state: "visible", timeout: 3000 });
+  await bijScherm("samenvatting (gestopt, lastige ronde)");
   await page.click("#btn-sum-lessons"); await wachtOpScherm(page, "scr-lessons");
 
   // Franse lijst: alles goed, tot de samenvatting
@@ -108,10 +106,10 @@ export async function loopSchermen(page, basis, bijScherm) {
     await page.waitForFunction(() => !document.getElementById("scr-summary").hidden || document.getElementById("btn-next").hidden);
   }
   await wachtOpScherm(page, "scr-summary");
-  // de kat verschijnt na het laden van het plaatje; even wachten
-  await page.locator(".fx-cat.is-in").waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
-  await bijScherm("samenvatting (vlekkeloos)");
-  await page.locator(".fx-cat").waitFor({ state: "detached", timeout: 6000 }).catch(() => {});
+  // vlekkeloos: de beloningskaart met de blije kat van de ronde staat er meteen
+  await page.locator("#sum-beloning .kat").waitFor({ state: "visible", timeout: 3000 });
+  await page.waitForFunction(() => { const i = document.querySelector("#sum-beloning .kat"); return i.complete && i.naturalWidth > 0; }, null, { timeout: 5000 });
+  await bijScherm("samenvatting (vlekkeloos, blije kat)");
 
   await page.click("#btn-sum-home"); await wachtOpScherm(page, "scr-home");
   await bijScherm("les (home, na een ronde)");
@@ -123,6 +121,4 @@ export async function loopSchermen(page, basis, bijScherm) {
   await page.click("#btn-report"); await wachtOpScherm(page, "scr-report");
   await bijScherm("rapport (met data)");
   await page.click("#btn-report-back"); await wachtOpScherm(page, "scr-lessons");
-  await page.click("#btn-cats"); await wachtOpScherm(page, "scr-cats");
-  await bijScherm("mijn katten (met kat)");
 }

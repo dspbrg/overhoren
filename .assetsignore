@@ -15,24 +15,22 @@
 !/sw.js
 !/ds.css
 !/ui.js
-!/cats.js
 !/celebrate.js
 !/engine.js
 !/lists.js
-!/cats/
+!/katten/
 !/fonts/
 !/icons/
 
 # Binnen die mappen toch niet
-# geen submappen in cats/, fonts/ en icons/
-/cats/*/
+# geen submappen in katten/, fonts/ en icons/
+/katten/*/
 /fonts/*/
 /icons/*/
 # alles wat met een punt begint (.DS_Store, .gitkeep, ...)
 .*
 # uitleg en bronbestanden
 *.md
-/cats/LEESMIJ.md
 *.zip
 # bron van de iconen; manifest.json en index.html gebruiken alleen de png's
 /icons/icoon.svg
