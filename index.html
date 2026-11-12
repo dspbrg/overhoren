@@ -10,9 +10,26 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Overhoren">
-<meta name="theme-color" content="#F4F3F8" media="(prefers-color-scheme: light)">
+<!-- deze twee kleuren gelijk houden met kl in zetThema hieronder -->
+<meta name="theme-color" content="#F4F1FC" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16142A" media="(prefers-color-scheme: dark)">
-<link rel="stylesheet" href="ds.css?v=20261108191924">
+<script>
+// Thema zo vroeg mogelijk zetten, voor de stylesheet: geen flits.
+// "light" of "dark" zet data-theme; anders volgt de app het systeem.
+// theme-color volgt mee. Faalt localStorage, dan blijft het Systeem.
+window.zetThema = function (t) {
+  var d = document.documentElement, kl = { light: "#F4F1FC", dark: "#16142A" };
+  if (t !== "light" && t !== "dark") t = "";
+  if (t) d.dataset.theme = t; else delete d.dataset.theme;
+  var m = document.querySelectorAll('meta[name="theme-color"]');
+  for (var i = 0; i < m.length; i++) {
+    m[i].content = t ? kl[t] : (/dark/.test(m[i].media) ? kl.dark : kl.light);
+  }
+  return t;
+};
+try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) {}
+</script>
+<link rel="stylesheet" href="ds.css?v=20261112104108">
 </head>
 <body>
 <div class="app">
@@ -28,6 +45,14 @@
     </div>
     <div class="lessons" id="lessons"></div>
     <p class="foot"><button class="link" data-icon="trophy" id="btn-cats">Mijn katten</button><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button></p>
+    <div class="theme-row" role="group" aria-labelledby="theme-label">
+      <span class="eyebrow" id="theme-label">Thema</span>
+      <div class="seg" id="theme-seg">
+        <button type="button" data-theme="" aria-pressed="true" class="on">Systeem</button>
+        <button type="button" data-theme="light" aria-pressed="false">Licht</button>
+        <button type="button" data-theme="dark" aria-pressed="false">Donker</button>
+      </div>
+    </div>
     <button class="btn add-list-btn" id="btn-import">+ Nieuwe lijst</button>
   </div>
 </section>
@@ -323,11 +348,11 @@
 
 </div>
 
-<script src="ui.js?v=20261108191924"></script>
-<script src="cats.js?v=20261108191924"></script>
-<script src="celebrate.js?v=20261108191924"></script>
-<script src="lists.js?v=20261108191924"></script>
-<script src="engine.js?v=20261108191924"></script>
+<script src="ui.js?v=20261112104108"></script>
+<script src="cats.js?v=20261112104108"></script>
+<script src="celebrate.js?v=20261112104108"></script>
+<script src="lists.js?v=20261112104108"></script>
+<script src="engine.js?v=20261112104108"></script>
 <script>
 (function(){
 "use strict";
@@ -1482,7 +1507,11 @@ async function photoEnrich(listId, items, mode, subject) {
 function bind(){
   $("btn-home-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
   document.querySelectorAll('input[name="imp-mode"]').forEach(r=>r.addEventListener("change", ()=>{ $("imp-langs").hidden = r.value!=="translate" || !r.checked; }));
-  $("size-seg").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{ sizeChoice = b.dataset.size==="all"?"all":parseInt(b.dataset.size,10); $("size-seg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b)); renderHome(); }));
+  // thema: Systeem, Licht of Donker, per apparaat bewaard
+  const themeSeg = $("theme-seg"), markTheme = t => themeSeg.querySelectorAll("button").forEach(x=>{ const on = x.dataset.theme === t; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on); });
+  markTheme(document.documentElement.dataset.theme || "");
+  themeSeg.addEventListener("click", e=>{ const b = e.target.closest("button"); if(!b) return; const t = window.zetThema(b.dataset.theme); save("overhoor:thema", t || null); markTheme(t); });
+  $("size-seg").querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ sizeChoice = b.dataset.size==="all"?"all":parseInt(b.dataset.size,10); $("size-seg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b)); renderHome(); }));
   $("btn-start").addEventListener("click", ()=>{ save(SKEY(list.id), null); startSession(); });
   $("btn-resume").addEventListener("click", resumeSession);
   $("btn-discard").addEventListener("click", ()=>{ save(SKEY(list.id), null); renderHome(); });

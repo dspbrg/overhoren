@@ -1,0 +1,38 @@
+# Wat online gaat bij de Worker "overhoren". Zelfde opmaak als .gitignore.
+#
+# Dit is een ALLOWLIST: eerst wordt alles uitgesloten, daarna gaat alleen de app
+# zelf weer aan. Voeg je een nieuw app-bestand of een nieuwe app-map toe in de
+# root, zet het dan hieronder bij "De app", anders komt het niet online.
+# Wrangler sluit .git en andere mappen NIET vanzelf uit; alleen deze lijst telt.
+
+# Alles uit
+/*
+
+# De app
+!/index.html
+!/styleguide.html
+!/manifest.json
+!/sw.js
+!/ds.css
+!/ui.js
+!/cats.js
+!/celebrate.js
+!/engine.js
+!/lists.js
+!/cats/
+!/fonts/
+!/icons/
+
+# Binnen die mappen toch niet
+# geen submappen in cats/, fonts/ en icons/
+/cats/*/
+/fonts/*/
+/icons/*/
+# alles wat met een punt begint (.DS_Store, .gitkeep, ...)
+.*
+# uitleg en bronbestanden
+*.md
+/cats/LEESMIJ.md
+*.zip
+# bron van de iconen; manifest.json en index.html gebruiken alleen de png's
+/icons/icoon.svg

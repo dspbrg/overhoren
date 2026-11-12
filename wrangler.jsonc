@@ -1,0 +1,35 @@
+// Cloudflare-config voor de app zelf (Worker "overhoren", alleen statische bestanden).
+// De sync-API heeft een eigen config in worker/wrangler.toml en staat hier los van.
+// Er is bewust geen main-script: alles is statisch, er draait geen code op de server.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "overhoren",
+  "compatibility_date": "2026-11-02",
+
+  // Logs en metrics in het Cloudflare-dashboard.
+  "observability": {
+    "enabled": true
+  },
+
+  // Expliciet uit: de app is alleen bereikbaar via het eigen domein hieronder,
+  // niet via een workers.dev-adres of losse preview-adressen per versie.
+  "workers_dev": false,
+  "preview_urls": false,
+
+  // Het eigen domein. Een deploy zet de custom domains van deze Worker gelijk
+  // aan deze lijst. Haal je dit blok weg of verander je het, dan verandert het
+  // domein bij de volgende deploy mee.
+  "routes": [
+    { "pattern": "overhoren.vandaan.net", "custom_domain": true }
+  ],
+
+  "assets": {
+    // De app staat in de root van de repo. Wat online mag, staat in .assetsignore
+    // (een allowlist: alles is uitgesloten behalve de app zelf).
+    "directory": ".",
+    // Standaard van Cloudflare, hier uitgeschreven zodat het gedrag zichtbaar is:
+    // /index.html wordt met een 307 doorgestuurd naar /.
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  }
+}

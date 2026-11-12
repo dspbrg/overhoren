@@ -9,27 +9,58 @@
 //   - daarna eerst uit de cache serveren, en op de achtergrond verversen
 //   - bij een nieuwe versie (andere CACHE) de oude weggooien
 //
-// De versie wordt bij elke deploy door deploy.sh vervangen, zodat een
-// nieuwe versie gegarandeerd doorkomt in plaats van blijven hangen.
+// De versie wordt bij elke deploy vervangen, zodat een nieuwe versie
+// gegarandeerd doorkomt in plaats van blijven hangen. Dat doet
+// scripts/deploy.sh (GitHub Pages) of het build command van Cloudflare,
+// dat VERSIE en de ?v=-stempels met de commit-sha vult.
+//
+// Doorverwijzingen: Cloudflare stuurt /index.html met een 307 door naar /.
+// Een response die via zo'n doorverwijzing binnenkwam (redirected) mag
+// nooit een navigatie beantwoorden, anders weigert de browser hem en
+// opent de app met een foutpagina. Daarom:
+//   - de schil bevat alleen "./", niet "./index.html"
+//   - elke navigatie naar de app (/, /index.html, oude snelkoppelingen)
+//     krijgt de gecachte "./"
+//   - een redirected response gaat nooit de cache in
 // =============================================================
-const VERSIE = "20261108191924";
+const VERSIE = "20261112104108";
 const CACHE = "overhoren-" + VERSIE;
 
 const SCHIL = [
-  "./", "./index.html", "./ds.css", "./ui.js", "./cats.js",
+  "./", "./ds.css", "./ui.js", "./cats.js",
   "./celebrate.js", "./engine.js", "./lists.js", "./manifest.json",
   "./icons/icoon-192.png", "./icons/icoon-512.png",
-  "./fonts/fredoka-latin-wght-normal.woff2",
-  "./fonts/fredoka-latin-ext-wght-normal.woff2",
-  "./fonts/atkinson-hyperlegible-latin-400-normal.woff2",
-  "./fonts/atkinson-hyperlegible-latin-ext-400-normal.woff2",
-  "./fonts/atkinson-hyperlegible-latin-700-normal.woff2",
-  "./fonts/atkinson-hyperlegible-latin-ext-700-normal.woff2"
+  "./fonts/chakra-petch-latin-600-normal.woff2",
+  "./fonts/chakra-petch-latin-ext-600-normal.woff2",
+  "./fonts/chakra-petch-latin-700-normal.woff2",
+  "./fonts/chakra-petch-latin-ext-700-normal.woff2",
+  "./fonts/inter-latin-wght-normal.woff2",
+  "./fonts/inter-latin-ext-wght-normal.woff2"
 ];
+
+// Alleen gewone, directe antwoorden bewaren. De kopie wordt meteen
+// gemaakt, voordat de browser het origineel kan uitlezen.
+function bewaar(sleutel, res) {
+  if (!res || !res.ok || res.redirected) return Promise.resolve();
+  const kopie = res.clone();
+  return caches.open(CACHE).then(c => c.put(sleutel, kopie));
+}
+
+// Schone kopie zonder het redirected-kenmerk, voor een navigatie.
+function schoon(res) {
+  if (!res.redirected) return res;
+  return new Response(res.body, { headers: res.headers, status: res.status, statusText: res.statusText });
+}
+
+// Is dit een navigatie naar de app zelf (/ of /index.html binnen de scope)?
+function isApp(url) {
+  const basis = new URL(self.registration.scope).pathname;
+  return url.pathname === basis || url.pathname === basis + "index.html";
+}
 
 self.addEventListener("install", e => {
   // faalt er een bestand, dan niet de hele installatie laten klappen
-  e.waitUntil(caches.open(CACHE).then(c => Promise.allSettled(SCHIL.map(u => c.add(u)))).then(() => self.skipWaiting()));
+  e.waitUntil(Promise.allSettled(SCHIL.map(u => fetch(u).then(res => bewaar(u, res)))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", e => {
@@ -46,12 +77,23 @@ self.addEventListener("fetch", e => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;   // sync gaat gewoon naar het net
 
+  // De app openen: altijd de gecachte "./", met het netwerk als terugval.
+  if (req.mode === "navigate" && isApp(url)) {
+    e.respondWith(
+      caches.match("./").then(hit => {
+        const vers = fetch("./").then(res => { bewaar("./", res); return schoon(res); }).catch(() => hit);
+        return hit || vers;
+      })
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(req, { ignoreSearch: true }).then(hit => {
       // op de achtergrond bijwerken, zodat een volgende keer vers is
       const vers = fetch(req).then(res => {
-        if (res && res.ok) caches.open(CACHE).then(c => c.put(req, res.clone()));
-        return res;
+        bewaar(req, res);
+        return req.mode === "navigate" ? schoon(res) : res;
       }).catch(() => hit);
       return hit || vers;
     })

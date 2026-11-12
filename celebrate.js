@@ -114,12 +114,11 @@
       return /^rgba?\(/.test(c) ? c : null;
     }).filter(Boolean);
     probe.remove();
-    return out.length ? out : ["#6B3FD1", "#2E9E5B", "#F0BE55", "#D9463A", "#2C6BB3"];
+    return out.length ? out : ["#6B3FD1", "#F29A52", "#F0BE55", "#A88BF0"];
   }
 
   function confetti(duration) {
-    const colors = resolveColors(["--accent", "--ok", "--tertiary", "--warn",
-                                  "--adj", "--verb", "--noun", "--bad"]);
+    const colors = resolveColors(["--confetti-1", "--confetti-2", "--confetti-3", "--confetti-4"]);
 
     const cv = document.createElement("canvas");
     cv.className = "fx-canvas";

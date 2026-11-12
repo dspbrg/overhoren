@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Overhoren · Styleguide</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="ds.css?v=dev">
+<style>
+/* Alleen de opmaak van deze pagina zelf: rasters en labels rond de
+   voorbeelden. Alles wat je in de voorbeelden ziet komt uit ds.css. */
+@layer screens {
+  body > .app { max-width: 960px; }
+  .sg-nav { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); }
+  .sg-section { display: flex; flex-direction: column; gap: var(--s4); }
+  .sg-section > h2 { scroll-margin-top: var(--s5); }
+  .sg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--s3); }
+  .sg-swatch { display: flex; flex-direction: column; gap: 6px; font-size: var(--t-meta); }
+  .sg-chip-color { height: 56px; clip-path: var(--cut-small); box-shadow: inset 0 0 0 1px var(--line); }
+  .sg-swatch code, .sg-row code, .sg-spec code { font-size: .8125rem; color: var(--muted); font-feature-settings: normal; }
+  .sg-swatch b { font-weight: 600; }
+  .sg-demo { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+  .sg-demo.col { flex-direction: column; align-items: stretch; }
+  .sg-spec { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s1) var(--s4); align-items: baseline; padding-block: var(--s2); border-bottom: 1px solid var(--line); }
+  .sg-spec:last-child { border-bottom: 0; }
+  .sg-row { display: flex; flex-direction: column; gap: var(--s2); }
+  .sg-shape { width: 120px; height: 64px; background: var(--accent); }
+  .sg-ring-row .ring { width: 72px; height: 72px; }
+  .sg-decisions { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: var(--s2); }
+  .sg-theme { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="brand">
+    <h1>Overhoren styleguide</h1>
+    <p class="tag">R6 Lowpoly, variant R6e</p>
+  </header>
+
+  <div class="card">
+    <p>Alles op deze pagina komt uit <code>ds.css</code> en <code>ui.js</code>, dezelfde bestanden als de app. Verandert daar iets, dan verandert het hier mee.</p>
+    <div class="field">
+      <span class="eyebrow">Theme</span>
+      <div class="seg" id="sg-theme">
+        <button type="button" data-theme="" class="on">System</button>
+        <button type="button" data-theme="light">Light</button>
+        <button type="button" data-theme="dark">Dark</button>
+      </div>
+      <p class="hint">Het donkere thema is voorlopig: afgeleid van R6e, dat alleen licht is ontworpen.</p>
+    </div>
+    <nav class="sg-nav">
+      <a class="link" href="#principles"><span>Principles</span></a>
+      <a class="link" href="#color"><span>Color</span></a>
+      <a class="link" href="#typography"><span>Typography</span></a>
+      <a class="link" href="#shape"><span>Shape</span></a>
+      <a class="link" href="#spacing"><span>Spacing</span></a>
+      <a class="link" href="#components"><span>Components</span></a>
+    </nav>
+  </div>
+
+  <!-- PRINCIPLES -->
+  <section class="sg-section" id="principles">
+    <h2>Principles</h2>
+    <div class="card">
+      <span class="eyebrow">Style decisions</span>
+      <ul class="sg-decisions">
+        <li><b>2026-11-08</b> Richting R6 Lowpoly, voorlopig.</li>
+        <li><b>2026-11-08</b> Titels in Chakra Petch, functionele tekst in een rustige sans-serif: Inter.</li>
+        <li><b>2026-11-08</b> Fonts lokaal laden, geen Google Fonts.</li>
+        <li><b>2026-11-08</b> Later: themakleur instelbaar. Nu nog niet.</li>
+      </ul>
+      <span class="eyebrow">Rules</span>
+      <ul class="sg-decisions">
+        <li>Schermen gebruiken alleen tokens en componentklassen, nooit losse waarden.</li>
+        <li>Vormen via <code>clip-path</code>, nooit <code>border-radius</code>. De schaduw zit als <code>filter: drop-shadow</code> op het element, het geknipte vlak op <code>::before</code>, zodat schaduw en focusrand niet weggeknipt worden.</li>
+        <li>Alle tekst haalt minstens 4,5:1 contrast, gemeten in de levende pagina, ook in het donkere thema.</li>
+        <li>Warm is voor prestatie en de toetsdatum. Nergens anders.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- COLOR -->
+  <section class="sg-section" id="color">
+    <h2>Color</h2>
+    <div class="card">
+      <span class="eyebrow">Surfaces</span>
+      <div class="sg-grid" id="sg-surfaces"></div>
+      <span class="eyebrow">Text</span>
+      <div class="sg-grid" id="sg-text"></div>
+      <span class="eyebrow">Accent and lines</span>
+      <div class="sg-grid" id="sg-accent"></div>
+      <span class="eyebrow">Warm: deadline and reward</span>
+      <div class="sg-grid" id="sg-warm"></div>
+      <span class="eyebrow">Feedback</span>
+      <div class="sg-grid" id="sg-feedback"></div>
+      <span class="eyebrow">Word class</span>
+      <div class="sg-grid" id="sg-wordclass"></div>
+      <span class="eyebrow">Confetti</span>
+      <div class="sg-grid" id="sg-confetti"></div>
+    </div>
+  </section>
+
+  <!-- TYPOGRAPHY -->
+  <section class="sg-section" id="typography">
+    <h2>Typography</h2>
+    <div class="card">
+      <p class="hint">Chakra Petch voor titels, Inter voor de rest. Inter staat overal met <code>font-feature-settings: 'ss02' 1</code>: een I met schreven, een l met staart en een doorgestreepte 0, zodat Il1 en O0 niet te verwarren zijn bij het spellen.</p>
+      <div class="sg-spec"><h1>Page title</h1><code>Chakra Petch 700 · 28px · 1.1</code></div>
+      <div class="sg-spec"><h2>Card title</h2><code>Chakra Petch 700 · 22px</code></div>
+      <div class="sg-spec"><span class="verdict bad" style="animation:none">Feedback title</span><code>Chakra Petch 700 · 22px</code></div>
+      <div class="sg-spec"><span class="eyebrow">Section label</span><code>Inter 600 · 13px · uppercase · .1em</code></div>
+      <div class="sg-spec"><span class="lesson-body"><h3 style="font-size:var(--t-list)">List title</h3></span><code>Inter 600 · 20px</code></div>
+      <div class="sg-spec"><p class="prompt" style="margin:0">awesome</p><code>Inter 600 · 32px (word in question)</code></div>
+      <div class="sg-spec"><p>Body: Il1 O0 rn m · é ç œ ß · 0123456789</p><code>Inter 400 · 17px · 1.4</code></div>
+      <div class="sg-spec"><p class="hint">Meta: Gold Experience A2 · 73 woorden</p><code>Inter 400 · 14px · muted</code></div>
+    </div>
+  </section>
+
+  <!-- SHAPE -->
+  <section class="sg-section" id="shape">
+    <h2>Shape</h2>
+    <div class="card">
+      <div class="sg-grid">
+        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-card)"></div><b>--cut-card</b><code>16px, card</code></div>
+        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-point)"></div><b>--cut-point</b><code>12px, button</code></div>
+        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-chip)"></div><b>--cut-chip</b><code>8px, chip, choice, segment</code></div>
+        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-meter);height:16px"></div><b>--cut-meter</b><code>4px, meter</code></div>
+        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-small)"></div><b>--cut-small</b><code>6px, stat</code></div>
+      </div>
+      <div class="sg-spec"><span>Card shadow</span><code>--card-shadow: drop-shadow(0 6px 0 #D2C8F2)</code></div>
+      <div class="sg-spec"><span>Primary button shadow</span><code>drop-shadow(0 5px 0 #4B2A99)</code></div>
+    </div>
+  </section>
+
+  <!-- SPACING -->
+  <section class="sg-section" id="spacing">
+    <h2>Spacing</h2>
+    <div class="card">
+      <p class="hint">8px-ritme. Pagina: padding 24px 16px, 24px tussen blokken.</p>
+      <div class="sg-grid" id="sg-spacing"></div>
+    </div>
+  </section>
+
+  <!-- COMPONENTS -->
+  <section class="sg-section" id="components">
+    <h2>Components</h2>
+    <p class="hint">Elk component uit <code>ui.js</code>, met de varianten die de app gebruikt. Onder elk voorbeeld de aanroep.</p>
+    <div id="sg-components" class="sg-section"></div>
+  </section>
+
+</div>
+
+<script src="ui.js?v=dev"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const esc = UI.esc;
+
+  // --- thema schakelen ---
+  $("sg-theme").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.theme) document.documentElement.dataset.theme = b.dataset.theme;
+    else delete document.documentElement.dataset.theme;
+    $("sg-theme").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    paintValues();
+  });
+
+  // --- kleuren ---
+  // getPropertyValue geeft light-dark() onopgelost terug, dus de waarde
+  // laten uitrekenen via een echt element (zie Overdracht, valkuilen).
+  function hex(rgb) {
+    const m = rgb.match(/[\d.]+/g); if (!m) return rgb;
+    const h = m.slice(0, 3).map(v => Math.round(+v).toString(16).padStart(2, "0")).join("").toUpperCase();
+    return "#" + h + (m[3] != null && +m[3] < 1 ? " · " + Math.round(+m[3] * 100) + "%" : "");
+  }
+  function swatch(token, note, gradient) {
+    return '<div class="sg-swatch"><div class="sg-chip-color" style="background:var(' + token + ')"></div>' +
+      '<b>' + esc(token) + '</b>' +
+      (gradient ? '<code>' + esc(gradient) + '</code>' : '<code data-token="' + esc(token) + '"></code>') +
+      (note ? '<span class="hint">' + esc(note) + '</span>' : "") + '</div>';
+  }
+  function paintValues() {
+    const probe = document.createElement("span");
+    document.body.appendChild(probe);
+    document.querySelectorAll("[data-token]").forEach(el => {
+      probe.style.color = "var(" + el.dataset.token + ")";
+      el.textContent = hex(getComputedStyle(probe).color);
+    });
+    probe.remove();
+  }
+  const groups = {
+    "sg-surfaces": [
+      ["--page", "Pagina, vier schuine banen", "160deg · --page-1 … --page-4"],
+      ["--page-1"], ["--page-2"], ["--page-3"], ["--page-4"],
+      ["--card", "Kaart, drie schuine banen", "115deg · --card-1 … --card-3"],
+      ["--card-1"], ["--card-2"], ["--card-3"], ["--card-shadow-color", "Harde schaduw onder kaart"],
+      ["--control-surf", "Vlak van secundaire knop, segment, keuze"], ["--control-hover", "Zelfde, bij hover"],
+      ["--control-shadow", "Harde schaduw onder die knoppen"],
+      ["--control", "Invoervelden"]
+    ],
+    "sg-text": [["--ink", "Tekst"], ["--muted", "Tekst zacht, meta"], ["--ink-feedback", "Lopende tekst in feedback"]],
+    "sg-accent": [["--accent", "Actie"], ["--accent-ink", "Tekst op accent"], ["--accent-strong", "Labels"], ["--accent-shadow", "Schaduw primaire knop"], ["--accent-shadow-ink", "Tekst op die schaduwkleur"],
+                  ["--track", "Spoor van ring en meter"], ["--line", "Scheiding"], ["--mark", "Markering"], ["--line-strong", "Rand van invoer, 3:1"]],
+    "sg-warm": [["--warm", "Toetsdatum, vlak"], ["--warm-ink", "Toetsdatum, tekst"],
+                ["--reward", "Beloning, drie banen", "115deg · --reward-1 … --reward-3"], ["--reward-1"], ["--reward-2"], ["--reward-3"],
+                ["--on-reward", "Tekst op beloning"], ["--reward-shadow"], ["--reward-icon", "Icoon op beloning"]],
+    "sg-feedback": [["--ok"], ["--ok-ink", "Tekst"], ["--ok-soft"], ["--ok-strong"], ["--bad"], ["--bad-ink", "Tekst"], ["--bad-soft"],
+                    ["--warn"], ["--warn-ink", "Tekst"], ["--warn-soft"]],
+    "sg-wordclass": [["--verb"], ["--noun"], ["--adj"], ["--adv"]],
+    "sg-confetti": [["--confetti-1"], ["--confetti-2"], ["--confetti-3"], ["--confetti-4"]]
+  };
+  for (const id in groups) $(id).innerHTML = groups[id].map(g => swatch(g[0], g[1], g[2])).join("");
+
+  $("sg-spacing").innerHTML = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6"].map(t =>
+    '<div class="sg-row"><div style="height:16px;width:var(' + t + ');background:var(--accent);clip-path:var(--cut-meter)"></div>' +
+    '<b>' + t + '</b><code>' + getComputedStyle(document.documentElement).getPropertyValue(t).trim() + '</code></div>').join("");
+
+  // --- componenten ---
+  function block(name, note, demos, opts) {
+    opts = opts || {};
+    return '<div class="card"><h2>' + esc(name) + '</h2>' + (note ? '<p class="hint">' + esc(note) + '</p>' : "") +
+      demos.map(d => '<div class="sg-row"><div class="sg-demo' + (opts.col ? " col" : "") + '">' + d[1] + '</div>' +
+        '<code>' + esc(d[0]) + '</code></div>').join("") + '</div>';
+  }
+  const iconList = Object.keys(UI.ICONS).map(n =>
+    '<span class="sg-row" style="align-items:center;font-size:1.5rem">' + UI.Icon(n) + '<code>' + n + '</code></span>').join("");
+
+  const html = [
+    block("Icon", "Inline SVG in currentColor, schaalt mee met de tekst. Nooit de enige betekenisdrager.",
+      [['UI.Icon(name)', iconList]]),
+
+    block("Button", "Punten links en rechts, minimaal 48px hoog, 17px 600.", [
+      ['UI.Button({ label })', UI.Button({ label: "Secondary" })],
+      ['UI.Button({ label, variant: "primary" })', UI.Button({ label: "Primary", variant: "primary" })],
+      ['UI.Button({ label, variant: "primary", icon: "play" })', UI.Button({ label: "Start overhoring", variant: "primary", icon: "play" })],
+      ['UI.Button({ label, variant: "ok" })', UI.Button({ label: "Ja, goed rekenen", variant: "ok" })],
+      ['UI.Button({ label, variant: "danger" })', UI.Button({ label: "Voortgang wissen", variant: "danger" })],
+      ['UI.Button({ label, disabled: true })', UI.Button({ label: "Disabled", variant: "primary", disabled: true })],
+      ['UI.Button({ label, variant: "primary", size: "big" })', UI.Button({ label: "Big, full width", variant: "primary", size: "big" })]
+    ]),
+
+    block("Link", "Ziet eruit als tekst, haalt wel het tikdoel van 44px.", [
+      ['UI.Link({ label })', UI.Link({ label: "Rapport" })],
+      ['UI.Link({ label, icon: "back" })', UI.Link({ label: "Alle lessen", icon: "back" })]
+    ]),
+
+    block("TopBar", "Terugknop links, vrije inhoud rechts.", [
+      ['UI.TopBar([{ type: "link", label }, { label, cls: "muted" }])',
+        '<div style="width:100%">' + UI.TopBar([{ type: "link", id: "x-back", label: "Terug" }, { label: "Wie oefent: Pia", cls: "muted" }]) + '</div>']
+    ], { col: true }),
+
+    block("Stat and StatsRow", "Getal in Chakra Petch, label eronder.", [
+      ['UI.Stat({ value, label })', UI.Stat({ value: 73, label: "nieuw" })],
+      ['UI.StatsRow([...])', '<div style="width:100%">' + UI.StatsRow([{ value: 73, label: "nieuw" }, { value: 4, label: "aan de beurt" }, { value: 12, label: "zit erin" }]) + '</div>']
+    ]),
+
+    block("Meter", "Balk van 8px, licht schuin. Spoor --track, vulling accent.", [
+      ['UI.Meter({ parts: [{ kind: "b", value: 40, total: 100 }] })', '<div style="width:100%">' + UI.Meter({ parts: [{ kind: "b", value: 40, total: 100 }] }) + '</div>'],
+      ['UI.Meter({ total, parts: [a, b, c] })', '<div style="width:100%">' + UI.Meter({ total: 100, parts: [{ kind: "a", value: 30 }, { kind: "b", value: 25 }, { kind: "c", value: 10 }] }) + '</div>']
+    ], { col: true }),
+
+    block("Ring", "Zeshoek, lijndikte 7. Paars is geoefend, groen zit erin. Percentage in Inter 600 14px.", [
+      ['UI.Ring({ known, learning, total })',
+        '<span class="sg-demo sg-ring-row">' + UI.Ring({ known: 0, learning: 0, total: 20 }) + UI.Ring({ known: 2, learning: 5, total: 20 }) +
+        UI.Ring({ known: 9, learning: 6, total: 20 }) + UI.Ring({ known: 20, learning: 0, total: 20 }) + '</span>']
+    ]),
+
+    block("Chip", "Parallellogram, 14px 600. Woordsoort kleurt zichzelf.", [
+      ['UI.Chip(kind)', UI.Chip("noun") + UI.Chip("verb") + UI.Chip("adjective") + UI.Chip("adverb")],
+      ['.due-chip · .deadline-chip · .deadline-chip.is-dichtbij · .streak',
+        '<span class="due-chip">' + UI.Icon("clock") + '<span>4 aan de beurt</span></span>' +
+        '<span class="deadline-chip">' + UI.Icon("alert") + '<span>toets over 5 dagen</span></span>' +
+        '<span class="deadline-chip is-dichtbij">' + UI.Icon("alert") + '<span>toets morgen</span></span>' +
+        '<span class="streak">' + UI.Icon("flame") + '<span>5 op rij</span></span>']
+    ]),
+
+    block("Choice and Choices", "Woordsoortknop met toetshint. Parallellogram.", [
+      ['UI.Choices(["Noun", "Verb", "Adjective"]) · per knop UI.Choice({ value, label, key })', '<div class="choices">' + UI.Choices(["Noun", "Verb", "Adjective"]) + '</div>'],
+      ['.choice.on · .choice.right · .choice.wrong',
+        '<div class="choices">' +
+          UI.Choice({ value: "on", label: "Selected", key: 1 }).replace('class="choice"', 'class="choice on"') +
+          UI.Choice({ value: "r", label: "Right", key: 2 }).replace('class="choice"', 'class="choice right"') +
+          UI.Choice({ value: "w", label: "Wrong", key: 3 }).replace('class="choice"', 'class="choice wrong"') +
+        '</div>']
+    ]),
+
+    block("Segmented control", "Alleen CSS: .seg met knoppen. Eén staat aan.", [
+      ['.seg > button.on', '<div class="seg"><button type="button">Kort · 10</button><button type="button" class="on">Normaal · 15</button><button type="button">Lang · alles</button></div>']
+    ]),
+
+    block("Notice", "Melding met gekleurde kantlijn, geen gevuld vlak.", [
+      ['UI.Notice({ text })', '<div style="width:100%">' + UI.Notice({ text: "Al 15 minuten bezig. Even pauze is slimmer dan doorgaan." }) + '</div>'],
+      ['UI.Notice({ html, spread: true })', '<div style="width:100%">' + UI.Notice({ icon: false, spread: true, html: "<span>Je was nog bezig met een ronde.</span>" }) + '</div>']
+    ], { col: true }),
+
+    block("Empty", "Lege staat met karakter, zonder illustratie.", [
+      ['UI.Empty({ glyph, title, body })', '<div style="width:100%">' + UI.Empty({ glyph: "?", title: "Nog niets te rapporteren.", body: "Doe eerst een ronde." }) + '</div>']
+    ], { col: true }),
+
+    block("Mark and feedback list", "Het oordeel per onderdeel. De titel erboven is .verdict.", [
+      ['.verdict.good · .verdict.bad · .verdict.maybe',
+        '<span class="verdict good" style="animation:none">Precies!</span><span class="verdict bad" style="animation:none">Nog niet</span><span class="verdict maybe" style="animation:none">Twijfel</span>'],
+      ['UI.Mark("ok" | "bad" | "maybe")',
+        '<ul class="fb-list" style="width:100%">' +
+          '<li>' + UI.Mark("ok") + '<div><div class="k">Woord</div><div>awesome</div></div></li>' +
+          '<li>' + UI.Mark("bad") + '<div><div class="k">Woordsoort</div><div>' + UI.Chip("adjective") + '</div><div class="yours">Jij: noun</div></div></li>' +
+          '<li>' + UI.Mark("maybe") + '<div><div class="k">Definitie</div><div>very good</div><div class="yours">Jij: heel goed ding</div></div></li>' +
+        '</ul>']
+    ], { col: true }),
+
+    block("LessonCard", "De kaart op het lessenoverzicht. Afgeschuinde hoeken, schaduw via filter.", [
+      ['UI.LessonCard({ title, meta, total, known, learning, due })',
+        '<div style="width:100%">' + UI.LessonCard({ id: "a", title: "Wordlist starter + unit 1", meta: "Gold Experience A2 · woord, woordsoort en definitie", total: 73, known: 9, learning: 14, due: 4 }) + '</div>'],
+      ['UI.LessonCard({ ..., deadline, deadlineDagen: 1 })',
+        '<div style="width:100%">' + UI.LessonCard({ id: "b", title: "Arrêt Apprendre", meta: "Vocabulaire & phrases-clés · Frans naar Nederlands", total: 70, known: 0, learning: 0, deadline: "toets morgen", deadlineDagen: 1 }) + '</div>'],
+      ['UI.LessonCard({ ..., mix: true })',
+        '<div style="width:100%">' + UI.LessonCard({ id: "c", title: "Alles door elkaar", meta: "2 lijsten samen", total: 98, known: 3, learning: 20, mix: true }) + '</div>']
+    ], { col: true }),
+
+    block("hydrateIcons", "Zet een icoon voor elk element met data-icon, zodat de HTML leesbaar blijft.", [
+      ['<button class="link" data-icon="trophy">', '<button class="link" data-icon="trophy" type="button">Mijn katten</button>']
+    ]),
+
+    block("Card", "Alleen CSS: .card. Hetzelfde vlak als LessonCard, met kaarttitel.", [
+      ['.card > h2', '<div class="card" style="width:100%"><h2>Hoe werkt het?</h2><p>Lopende tekst in een kaart.</p></div>']
+    ], { col: true })
+  ];
+  $("sg-components").innerHTML = html.join("");
+  UI.hydrateIcons(document);
+  paintValues();
+  // systeemthema kan wisselen terwijl de pagina open staat
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paintValues);
+})();
+</script>
+</body>
+</html>
