@@ -98,11 +98,15 @@
     --card-3: light-dark(#EFEAFC, #2A2549);
     --card: linear-gradient(115deg, var(--card-1) 0 45%, var(--card-2) 45% 75%, var(--card-3) 75% 100%);
     --card-shadow-color: light-dark(#D2C8F2, #0C0A1A);
-    /* vlak en schaduw van bedienbare elementen op een kaart. Licht volgt
-       R6e (wit met kaartschaduw). Donker wijkt af: daar viel een knop
-       weg tegen de kaart, dus een lichter vlak en een lichte rand-schaduw. */
-    --control-surf:   light-dark(#FFFFFF, #3A3460);
-    --control-shadow: light-dark(#D2C8F2, #6F6894);
+    /* vlak en schaduw van bedienbare elementen op een kaart. Licht: een
+       lichtpaars vlak dat op alle drie de kaartbanen zichtbaar afsteekt
+       (ook op de rechterbaan #EFEAFC; een lichtere tint viel daar weg).
+       Rode en paarse tekst halen erop minstens 4,5:1. De schaduw steekt
+       even sterk af als de kaartschaduw onder de kaart (1,58:1). Donker:
+       daar viel een knop weg tegen de kaart, dus een lichter vlak en een
+       lichte rand-schaduw. */
+    --control-surf:   light-dark(#E4DCF8, #3A3460);
+    --control-shadow: light-dark(#B9ABEA, #6F6894);
     --card-shadow: drop-shadow(0 6px 0 var(--card-shadow-color));
     --surface: var(--card-1);   /* effen variant */
 
@@ -124,7 +128,8 @@
 
     /* oppervlakken van invoervelden */
     --control:       light-dark(#FFFFFF, #2A2647);
-    --control-hover: light-dark(#EEE8FB, #453E70);
+    /* hover van knoppen: in licht een stap donkerder dan --control-surf */
+    --control-hover: light-dark(#DBD2F6, #453E70);   /* rode tekst haalt hierop 4,53:1 */
 
     /* primary: de actie */
     --accent:        light-dark(#6B3FD1, #A88BF0);
@@ -342,6 +347,12 @@
   .muted { color: var(--muted); }
   .label { font-weight: 600; font-size: .95rem; }
   .hint  { font-size: var(--t-meta); color: var(--muted); }
+  /* zachte tekst ín een knop: --muted haalt op het knopvlak geen 4,5:1 */
+  .btn .hint, .btn .muted, .choice .hint, .choice .muted,
+  .seg button .hint, .seg button .muted { color: var(--ink-feedback); }
+  /* op een gevuld accentvlak de knoptekst volgen, anders grijs op paars */
+  .btn.primary :is(.hint, .muted), .choice.on :is(.hint, .muted),
+  .seg button.on :is(.hint, .muted) { color: inherit; }
   /* sectielabel: Inter 600, 13px, hoofdletters, accent sterk */
   .eyebrow, .section-label {
     font-size: var(--t-section); font-weight: 600; text-transform: uppercase;
@@ -490,7 +501,8 @@
   .choice:disabled { cursor: default; }
   .choice kbd {
     font: inherit; font-size: .75rem; font-weight: 600; line-height: 1; flex: none;
-    color: var(--muted); background: var(--mark);
+    /* in licht wit, want de knop zelf is al lichtpaars; donker ongewijzigd */
+    color: var(--muted); background: light-dark(var(--card-1), var(--mark));
     clip-path: var(--cut-chip); padding: 4px 9px;
   }
   .choice.on kbd { color: var(--accent-shadow-ink); background: var(--accent-shadow); }

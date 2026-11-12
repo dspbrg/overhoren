@@ -26,6 +26,8 @@ al het andere externe verkeer wordt geblokkeerd en als fout gemeld.
 | `fonts.test.mjs` | Fonts staan in de service worker, laden offline uit de cache, de browser tekent echt Chakra Petch en Inter, geen verzoeken naar Google. |
 | `styleguide.test.mjs` | styleguide.html laadt zonder fouten, toont elk component uit `window.UI`, themaknop werkt, overloop en contrast. |
 | `thema.test.mjs` | Themaknop op het startscherm: elke stand (data-theme, aria-pressed, theme-color), keuze blijft na herladen en staat er al voor de app-scripts, afwijkend thema op alle schermen (contrast, overloop, JS-fouten), datumveld volgt de stand, werkt zonder localStorage, toetsenbord en tikdoelen. |
+| `knopvlak.test.mjs` | Lesscherm ("Eerst lezen", niet-gekozen keuzeknoppen) en vraagscherm (woordsoortknoppen), licht en donker, 360 en 1280 px: het knopvlak steekt op elk punt af tegen de kaartbaan eronder (OKLab-verschil minstens 0,025 in licht, 0,05 in donker), en hover geeft een ander vlak dan rust. |
+| `fotokeuze.test.mjs` | Foto-import na het kiezen van een (zelfgemaakt) testplaatje: contrast van alle tekst bij de vier typeknoppen, in rust en bij hover op elke knop, licht en donker, 360 en 1280 px. De worker wordt niet aangeroepen. |
 | `ui.test.mjs` | De zeshoekige Ring en de confettikleuren, zonder browser. |
 
 Contrast wordt gemeten in de levende pagina: per tekst worden alle lagen
