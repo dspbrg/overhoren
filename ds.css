@@ -93,6 +93,11 @@
     --card-3: light-dark(#EFEAFC, #2A2549);
     --card: linear-gradient(115deg, var(--card-1) 0 45%, var(--card-2) 45% 75%, var(--card-3) 75% 100%);
     --card-shadow-color: light-dark(#D2C8F2, #0C0A1A);
+    /* vlak en schaduw van bedienbare elementen op een kaart. Licht volgt
+       R6e (wit met kaartschaduw). Donker wijkt af: daar viel een knop
+       weg tegen de kaart, dus een lichter vlak en een lichte rand-schaduw. */
+    --control-surf:   light-dark(#FFFFFF, #3A3460);
+    --control-shadow: light-dark(#D2C8F2, #6F6894);
     --card-shadow: drop-shadow(0 6px 0 var(--card-shadow-color));
     --surface: var(--card-1);   /* effen variant */
 
@@ -104,8 +109,9 @@
     --ink-feedback: light-dark(#4A4760, #CCC8DE);   /* lopende tekst in feedback */
 
     /* --track is het spoor van ring en meter, --line scheidt,
-       --mark is een rustige markering. --line-strong omlijnt iets dat je
-       kunt bedienen en haalt minimaal 3:1 met --surface (WCAG 1.4.11). */
+       --mark is een rustige markering. --line-strong omlijnt invoervelden
+       en haalt minimaal 3:1 met --surface (WCAG 1.4.11). Knoppen hebben
+       geen rand: daar bakenen --control-surf en --control-shadow af. */
     --track:       light-dark(#DFDAEE, #3A3656);
     --line:        light-dark(#E4E1EE, #34304F);
     --mark:        light-dark(#EEE8FB, #2E2750);
@@ -113,7 +119,7 @@
 
     /* oppervlakken van invoervelden */
     --control:       light-dark(#FFFFFF, #2A2647);
-    --control-hover: light-dark(#F4F1FC, #332E55);
+    --control-hover: light-dark(#EEE8FB, #453E70);
 
     /* primary: de actie */
     --accent:        light-dark(#6B3FD1, #A88BF0);
@@ -125,6 +131,7 @@
     /* warm, toetsdatum */
     --warm:     light-dark(#FFE0C7, #4A2A12);
     --warm-ink: light-dark(#6E3300, #FFD3B2);
+    --warm-near: light-dark(#FFD3B2, #5A3418);   /* toets vandaag of morgen; niet in R6e, eigen toevoeging */
 
     /* warm, beloning: uitsluitend prestatie (streak, score). Nergens anders. */
     --reward-1:      light-dark(#FFE0C7, #4A2A12);
@@ -232,12 +239,18 @@
   html, body { margin: 0; }
   html { background: var(--page-1); }
   body {
-    background: var(--page); background-attachment: fixed; color: var(--ink);
+    color: var(--ink);
     font-family: var(--body); font-size: var(--t-body); line-height: 1.4;
     /* ss02: de onderscheidende I, l en 1 van Inter, belangrijk bij spellen */
     font-feature-settings: 'ss02' 1;
     padding: var(--s5) var(--s4);
     min-height: 100vh;
+  }
+  /* De pagina-achtergrond staat stil op een eigen laag. background-attachment:
+     fixed met veel drop-shadows kan op Android haperend scrollen geven. */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1;
+    background: var(--page); pointer-events: none;
   }
   /* knoppen en velden erven font niet vanzelf de feature-instelling */
   button, input, select, textarea { font-feature-settings: inherit; }
@@ -340,6 +353,7 @@
      Per component zet je alleen --surf (vlak), --cut (vorm) en
      --drop (schaduw). */
   .card, .lesson, .btn, .seg button, .choice, .empty .glyph {
+    /* standaard: geen schaduw, zodat --drop nooit van een voorouder lekt */
     position: relative; isolation: isolate;
     background: none; border: 0; border-radius: 0;
     filter: var(--drop, none);
@@ -360,7 +374,7 @@
 
   /* --- button: punten links en rechts --- */
   .btn {
-    --surf: var(--card-1); --cut: var(--cut-point); --drop: var(--card-shadow);
+    --surf: var(--control-surf); --cut: var(--cut-point); --drop: drop-shadow(0 6px 0 var(--control-shadow));
     font: inherit; font-size: var(--t-body); font-weight: 600; cursor: pointer;
     color: var(--ink);
     padding: 12px 26px; min-height: var(--btn-h); margin-bottom: 6px;
@@ -392,7 +406,7 @@
   /* --- segmented control: parallellogrammen --- */
   .seg { display: flex; flex-wrap: wrap; gap: var(--s2); }
   .seg button {
-    --surf: var(--card-1); --cut: var(--cut-chip); --drop: var(--card-shadow);
+    --surf: var(--control-surf); --cut: var(--cut-chip); --drop: drop-shadow(0 6px 0 var(--control-shadow));
     font: inherit; font-size: var(--t-meta); font-weight: 600; cursor: pointer;
     color: var(--ink);
     padding: 10px 20px; min-height: var(--tap); margin-bottom: 6px;
@@ -453,7 +467,7 @@
      "Phrasal verb" brak anders af in een vaste kolom (Chromebook). */
   .choices { display: flex; flex-wrap: wrap; gap: var(--s3); }
   .choice {
-    --surf: var(--card-1); --cut: var(--cut-chip); --drop: var(--card-shadow);
+    --surf: var(--control-surf); --cut: var(--cut-chip); --drop: drop-shadow(0 6px 0 var(--control-shadow));
     flex: 0 0 auto; white-space: nowrap;
     font: inherit; font-weight: 600; cursor: pointer; color: var(--ink);
     padding: 12px 22px; min-height: var(--btn-h); margin-bottom: 6px;
@@ -499,7 +513,7 @@
     padding: 48px var(--s5); background: var(--mark); clip-path: var(--cut-card);
   }
   .empty .glyph {
-    --surf: var(--card-1); --cut: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    --surf: var(--card-1); --drop: none; --cut: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
     width: 88px; height: 96px; display: grid; place-items: center;
     color: var(--accent);
     font-family: var(--display); font-weight: 700; font-size: 2.5rem;
@@ -604,7 +618,7 @@
     font-family: var(--body); font-size: var(--t-section); font-weight: 600;
     text-transform: uppercase; letter-spacing: .1em; color: var(--accent-strong);
   }
-  .vak-aantal { font-size: var(--t-section); font-weight: 400; letter-spacing: normal; text-transform: none; color: var(--muted); }
+  .vak-aantal { font-size: var(--t-meta); font-weight: 400; letter-spacing: normal; text-transform: none; color: var(--muted); }
   .vak-lijsten { display: flex; flex-direction: column; gap: var(--s4); }
 
   /* de gemengde ronde is geen les maar een manier van oefenen, dus
@@ -675,22 +689,23 @@
   /* toetsdatum: warm */
   .deadline-chip { background: var(--warm); color: var(--warm-ink); }
   /* vandaag of morgen: dan mag het opvallen */
-  .deadline-chip.is-dichtbij { background: var(--reward-2); }
+  .deadline-chip.is-dichtbij { background: var(--warm-near); }
   /* aan de beurt: accent met wit */
   .due-chip { background: var(--accent); color: var(--accent-ink); }
   #deadline-input { width: auto; max-width: 220px; }
   /* de beloningsprikkel bij de rondegrootte, rustig maar zichtbaar */
   /* inline, niet inline-flex: anders wordt elk stuk tekst een eigen kolom */
-  .size-kans { display: inline; color: var(--warm-ink); }
+  .size-kans { display: inline; color: var(--on-reward); }
   .size-kans .icon { margin-right: 2px; }
 
   /* --- feedbacklijst --- */
   .fb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; color: var(--ink-feedback); }
   .fb-list li { display: grid; grid-template-columns: 24px 1fr; gap: var(--s3); align-items: start; }
   .fb-list .mark { display: grid; place-items: center; font-size: 1.25rem; margin-top: .1em; }
-  .fb-list .mark.ok { color: var(--ok); }
-  .fb-list .mark.bad { color: var(--bad); }
-  .fb-list .mark.maybe { color: var(--warn); }
+  /* het icoon draagt het oordeel, dus 3:1: de -ink-varianten */
+  .fb-list .mark.ok { color: var(--ok-ink); }
+  .fb-list .mark.bad { color: var(--bad-ink); }
+  .fb-list .mark.maybe { color: var(--warn-ink); }
   .fb-list .k { font-size: var(--t-section); text-transform: uppercase; letter-spacing: .1em; color: var(--accent-strong); font-weight: 600; }
   .fb-list .yours { color: var(--muted); font-size: var(--t-meta); margin-top: 4px; }
   .fb-list .yours:empty { display: none; }
@@ -716,8 +731,10 @@
     transform: translateY(4px); --drop: drop-shadow(0 1px 0 var(--accent-shadow));
   }
   .btn:not(.primary):not(.ok):active:not(:disabled), .seg button:not(.on):active,
-  .choice:not(.on):active:not(:disabled) { --drop: drop-shadow(0 2px 0 var(--card-shadow-color)); }
-  .lesson:active { transform: translateY(3px); --drop: drop-shadow(0 3px 0 var(--card-shadow-color)); }
+  .choice:not(.on):active:not(:disabled) { --drop: drop-shadow(0 2px 0 var(--control-shadow)); }
+  .btn.ok:active:not(:disabled) { --drop: drop-shadow(0 1px 0 var(--ok)); }
+  .lesson:active { transform: translateY(3px); }
+  .lesson:not(.is-mix):active { --drop: drop-shadow(0 3px 0 var(--card-shadow-color)); }
 
   @keyframes pop  { from { transform: scale(.7); opacity: 0 } to { transform: scale(1); opacity: 1 } }
   @keyframes bump { 0% { transform: scale(1) } 40% { transform: scale(1.22) } 100% { transform: scale(1) } }
@@ -845,10 +862,10 @@
   @media (hover: hover) and (pointer: fine) {
     /* hover kleurt alleen het vlak; de vorm en schaduw blijven */
     .lesson:hover:not(.is-mix), .import-choice:hover { --surf: linear-gradient(115deg, var(--card-1) 0 45%, var(--mark) 45% 100%); }
-    .lesson.is-mix:hover { --surf: color-mix(in srgb, var(--accent) 14%, var(--card-1)); }
+    .lesson.is-mix:hover { --surf: color-mix(in srgb, var(--accent) 10%, var(--card-1)); }
     .btn:hover:not(:disabled):not(.primary):not(.ok),
     .choice:hover:not(:disabled):not(.on):not(.right):not(.wrong),
-    .seg button:hover:not(.on) { --surf: var(--control-hover); }
+    .seg button:hover:not(.on) { --surf: var(--mark); }
     .btn.primary:hover:not(:disabled), .seg button.on:hover { --surf: color-mix(in srgb, var(--accent) 88%, white); }
     .link:hover { text-decoration-thickness: 3px; }
   }
@@ -892,6 +909,17 @@
     .choice { padding: 10px 18px; min-height: var(--tap); font-size: .95rem; }
     .card { padding: 18px 20px; gap: var(--s4); }
     #q-keys-hint { display: none; }
+  }
+  /* Hoog contrast (Windows): ::before-vlakken verdwijnen, dus echte randen */
+  @media (forced-colors: active) {
+    .btn, .choice, .seg button, .lesson, .card, .notice { border: 2px solid ButtonText; filter: none; }
+    .seg button.on, .choice.on { border-color: Highlight; outline: 2px solid Highlight; }
+    .card, .notice, .stat, .empty, .chip, .due-chip, .deadline-chip, .meter, .streak, .verdict { clip-path: none; }
+    .ring-arc { stroke: Highlight; }
+    input[type=range]::-webkit-slider-runnable-track { background: ButtonText; }
+    input[type=range]::-moz-range-track { background: ButtonText; }
+    input[type=range]::-webkit-slider-thumb { background: Highlight; forced-color-adjust: none; }
+    input[type=range]::-moz-range-thumb { background: Highlight; forced-color-adjust: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
