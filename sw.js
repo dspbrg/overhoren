@@ -19,12 +19,12 @@ const SCHIL = [
   "./", "./index.html", "./ds.css", "./ui.js", "./cats.js",
   "./celebrate.js", "./engine.js", "./lists.js", "./manifest.json",
   "./icons/icoon-192.png", "./icons/icoon-512.png",
-  "./fonts/fredoka-latin-wght-normal.woff2",
-  "./fonts/fredoka-latin-ext-wght-normal.woff2",
-  "./fonts/atkinson-hyperlegible-latin-400-normal.woff2",
-  "./fonts/atkinson-hyperlegible-latin-ext-400-normal.woff2",
-  "./fonts/atkinson-hyperlegible-latin-700-normal.woff2",
-  "./fonts/atkinson-hyperlegible-latin-ext-700-normal.woff2"
+  "./fonts/chakra-petch-latin-600-normal.woff2",
+  "./fonts/chakra-petch-latin-ext-600-normal.woff2",
+  "./fonts/chakra-petch-latin-700-normal.woff2",
+  "./fonts/chakra-petch-latin-ext-700-normal.woff2",
+  "./fonts/inter-latin-wght-normal.woff2",
+  "./fonts/inter-latin-ext-wght-normal.woff2"
 ];
 
 self.addEventListener("install", e => {

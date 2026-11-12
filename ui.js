@@ -109,28 +109,30 @@
     return '<span class="' + cls("meter", o.size || "sm", o.className) + '"' + attr("id", o.id) + '>' + parts + '</span>';
   }
 
-  // --- Ring: voortgang als donut ------------------------------
-  // Twee bogen over elkaar: eerst alles wat geoefend is, daarbovenop
+  // --- Ring: voortgang als zeshoek ----------------------------
+  // Twee lijnen over elkaar: eerst alles wat geoefend is, daarbovenop
   // het deel dat er echt in zit. In het midden het percentage dat al
   // een keer geoefend is, want dat beweegt na elke ronde. "Zit erin"
   // alleen zou dagenlang op nul blijven staan.
+  // De zeshoek begint bovenaan en loopt met de klok mee. pathLength=100
+  // maakt de lengte van de lijn gelijk aan het percentage.
+  const HEX = "M32 6L54.52 19L54.52 45L32 58L9.48 45L9.48 19Z";
   function Ring(o) {
     o = o || {};
     const total = Math.max(1, Number(o.total) || 1);
     const known = Number(o.known) || 0;
     const learning = Number(o.learning) || 0;
-    const r = 26, C = 2 * Math.PI * r;
     const geoefend = Math.min(total, known + learning);
-    const boog = v => (Math.max(0, Math.min(total, v)) / total * C).toFixed(2) + " " + C.toFixed(2);
-    // Een boog van lengte nul tekent met stroke-linecap:round alsnog een
+    const lijn = v => (Math.max(0, Math.min(total, v)) / total * 100).toFixed(2) + " 100";
+    // Een lijn van lengte nul tekent met stroke-linecap:round alsnog een
     // rond puntje. Bij nul laten we hem dus helemaal weg.
     const arc = (klasse, v) => v > 0
-      ? '<circle class="ring-arc ' + klasse + '" cx="32" cy="32" r="' + r + '" stroke-dasharray="' + boog(v) + '"/>'
+      ? '<path class="ring-arc ' + klasse + '" d="' + HEX + '" pathLength="100" stroke-dasharray="' + lijn(v) + '"/>'
       : "";
     const pct = Math.round(100 * geoefend / total);
     return '<svg class="ring" viewBox="0 0 64 64" aria-hidden="true" focusable="false">' +
-      '<g transform="rotate(-90 32 32)">' +
-        '<circle class="ring-track" cx="32" cy="32" r="' + r + '"/>' +
+      '<g>' +
+        '<path class="ring-track" d="' + HEX + '"/>' +
         arc("learning", geoefend) +
         arc("known", known) +
       '</g>' +

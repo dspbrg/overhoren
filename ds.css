@@ -4,6 +4,10 @@
    het verandert overal, want de schermen gebruiken alleen tokens
    en componentklassen, nooit losse waarden.
 
+   Stijl: R6 Lowpoly, variant R6e (bouwopdracht 1, 12 november 2026).
+   Vlakken in schuine banen, afgeschuinde hoeken, harde schaduw
+   recht naar beneden. Chakra Petch voor titels, Inter voor de rest.
+
    Lagen (later = wint van eerder):
      tokens      de enige plek met harde waarden
      base        reset en standaard elementen
@@ -14,45 +18,49 @@
    Kleur staat per rol op een regel, met light en dark naast elkaar
    via light-dark(). Er is dus geen tweede blok dat je kunt vergeten
    bij te werken. Schakelen kan met data-theme="light" of "dark".
+
+   Een overzicht van alles staat in styleguide.html.
    ============================================================= */
 
 @layer tokens, base, components, screens, responsive;
 
 /* =============================================================
    0. FONTS
-   Zelf gehost (Fontsource, OFL: fonts/OFL.txt), zodat de app ook
-   offline in de juiste letter staat en niets naar Google gaat.
-   Per letter twee subsets: latin (o.a. é ç œ) en latin-ext (o.a.
+   Zelf gehost, zodat de app ook offline in de juiste letter staat
+   en niets naar Google gaat. Bouwen: scripts/maak-fonts.sh.
+   Licenties: fonts/OFL.txt.
+   Per letter twee subsets: latin (o.a. é ç œ ß) en latin-ext (o.a.
    ŝ ő ł). De browser haalt via unicode-range alleen op wat nodig is.
    ============================================================= */
 @font-face {
-  font-family: "Fredoka"; font-style: normal; font-weight: 500 700; font-display: swap;
-  src: url(fonts/fredoka-latin-ext-wght-normal.woff2) format("woff2");
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url(fonts/chakra-petch-latin-ext-600-normal.woff2) format("woff2");
   unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
 }
 @font-face {
-  font-family: "Fredoka"; font-style: normal; font-weight: 500 700; font-display: swap;
-  src: url(fonts/fredoka-latin-wght-normal.woff2) format("woff2");
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url(fonts/chakra-petch-latin-600-normal.woff2) format("woff2");
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
 @font-face {
-  font-family: "Atkinson Hyperlegible"; font-style: normal; font-weight: 400; font-display: swap;
-  src: url(fonts/atkinson-hyperlegible-latin-ext-400-normal.woff2) format("woff2");
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url(fonts/chakra-petch-latin-ext-700-normal.woff2) format("woff2");
   unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
 }
 @font-face {
-  font-family: "Atkinson Hyperlegible"; font-style: normal; font-weight: 400; font-display: swap;
-  src: url(fonts/atkinson-hyperlegible-latin-400-normal.woff2) format("woff2");
+  font-family: "Chakra Petch"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url(fonts/chakra-petch-latin-700-normal.woff2) format("woff2");
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
+/* Inter komt van de maker zelf, niet van Fontsource: die mist ss02. */
 @font-face {
-  font-family: "Atkinson Hyperlegible"; font-style: normal; font-weight: 700; font-display: swap;
-  src: url(fonts/atkinson-hyperlegible-latin-ext-700-normal.woff2) format("woff2");
+  font-family: "Inter"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url(fonts/inter-latin-ext-wght-normal.woff2) format("woff2");
   unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
 }
 @font-face {
-  font-family: "Atkinson Hyperlegible"; font-style: normal; font-weight: 700; font-display: swap;
-  src: url(fonts/atkinson-hyperlegible-latin-700-normal.woff2) format("woff2");
+  font-family: "Inter"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url(fonts/inter-latin-wght-normal.woff2) format("woff2");
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
 
@@ -63,73 +71,134 @@
   :root {
     color-scheme: light dark;
 
+    /* DONKER THEMA IS VOORLOPIG. R6e is alleen licht ontworpen. De
+       tweede waarde in elke light-dark() is daarvan afgeleid: zelfde
+       rol, zelfde verhoudingen, contrast nagemeten. Er is nog geen
+       donker ontwerp gekeurd. */
+
     /* --- kleur: rol, niet uiterlijk. light-dark(licht, donker) --- */
-    --bg:            light-dark(#F4F3F8, #16142A);
-    --surface:       light-dark(#FFFFFF, #221F3A);
-    --ink:           light-dark(#1C1A2E, #EFEDF7);
-    --muted:         light-dark(#6A6784, #A5A1BD);
 
-    /* --line scheidt, --line-strong omlijnt iets dat je kunt bedienen.
-       --line-strong haalt minimaal 3:1 met --surface (WCAG 1.4.11). */
-    --line:          light-dark(#DDDAE8, #3A3656);
-    --line-strong:   light-dark(#928AAE, #6F6894);
+    /* pagina: vier schuine banen */
+    --page-1: light-dark(#F4F1FC, #16142A);
+    --page-2: light-dark(#EEEAFA, #1A1731);
+    --page-3: light-dark(#F2EEFB, #18152E);
+    --page-4: light-dark(#EAE5F8, #1D1A36);
+    --page: linear-gradient(160deg, var(--page-1) 0 30%, var(--page-2) 30% 55%,
+                                    var(--page-3) 55% 80%, var(--page-4) 80% 100%);
+    --bg: var(--page-1);   /* effen variant, voor kleine vlakken */
 
-    /* oppervlakken van bedienbare elementen */
-    --control:       light-dark(#F3F1FA, #2A2647);
-    --control-hover: light-dark(#EAE6F6, #332E55);
-    --track:         light-dark(#DFDAEE, #3A3656);
+    /* kaart: drie schuine banen en een harde schaduw eronder */
+    --card-1: light-dark(#FFFFFF, #221F3A);
+    --card-2: light-dark(#F7F4FE, #262242);
+    --card-3: light-dark(#EFEAFC, #2A2549);
+    --card: linear-gradient(115deg, var(--card-1) 0 45%, var(--card-2) 45% 75%, var(--card-3) 75% 100%);
+    --card-shadow-color: light-dark(#D2C8F2, #0C0A1A);
+    --card-shadow: drop-shadow(0 6px 0 var(--card-shadow-color));
+    --surface: var(--card-1);   /* effen variant */
+
+    --ink:          light-dark(#1C1A2E, #EFEDF7);
+    /* tekst zacht, meta. R6e geeft #6A6784; dat haalt op de donkerste
+       paginabaan (#EAE5F8) maar 4,39:1. #686582 haalt 4,52:1, verschil
+       is met het oog niet te zien. */
+    --muted:        light-dark(#686582, #A9A5C1);
+    --ink-feedback: light-dark(#4A4760, #CCC8DE);   /* lopende tekst in feedback */
+
+    /* --track is het spoor van ring en meter, --line scheidt,
+       --mark is een rustige markering. --line-strong omlijnt iets dat je
+       kunt bedienen en haalt minimaal 3:1 met --surface (WCAG 1.4.11). */
+    --track:       light-dark(#DFDAEE, #3A3656);
+    --line:        light-dark(#E4E1EE, #34304F);
+    --mark:        light-dark(#EEE8FB, #2E2750);
+    --line-strong: light-dark(#928AAE, #6F6894);
+
+    /* oppervlakken van invoervelden */
+    --control:       light-dark(#FFFFFF, #2A2647);
+    --control-hover: light-dark(#F4F1FC, #332E55);
 
     /* primary: de actie */
     --accent:        light-dark(#6B3FD1, #A88BF0);
     --accent-ink:    light-dark(#FFFFFF, #16142A);
-    --accent-soft:   light-dark(#EEE8FB, #2E2750);
+    --accent-strong: light-dark(#4B2A99, #C9B8F7);   /* labels */
+    --accent-shadow: light-dark(#4B2A99, #4B2A99);   /* harde schaduw onder de primaire knop */
+    --accent-soft:   var(--mark);
 
-    /* tertiary: uitsluitend prestatie (streak, score). Nergens anders. */
-    --tertiary:               light-dark(#8A5200, #FFC46B);
-    --tertiary-container:     light-dark(#FFDDA1, #5C3A00);
-    --on-tertiary-container:  light-dark(#4A2E00, #FFDDA1);
+    /* warm, toetsdatum */
+    --warm:     light-dark(#FFE0C7, #4A2A12);
+    --warm-ink: light-dark(#6E3300, #FFD3B2);
 
-    /* feedback. --ok-strong is de gevulde variant en haalt AA met --on-ok. */
+    /* warm, beloning: uitsluitend prestatie (streak, score). Nergens anders. */
+    --reward-1:      light-dark(#FFE0C7, #4A2A12);
+    --reward-2:      light-dark(#FFD3B2, #55311A);
+    --reward-3:      light-dark(#FFE8D5, #3F2410);
+    --reward:        linear-gradient(115deg, var(--reward-1) 0 45%, var(--reward-2) 45% 75%, var(--reward-3) 75% 100%);
+    --on-reward:     light-dark(#5A2A00, #FFE0C7);
+    --reward-shadow: light-dark(#F2BE97, #24130A);
+    --reward-icon:   light-dark(#9A4A0C, #FFB27A);   /* icoon op beloning, minstens 3:1 */
+    /* oude namen, zodat bestaande regels blijven kloppen */
+    --tertiary:              var(--reward-icon);
+    --tertiary-container:    var(--reward-1);
+    --on-tertiary-container: var(--on-reward);
+
+    /* confetti */
+    --confetti-1: #6B3FD1;
+    --confetti-2: #F29A52;
+    --confetti-3: #F0BE55;
+    --confetti-4: #A88BF0;
+
+    /* feedback. De -ink-varianten zijn voor tekst en halen 4,5:1 op de
+       kaart; de gewone zijn voor iconen, randen en balken. */
     --ok:        light-dark(#2E9E5B, #5FCF8A);
+    --ok-ink:    light-dark(#1E7A4D, #7FDCA3);
     --ok-soft:   light-dark(#DFF5E7, #1F3A2C);
     --ok-strong: light-dark(#1E7A4D, #5FCF8A);
     --on-ok:     light-dark(#FFFFFF, #16142A);
     --bad:       light-dark(#D9463A, #F07A6E);
+    --bad-ink:   light-dark(#B3261E, #FF9A8F);
     --bad-soft:  light-dark(#FBE3E0, #452527);
     --warn:      light-dark(#B8790A, #F0BE55);
+    --warn-ink:  light-dark(#8A5200, #F5CD7A);
     --warn-soft: light-dark(#FDF1D6, #423519);
 
     /* woordsoorten: semantisch, helpt bij het leren */
-    --verb: light-dark(#C0392B, #F08C80);
-    --adj:  light-dark(#2C6BB3, #7FB2F0);
-    --noun: light-dark(#1E7A4D, #7FD3A1);
+    --verb: light-dark(#B0301F, #F08C80);
+    --adj:  light-dark(#2563A6, #7FB2F0);
+    --noun: light-dark(#1D764B, #7FD3A1);
     --adv:  light-dark(#5B5470, #B9B2D4);
 
-    --shadow:
-      0 0 0 1px light-dark(transparent, rgba(255,255,255,.055)),
-      0 10px 28px -12px light-dark(rgba(28,26,46,.20), rgba(0,0,0,.65));
-
-    /* --- vorm: Material 3 corner radius scale --- */
-    --shape-xs:4px;  --shape-s:8px;   --shape-m:12px;  --shape-l:16px;
-    --shape-li:20px; --shape-xl:28px; --shape-xli:32px; --shape-xxl:48px;
+    /* --- vorm: lowpoly. Alles via clip-path, nooit border-radius. --- */
+    --cut-card:  polygon(16px 0, calc(100% - 16px) 0, 100% 16px, 100% calc(100% - 16px),
+                         calc(100% - 16px) 100%, 16px 100%, 0 calc(100% - 16px), 0 16px);
+    --cut-point: polygon(12px 0, calc(100% - 12px) 0, 100% 50%,
+                         calc(100% - 12px) 100%, 12px 100%, 0 50%);
+    --cut-chip:  polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+    --cut-meter: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+    --cut-small: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px),
+                         calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+    /* alleen nog voor wat buiten deze bouw valt (katten, beloning) */
+    --shape-xs:4px;  --shape-s:4px;   --shape-m:4px;   --shape-l:6px;
+    --shape-li:6px;  --shape-xl:8px;  --shape-xli:8px; --shape-xxl:8px;
     --shape-full:999px;
-    /* Optische regel: buitenradius min padding = binnenradius.
-       Kaart 28 met padding 20 vraagt dus 8 tot 12 binnenin. */
 
-    /* --- typografie: grote sprongen, geen bijna-gelijke maten --- */
-    --t-display:   clamp(2.25rem, 9vw, 2.8125rem);
-    --t-headline:  1.75rem;
-    --t-headline-sm: 1.5rem;
-    --t-title:     1.375rem;
-    --t-title-md:  1rem;
-    --t-body:      1.0625rem;
-    --t-label:     .875rem;
-    --t-label-sm:  .6875rem;
-    /* Fredoka is de brand typeface en staat NOOIT onder 1.375rem.
-       Atkinson Hyperlegible is de plain typeface: gekozen om zijn
-       onderscheidende letterparen (I/l/1, b/d/p/q) bij het spellen. */
-    --display: "Fredoka","Trebuchet MS",system-ui,sans-serif;
-    --body:    "Atkinson Hyperlegible","Verdana",system-ui,sans-serif;
+    --shadow: 0 6px 0 var(--card-shadow-color);   /* box-shadow-variant van --card-shadow */
+
+    /* --- typografie --- */
+    --display: "Chakra Petch","Trebuchet MS",system-ui,sans-serif;
+    --body:    "Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --t-page:    1.75rem;     /* 28px paginatitel, Chakra 700 */
+    --t-card:    1.375rem;    /* 22px kaart- en feedbacktitel, Chakra 700 */
+    --t-list:    1.25rem;     /* 20px lijsttitel, Inter 600 */
+    --t-word:    2rem;        /* 32px woord in de vraag, Inter 600 */
+    --t-body:    1.0625rem;   /* 17px lopende tekst */
+    --t-meta:    .875rem;     /* 14px meta */
+    --t-section: .8125rem;    /* 13px sectielabel, hoofdletters */
+    --t-label:    .875rem;
+    --t-label-sm: .6875rem;
+    /* oude namen */
+    --t-display: var(--t-word);
+    --t-headline: var(--t-page);
+    --t-headline-sm: var(--t-card);
+    --t-title: var(--t-list);
+    --t-title-md: 1rem;
 
     /* --- ruimte: 8px-ritme. Binnen een groep klein, ertussen groot. --- */
     --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:36px;
@@ -144,8 +213,9 @@
     --m3-effects:      200ms cubic-bezier(0.34,0.80,0.34,1.00);
     --m3-effects-slow: 300ms cubic-bezier(0.34,0.88,0.34,1.00);
 
-    /* kleinste tikdoel op een telefoon */
+    /* kleinste tikdoel op een telefoon; knoppen zijn 48 */
     --tap:44px;
+    --btn-h:48px;
   }
 
   /* handmatig schakelen, anders volgt de app het systeem */
@@ -160,25 +230,33 @@
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   html, body { margin: 0; }
+  html { background: var(--page-1); }
   body {
-    background: var(--bg); color: var(--ink);
-    font-family: var(--body); font-size: var(--t-body); line-height: 1.45;
-    padding-inline: var(--s4); padding-block: var(--s5) var(--s6);
-    min-height: 100%;
+    background: var(--page); background-attachment: fixed; color: var(--ink);
+    font-family: var(--body); font-size: var(--t-body); line-height: 1.4;
+    /* ss02: de onderscheidende I, l en 1 van Inter, belangrijk bij spellen */
+    font-feature-settings: 'ss02' 1;
+    padding: var(--s5) var(--s4);
+    min-height: 100vh;
   }
+  /* knoppen en velden erven font niet vanzelf de feature-instelling */
+  button, input, select, textarea { font-feature-settings: inherit; }
   p { margin: 0; }
-  h1, h2 { font-family: var(--display); font-weight: 600; margin: 0; line-height: 1.15; text-wrap: balance; }
-  h1 { font-size: var(--t-headline); }
-  h2 { font-size: 1.4rem; }
-  h3 { font-family: var(--body); font-weight: 700; font-size: 1.1rem; line-height: 1.15; margin: 0; }
+  /* vet is 700, de zwaarste letter die we hebben. 'bolder' zou binnen
+     tekst van 600 om 900 vragen. */
+  b, strong { font-weight: 700; }
+  h1, h2 { font-family: var(--display); font-weight: 700; margin: 0; text-wrap: balance; }
+  h1 { font-size: var(--t-page); line-height: 1.1; }
+  h2 { font-size: var(--t-card); line-height: 1.15; }
+  h3 { font-family: var(--body); font-weight: 600; font-size: 1.125rem; line-height: 1.2; margin: 0; }
 
   table { width: 100%; border-collapse: collapse; font-size: .95rem; }
   th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  th { font-size: var(--t-section); font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--accent-strong); }
 
   select, input[type=text], input[type=date], textarea {
     font: inherit; color: var(--ink); background: var(--control);
-    border: 1.5px solid var(--line-strong); border-radius: var(--shape-m);
+    border: 1.5px solid var(--line-strong); border-radius: 0;
     padding: 12px 14px; width: 100%;
   }
   input[type=text] { font-size: 1.15rem; }
@@ -190,22 +268,24 @@
     width: 100%; background: transparent; padding: 0; border: 0;
     height: var(--tap); cursor: pointer;
   }
+  /* Het spoor blijft recht: in Chrome zit de duim binnen het spoor, en
+     clip-path op het spoor zou de duim wegknippen. */
   input[type=range]::-webkit-slider-runnable-track {
-    height: 8px; border-radius: var(--shape-full); background: var(--track);
+    height: 8px; background: var(--track);
   }
   input[type=range]::-moz-range-track {
-    height: 8px; border-radius: var(--shape-full); background: var(--track);
+    height: 8px; background: var(--track);
   }
   input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
-    width: 26px; height: 26px; margin-top: -9px;
-    border-radius: var(--shape-full);
-    background: var(--accent); border: 3px solid var(--surface);
-    box-shadow: 0 1px 4px rgba(0,0,0,.35);
+    width: 24px; height: 24px; margin-top: -8px;
+    background: var(--accent); border: 0;
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   }
   input[type=range]::-moz-range-thumb {
-    width: 20px; height: 20px; border-radius: var(--shape-full);
-    background: var(--accent); border: 3px solid var(--surface);
+    width: 22px; height: 22px; border: 0; border-radius: 0;
+    background: var(--accent);
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   }
   input[type=range]:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
   /* de kalenderknop meekleuren met de rest */
@@ -215,10 +295,11 @@
   input[type=date]:hover::-webkit-calendar-picker-indicator { opacity: 1; }
   textarea { min-height: 160px; resize: vertical; font-size: .95rem; }
 
-  /* Focus is overal gelijk en wint altijd van hover. */
+  /* Focus is overal gelijk en wint altijd van hover. De outline hoort bij
+     het element zelf; de vorm zit op ::before, dus clip-path knipt hem niet. */
   select:focus, input:focus, textarea:focus, button:focus-visible,
   :where(.btn, .choice, .lesson, .seg button, .link):focus-visible {
-    outline: 3px solid var(--accent); outline-offset: 2px;
+    outline: 3px solid var(--accent); outline-offset: 3px;
   }
 }
 
@@ -229,17 +310,21 @@
 
   /* --- layout-primitieven --- */
   .app { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--s5); }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; }
-  .row > .btn { flex: 1 1 0; min-width: 0; white-space: nowrap; padding-inline: 14px; }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row { display: flex; gap: var(--s3); flex-wrap: wrap; }
+  .row > .btn { flex: 1 1 0; min-width: 0; white-space: nowrap; padding-inline: 20px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
   .field { display: flex; flex-direction: column; gap: var(--s2); }
 
   /* --- tekst --- */
   .muted { color: var(--muted); }
-  .label { font-weight: 700; font-size: .95rem; }
-  .hint  { font-size: var(--t-label); color: var(--muted); }
-  .eyebrow { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
-  .word  { font-family: var(--body); font-weight: 700; font-size: 1.05rem; }
+  .label { font-weight: 600; font-size: .95rem; }
+  .hint  { font-size: var(--t-meta); color: var(--muted); }
+  /* sectielabel: Inter 600, 13px, hoofdletters, accent sterk */
+  .eyebrow, .section-label {
+    font-size: var(--t-section); font-weight: 600; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--accent-strong);
+  }
+  .word  { font-family: var(--body); font-weight: 600; font-size: 1.05rem; }
 
   /* --- icon: inline SVG dat meeschaalt met de tekst en de kleur
          van zijn omgeving overneemt. Nooit los gebruiken als enige
@@ -247,29 +332,55 @@
   .icon { width: 1em; height: 1em; flex: none; vertical-align: -.125em; }
   .icon.lg { width: 1.5em; height: 1.5em; }
 
+  /* --- vorm-techniek ---
+     clip-path knipt ook box-shadow en outline weg. Daarom draagt het
+     element zelf de schaduw (filter: drop-shadow) en de focusrand, en
+     tekent ::before het vlak met de afgeschuinde vorm. Het element is
+     dus de wrapper met filter, ::before het geknipte vlak.
+     Per component zet je alleen --surf (vlak), --cut (vorm) en
+     --drop (schaduw). */
+  .card, .lesson, .btn, .seg button, .choice, .empty .glyph {
+    position: relative; isolation: isolate;
+    background: none; border: 0; border-radius: 0;
+    filter: var(--drop, none);
+  }
+  .card::before, .lesson::before, .btn::before, .seg button::before,
+  .choice::before, .empty .glyph::before {
+    content: ""; position: absolute; inset: 0; z-index: -1;
+    background: var(--surf, var(--card)); clip-path: var(--cut, var(--cut-card));
+    transition: background var(--m3-effects);
+  }
+
   /* --- card --- */
   .card {
-    background: var(--surface); border-radius: var(--shape-xl);
-    padding: var(--s5) 20px; box-shadow: var(--shadow);
+    --surf: var(--card); --cut: var(--cut-card); --drop: var(--card-shadow);
+    padding: var(--s5) 20px;
     display: flex; flex-direction: column; gap: var(--s5);
   }
 
-  /* --- button --- */
+  /* --- button: punten links en rechts --- */
   .btn {
-    font: inherit; font-weight: 700; cursor: pointer;
-    border: 1.5px solid var(--line-strong); background: var(--control); color: var(--ink);
-    border-radius: var(--shape-full); padding: 12px 18px;
-    min-height: var(--tap);
+    --surf: var(--card-1); --cut: var(--cut-point); --drop: var(--card-shadow);
+    font: inherit; font-size: var(--t-body); font-weight: 600; cursor: pointer;
+    color: var(--ink);
+    padding: 12px 26px; min-height: var(--btn-h); margin-bottom: 6px;
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+    line-height: 1.2;
   }
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-  .btn.big     { font-family: var(--body); font-size: 1.05rem; padding: 15px 20px; width: 100%; }
-  .btn.ok      { background: var(--ok-soft); border-color: var(--ok); color: var(--ink); }
-  .btn.danger  { border-color: var(--bad); color: var(--bad); }
+  .btn.primary {
+    --surf: var(--accent); --drop: drop-shadow(0 5px 0 var(--accent-shadow));
+    color: var(--accent-ink);
+  }
+  .btn.big     { width: 100%; }
+  .btn.ok      { --surf: var(--ok-soft); --drop: drop-shadow(0 5px 0 var(--ok)); color: var(--ink); }
+  .btn.danger  { color: var(--bad-ink); }
+  .btn:disabled { cursor: default; opacity: .55; }
+  /* knop als <label>, zoals bij de foto-invoer */
+  label.btn { display: flex; }
 
   /* --- link: ziet eruit als tekst, maar haalt wel het tikdoel --- */
   .link {
-    font: inherit; font-weight: 700; cursor: pointer;
+    font: inherit; font-weight: 600; cursor: pointer;
     background: none; border: 0; color: var(--accent);
     display: inline-flex; align-items: center; min-height: var(--tap); padding: 11px 4px;
     gap: 6px;
@@ -278,124 +389,123 @@
   .link > span { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
   .link:hover > span { text-decoration-thickness: 3px; }
 
-  /* --- segmented control --- */
+  /* --- segmented control: parallellogrammen --- */
   .seg { display: flex; flex-wrap: wrap; gap: var(--s2); }
   .seg button {
-    font: inherit; font-weight: 700; cursor: pointer;
-    border: 1.5px solid var(--line-strong); background: var(--control); color: var(--ink);
-    border-radius: var(--shape-full); padding: 10px 16px; min-height: var(--tap);
+    --surf: var(--card-1); --cut: var(--cut-chip); --drop: var(--card-shadow);
+    font: inherit; font-size: var(--t-meta); font-weight: 600; cursor: pointer;
+    color: var(--ink);
+    padding: 10px 20px; min-height: var(--tap); margin-bottom: 6px;
   }
-  .seg button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button.on { --surf: var(--accent); --drop: drop-shadow(0 5px 0 var(--accent-shadow)); color: var(--accent-ink); }
 
   /* --- stat: getal met label --- */
   .stats-row, .summary-grid { display: grid; gap: var(--s2); }
   .stats-row { grid-template-columns: repeat(3, 1fr); }
   .stat {
-    background: transparent; border: 1px solid var(--line); border-radius: var(--shape-m);
+    background: var(--mark); clip-path: var(--cut-small);
     padding: var(--s3) var(--s2); text-align: center;
     display: flex; flex-direction: column; gap: 2px; justify-content: center; min-height: 82px;
   }
-  .stat b { font-family: var(--display); font-size: 1.7rem; font-variant-numeric: tabular-nums; }
-  .stat > span { font-size: .78rem; color: var(--muted); line-height: 1.25; text-wrap: balance; }
+  .stat > b { font-family: var(--display); font-weight: 700; font-size: 1.75rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .stat > span { font-size: var(--t-meta); color: var(--muted); line-height: 1.25; text-wrap: balance; }
 
-  /* --- chip: woordsoort, kleurt zichzelf op basis van currentColor --- */
+  /* --- chip: parallellogram ---
+     Woordsoorten kleuren zichzelf via currentColor. */
   .chip {
-    display: inline-block; font-weight: 700; font-size: .82rem;
-    padding: 3px 10px; border-radius: var(--shape-full);
-    background: color-mix(in srgb, currentColor 14%, transparent);
-    border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+    display: inline-block; font-weight: 600; font-size: var(--t-meta); line-height: 1.4;
+    padding: 4px 16px; clip-path: var(--cut-chip);
+    background: color-mix(in srgb, currentColor 13%, var(--card-1));
   }
   .chip.verb { color: var(--verb); }
   .chip.adjective { color: var(--adj); }
   .chip.noun { color: var(--noun); }
   .chip.adverb { color: var(--adv); }
 
-  /* --- meter: elke voortgangsbalk in de app --- */
-  .meter { background: var(--track); border-radius: var(--shape-full); overflow: hidden; display: flex; }
+  /* --- meter: elke voortgangsbalk in de app. Licht schuin. --- */
+  .meter { background: var(--track); clip-path: var(--cut-meter); overflow: hidden; display: flex; height: 8px; }
   .meter i { display: block; height: 100%; }
   .meter .a { background: var(--ok); }
   .meter .b { background: var(--accent); }
   .meter .c { background: var(--warn); }
-  .meter.sm { height: 6px; }
-  .meter.md { height: 8px; }
-  .meter.lg { height: 12px; }
+  .meter.sm, .meter.md, .meter.lg { height: 8px; }
 
   /* --- notice: gekleurde kantlijn, geen gevuld vlak --- */
   .notice {
-    background: transparent; border: 1px solid var(--warn); border-left-width: 4px;
-    border-radius: var(--shape-m); padding: var(--s4) var(--s5);
+    background: var(--card-1); border: 0; border-left: 4px solid var(--warn);
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+    padding: var(--s4) var(--s5);
+    display: flex; gap: var(--s3); align-items: flex-start;
   }
   /* Knoppen in een melding houden hun eigen breedte. Zonder dit knijpt
      .row > .btn ze samen tot de tekst niet meer past. */
   .notice .row { gap: var(--s3); align-items: center; }
-  .notice .row > .btn { flex: 0 1 auto; padding-inline: 18px; }
-  .notice { display: flex; gap: var(--s3); align-items: flex-start; }
-  .notice .notice-icon { color: var(--warn); margin-top: .15em; }
+  .notice .row > .btn { flex: 0 1 auto; padding-inline: 26px; }
+  .notice .notice-icon { color: var(--warn-ink); margin-top: .15em; }
   /* geldt voor de directe kinderen, of dat nu een div van Notice() is
      of losse spans in de handgeschreven markup */
   .notice.row-between { flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: var(--s5); row-gap: var(--s3); }
   .notice.row-between > * { min-width: 0; }
   .notice.row-between > :first-child { flex: 1 1 14rem; }
 
-  /* --- choice: woordsoortknop --- */
-  /* elke knop zo breed als zijn tekst: nooit afbreken, dus nooit hoger.
+  /* --- choice: woordsoortknop, parallellogram ---
+     Elke knop zo breed als zijn tekst: nooit afbreken, dus nooit hoger.
      "Phrasal verb" brak anders af in een vaste kolom (Chromebook). */
-  .choices { display: flex; flex-wrap: wrap; gap: 10px; }
+  .choices { display: flex; flex-wrap: wrap; gap: var(--s3); }
   .choice {
+    --surf: var(--card-1); --cut: var(--cut-chip); --drop: var(--card-shadow);
     flex: 0 0 auto; white-space: nowrap;
-    font: inherit; font-weight: 700; cursor: pointer;
-    border: 1.5px solid var(--line-strong); background: var(--control); color: var(--ink);
-    border-radius: var(--shape-l); padding: 14px 12px; min-height: var(--tap);
+    font: inherit; font-weight: 600; cursor: pointer; color: var(--ink);
+    padding: 12px 22px; min-height: var(--btn-h); margin-bottom: 6px;
     display: flex; justify-content: space-between; align-items: center; gap: var(--s2);
   }
-  .choice.on    { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-  .choice.right { background: var(--ok-soft); border-color: var(--ok); }
-  .choice.wrong { background: var(--bad-soft); border-color: var(--bad); }
+  .choice.on    { --surf: var(--accent); --drop: drop-shadow(0 5px 0 var(--accent-shadow)); color: var(--accent-ink); }
+  .choice.right { --surf: var(--ok-soft); --drop: drop-shadow(0 5px 0 var(--ok)); }
+  .choice.wrong { --surf: var(--bad-soft); --drop: drop-shadow(0 5px 0 var(--bad)); }
   .choice:disabled { cursor: default; }
   .choice kbd {
-    font: inherit; font-size: .75rem; font-weight: 700; line-height: 1; flex: none;
-    color: var(--muted); background: var(--bg);
-    border: 1px solid var(--line-strong); border-radius: var(--shape-s); padding: 3px 7px;
+    font: inherit; font-size: .75rem; font-weight: 600; line-height: 1; flex: none;
+    color: var(--muted); background: var(--mark);
+    clip-path: var(--cut-chip); padding: 4px 9px;
   }
-  .choice.on kbd { color: var(--accent-ink); background: transparent; border-color: currentColor; }
+  .choice.on kbd { color: #FFFFFF; background: var(--accent-shadow); }
   .choice:disabled kbd { opacity: 0; }
 
-  /* --- verdict: het oordeel. Goed is gevuld, fout en twijfel omlijnd,
-         zodat bevestiging zwaarder weegt dan correctie. --- */
+  /* --- verdict: de feedbacktitel. Chakra Petch 700, 22px.
+         Goed is gevuld, fout en twijfel alleen tekst, zodat
+         bevestiging zwaarder weegt dan correctie. --- */
   .verdict {
-    font-family: var(--body); font-weight: 700; font-size: var(--t-title-md);
-    padding: 8px 18px; border-radius: var(--shape-full);
+    font-family: var(--display); font-weight: 700; font-size: var(--t-card); line-height: 1.15;
     align-self: flex-start; display: inline-block;
     animation: pop var(--m3-spatial-fast) both;
   }
-  .verdict.good { background: var(--ok-strong); color: var(--on-ok); }
-  .verdict.bad, .verdict.maybe { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
-  .verdict.bad { color: var(--bad); }
-  .verdict.maybe { color: var(--warn); }
+  .verdict.good { background: var(--ok-strong); color: var(--on-ok); padding: 6px 22px; clip-path: var(--cut-chip); }
+  .verdict.bad { color: var(--bad-ink); }
+  .verdict.maybe { color: var(--warn-ink); }
 
-  /* --- streak: prestatie, de enige plek met tertiary --- */
+  /* --- streak: prestatie, warm --- */
   .streak {
     display: inline-flex; align-items: center; gap: 6px;
-    background: var(--tertiary-container); color: var(--on-tertiary-container);
-    font-weight: 700; font-size: var(--t-label);
-    padding: 5px 12px; border-radius: var(--shape-full); font-variant-numeric: tabular-nums;
+    background: var(--reward); color: var(--on-reward);
+    font-weight: 600; font-size: var(--t-meta);
+    padding: 4px 16px; clip-path: var(--cut-chip); font-variant-numeric: tabular-nums;
   }
   .streak.is-up { animation: bump var(--m3-spatial-fast); }
-  .streak .icon { color: var(--tertiary); }
+  .streak .icon { color: var(--reward-icon); }
 
   /* --- empty: lege staat met karakter, zonder illustratie --- */
   .empty {
     display: grid; place-items: center; gap: var(--s3); text-align: center;
-    padding: 48px var(--s5); border-radius: var(--shape-xl); background: var(--control);
+    padding: 48px var(--s5); background: var(--mark); clip-path: var(--cut-card);
   }
   .empty .glyph {
-    width: 88px; height: 88px; display: grid; place-items: center;
-    background: var(--accent-soft); color: var(--accent);
+    --surf: var(--card-1); --cut: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    width: 88px; height: 96px; display: grid; place-items: center;
+    color: var(--accent);
     font-family: var(--display); font-weight: 700; font-size: 2.5rem;
-    border-radius: var(--shape-xxl) var(--shape-m) var(--shape-xxl) var(--shape-m);
   }
 
-  /* --- viering: alleen bij een vlekkeloze ronde --- */
+  /* --- viering: alleen bij een vlekkeloze ronde (bouwopdracht 2) --- */
   .fx-canvas {
     position: fixed; inset: 0; z-index: 90;
     pointer-events: none;
@@ -423,7 +533,7 @@
     background: light-dark(#EFEDF6, #E4E0F0);
   }
   .fx-cat figcaption {
-    font-family: var(--display); font-weight: 600; font-size: 1.05rem;
+    font-family: var(--display); font-weight: 700; font-size: 1.05rem;
     color: #1C1A2E; text-align: center;
     padding: 10px 4px 12px; line-height: 1.2;
   }
@@ -456,7 +566,7 @@
   .cat-card figcaption { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
   .cat-card figcaption b { font-size: .95rem; line-height: 1.2; }
   .cat-card .cat-rang {
-    font-size: var(--t-label-sm); font-weight: 700; letter-spacing: .04em;
+    font-size: var(--t-label-sm); font-weight: 600; letter-spacing: .04em;
     text-transform: uppercase; color: var(--muted);
   }
   .cat-card .cat-meta { font-size: var(--t-label-sm); color: var(--muted); }
@@ -473,9 +583,10 @@
 
   /* de kaart tijdens de viering krijgt hetzelfde randje bij een zeldzame */
   .fx-cat[data-rang="zeldzaam"] { box-shadow: 0 0 0 3px var(--tertiary), 0 24px 60px -12px rgba(0,0,0,.6); }
-  .fx-cat figcaption b { display: block; }
+  /* inherit: <b> zou anders 900 vragen, en dat gewicht hebben we niet */
+  .fx-cat figcaption b { display: block; font-weight: inherit; }
   .fx-cat .fx-cat-sub {
-    display: block; font-family: var(--body); font-weight: 700;
+    display: block; font-family: var(--body); font-weight: 600;
     font-size: var(--t-label); color: #6A6784; margin-top: 2px;
   }
 
@@ -483,33 +594,31 @@
   .topbar { margin-block: -10px; display: flex; justify-content: space-between; align-items: center; gap: var(--s3); font-variant-numeric: tabular-nums; }
   .foot { display: flex; gap: var(--s2) var(--s4); justify-content: center; flex-wrap: wrap; color: var(--muted); margin-block: -10px; }
   .brand { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
-  .brand .tag { color: var(--muted); }
+  .brand .tag { color: var(--muted); font-size: var(--t-meta); }
 
-  /* --- vak: een map met de lijsten van een schoolvak --- */
-  /* het vak is de bovenste laag: groter dan de kaarttitels eronder */
-  .vak { display: flex; flex-direction: column; gap: var(--s4); }
+  /* --- vak: een map met de lijsten van een schoolvak ---
+     De vaknaam is een sectielabel; de kaarten eronder dragen de titels. */
+  .vak { display: flex; flex-direction: column; gap: var(--s3); }
   .vak-kop {
-    display: flex; align-items: baseline; gap: var(--s3);
-    font-family: var(--display); font-size: var(--t-headline); font-weight: 700; margin: 0;
+    display: flex; align-items: baseline; gap: var(--s3); margin: 0;
+    font-family: var(--body); font-size: var(--t-section); font-weight: 600;
+    text-transform: uppercase; letter-spacing: .1em; color: var(--accent-strong);
   }
-  .vak-aantal { font-family: var(--body); font-size: var(--t-label); font-weight: 400; color: var(--muted); }
-  .vak-lijsten { display: flex; flex-direction: column; gap: var(--s3); }
+  .vak-aantal { font-size: var(--t-section); font-weight: 400; letter-spacing: normal; text-transform: none; color: var(--muted); }
+  .vak-lijsten { display: flex; flex-direction: column; gap: var(--s4); }
 
   /* de gemengde ronde is geen les maar een manier van oefenen, dus
-     oogt hij anders: geen vlak, wel dezelfde maat */
-  .lesson.is-mix {
-    background: transparent;
-    border-style: dashed;
-    box-shadow: none;
-  }
-  .lesson.is-mix .subj { display: inline-flex; align-items: center; gap: 5px; color: var(--tertiary); }
+     oogt hij anders: markering in plaats van kaart, geen schaduw */
+  .lesson.is-mix { --surf: var(--mark); --drop: none; }
+  .lesson.is-mix .subj { display: inline-flex; align-items: center; gap: 5px; }
 
   /* --- lesson: de kaart op het lessenoverzicht ---
      Twee kolommen: tekst links, voortgangsring rechts. De ring toont
      hoeveel er al geoefend is, niet alleen wat er "in zit", want dat
      laatste beweegt pas na dagen en zou dus altijd nul lijken. --- */
-  .lessons { display: flex; flex-direction: column; gap: var(--s6); }
+  .lessons { display: flex; flex-direction: column; gap: var(--s5); }
   .lesson {
+    --surf: var(--card); --cut: var(--cut-card); --drop: var(--card-shadow);
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     /* Vaste plekken, zodat de ring over beide rijen staat en bij elke kaart
@@ -519,34 +628,35 @@
     grid-template-areas: "body ring" "chip ring";
     column-gap: var(--s4); row-gap: var(--s3); align-items: start;
     text-align: left; font: inherit; color: var(--ink);
-    background: var(--surface); border: 1px solid var(--line-strong);
-    border-radius: var(--shape-xl); padding: 18px 20px; cursor: pointer; box-shadow: var(--shadow);
+    padding: 18px 20px; margin-bottom: 6px; cursor: pointer;
   }
   .lesson-body { grid-area: body; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .lesson .subj { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--accent); }
-  .lesson h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; font-size: var(--t-title); line-height: 1.15; margin: 0; }
+  .lesson .subj { font-size: var(--t-section); text-transform: uppercase; letter-spacing: .1em; font-weight: 600; color: var(--accent-strong); }
+  /* lijsttitel: Inter 600, 20px */
+  .lesson h3 { font-family: var(--body); font-weight: 600; text-wrap: balance; font-size: var(--t-list); line-height: 1.2; margin: 0; }
   /* een regel, geen onvoorspelbare afbreking die de kaarthoogte laat springen */
   .lesson-meta {
-    font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: var(--t-meta); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .lesson-stats {
-    margin-top: 6px; font-size: var(--t-label); font-weight: 700; color: var(--muted);
+    margin-top: 6px; font-size: var(--t-meta); font-weight: 600; color: var(--muted);
     font-variant-numeric: tabular-nums;
   }
 
+  /* --- ring: zeshoek, spoor en vulling --- */
   .lesson-ring { grid-area: ring; align-self: start; display: grid; justify-items: center; gap: 2px; }
   .ring { width: 64px; height: 64px; display: block; }
-  .ring-track { fill: none; stroke: var(--track); stroke-width: 8; }
-  .ring-arc { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray var(--m3-spatial); }
+  .ring-track { fill: var(--page-1); stroke: var(--track); stroke-width: 7; stroke-linejoin: round; }
+  .ring-arc { fill: none; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; transition: stroke-dasharray var(--m3-spatial); }
   .ring-arc.learning { stroke: var(--accent); }
   .ring-arc.known { stroke: var(--ok); }
   .ring-pct {
-    fill: var(--ink); font-family: var(--display); font-weight: 600; font-size: 19px;
-    text-anchor: middle; dominant-baseline: central;
+    fill: var(--ink); font-family: var(--body); font-weight: 600; font-size: 14px;
+    text-anchor: middle; dominant-baseline: central; font-variant-numeric: tabular-nums;
   }
   .ring-sign { font-size: 11px; fill: var(--muted); }
   .ring-cap {
-    font-size: var(--t-label-sm); font-weight: 700; letter-spacing: .04em;
+    font-size: var(--t-label-sm); font-weight: 600; letter-spacing: .06em;
     text-transform: uppercase; color: var(--muted); white-space: nowrap;
   }
 
@@ -556,67 +666,64 @@
     display: flex; flex-wrap: wrap; gap: var(--s2);
   }
   .lesson-chips:empty { display: none; }
-  .deadline-chip {
+  /* chips: parallellogram, 14px 600, padding 4px 16px */
+  .deadline-chip, .due-chip {
     display: inline-flex; align-items: center; gap: 6px;
-    background: transparent; color: var(--muted);
-    border: 1px solid var(--line-strong);
-    font-size: var(--t-label); font-weight: 700;
-    padding: 4px 11px; border-radius: var(--shape-full);
+    font-size: var(--t-meta); font-weight: 600; line-height: 1.4;
+    padding: 4px 16px; clip-path: var(--cut-chip);
   }
+  /* toetsdatum: warm */
+  .deadline-chip { background: var(--warm); color: var(--warm-ink); }
   /* vandaag of morgen: dan mag het opvallen */
-  .deadline-chip.is-dichtbij {
-    background: var(--tertiary-container); color: var(--on-tertiary-container);
-    border-color: transparent;
-  }
-  .deadline-chip.is-dichtbij .icon { color: var(--tertiary); }
+  .deadline-chip.is-dichtbij { background: var(--reward-2); }
+  /* aan de beurt: accent met wit */
+  .due-chip { background: var(--accent); color: var(--accent-ink); }
   #deadline-input { width: auto; max-width: 220px; }
   /* de beloningsprikkel bij de rondegrootte, rustig maar zichtbaar */
-  .size-kans { display: inline-flex; align-items: center; gap: 5px; color: var(--tertiary); }
-  .size-kans .icon { flex: none; }
-
-  .due-chip {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--accent-soft); color: var(--accent);
-    font-size: var(--t-label); font-weight: 700;
-    padding: 5px 12px; border-radius: var(--shape-full);
-  }
+  /* inline, niet inline-flex: anders wordt elk stuk tekst een eigen kolom */
+  .size-kans { display: inline; color: var(--warm-ink); }
+  .size-kans .icon { margin-right: 2px; }
 
   /* --- feedbacklijst --- */
-  .fb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .fb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; color: var(--ink-feedback); }
   .fb-list li { display: grid; grid-template-columns: 24px 1fr; gap: var(--s3); align-items: start; }
   .fb-list .mark { display: grid; place-items: center; font-size: 1.25rem; margin-top: .1em; }
   .fb-list .mark.ok { color: var(--ok); }
   .fb-list .mark.bad { color: var(--bad); }
   .fb-list .mark.maybe { color: var(--warn); }
-  .fb-list .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
-  .fb-list .yours { color: var(--muted); font-size: .88rem; margin-top: 4px; }
+  .fb-list .k { font-size: var(--t-section); text-transform: uppercase; letter-spacing: .1em; color: var(--accent-strong); font-weight: 600; }
+  .fb-list .yours { color: var(--muted); font-size: var(--t-meta); margin-top: 4px; }
   .fb-list .yours:empty { display: none; }
 
   /* --- overig --- */
   .tbl { overflow-x: auto; }
   .radio { display: flex; flex-direction: column; gap: var(--s2); }
   .radio label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
-  .radio input { margin-top: 5px; }
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .85rem; color: var(--muted); }
-  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--line-strong); margin-right: 5px; vertical-align: middle; }
-  .hard { color: var(--bad); font-weight: 700; font-size: .8rem; }
+  .radio input { margin-top: 5px; accent-color: var(--accent); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: var(--t-meta); color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border: 1px solid var(--line-strong); margin-right: 5px; vertical-align: middle; }
+  .hard { color: var(--bad-ink); font-weight: 600; font-size: .8rem; }
   .dots { letter-spacing: 2px; color: var(--accent); font-size: .8rem; }
   .sync { display: none; }
 
-  /* --- beweging --- */
+  /* --- beweging ---
+     Indrukken: het vlak zakt in zijn schaduw. */
   .btn, .choice, .seg button, .lesson {
-    transition: background var(--m3-effects), border-color var(--m3-effects),
-                color var(--m3-effects), transform var(--m3-spatial-fast);
+    transition: color var(--m3-effects), transform var(--m3-effects-fast), filter var(--m3-effects-fast);
   }
   .meter i { transition: width var(--m3-spatial); }
-  .btn:active { transform: scale(.98); }
-  .lesson:active, .choice:active:not(:disabled), .seg button:active { transform: scale(.99); }
+  .btn:active:not(:disabled), .choice:active:not(:disabled), .seg button:active {
+    transform: translateY(4px); --drop: drop-shadow(0 1px 0 var(--accent-shadow));
+  }
+  .btn:not(.primary):not(.ok):active:not(:disabled), .seg button:not(.on):active,
+  .choice:not(.on):active:not(:disabled) { --drop: drop-shadow(0 2px 0 var(--card-shadow-color)); }
+  .lesson:active { transform: translateY(3px); --drop: drop-shadow(0 3px 0 var(--card-shadow-color)); }
 
   @keyframes pop  { from { transform: scale(.7); opacity: 0 } to { transform: scale(1); opacity: 1 } }
   @keyframes bump { 0% { transform: scale(1) } 40% { transform: scale(1.22) } 100% { transform: scale(1) } }
   @keyframes ring {
-    0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent) }
-    100% { box-shadow: 0 0 0 14px transparent }
+    0%   { filter: drop-shadow(0 6px 0 var(--card-shadow-color)) drop-shadow(0 0 0 color-mix(in srgb, var(--ok) 55%, transparent)) }
+    100% { filter: drop-shadow(0 6px 0 var(--card-shadow-color)) drop-shadow(0 0 14px transparent) }
   }
 }
 
@@ -632,43 +739,44 @@
   .learner-row input { max-width: 200px; }
 
   /* quiz */
-  .q-card { gap: var(--s4); border-radius: var(--shape-xxl) var(--shape-xl) var(--shape-xl) var(--shape-xl); }
+  .q-card { gap: var(--s4); }
   .q-card > #q-kind { margin-bottom: calc(-1 * var(--s3)); }
   .q-card.is-good { animation: ring var(--m3-effects-slow) both; }
+  /* woord in de vraag: Inter 600, 32px */
   .prompt {
-    font-family: var(--display); font-weight: 700; font-size: var(--t-display);
-    line-height: 1.08; letter-spacing: -.01em; text-wrap: balance; margin-block: 2px 4px;
+    font-family: var(--body); font-weight: 600; font-size: var(--t-word);
+    line-height: 1.15; letter-spacing: -.01em; text-wrap: balance; margin-block: 2px 4px;
   }
   /* zin (invulzin, grammatica): zelfde lettertype als een los woord, maat van een zin */
-  .prompt.zin { font-size: clamp(1.3rem, 4.5vw, 1.7rem); line-height: 1.3; letter-spacing: 0; }
+  .prompt.zin { font-size: clamp(1.3rem, 4.5vw, 1.6rem); line-height: 1.3; letter-spacing: 0; }
   .prompt .zin-hint { display: block; margin-top: 6px; font-size: .75em; font-weight: 400; color: var(--muted); }
-  .prompt.def { font-family: var(--body); font-weight: 400; font-size: clamp(1.3rem, 4.5vw, 1.7rem); line-height: 1.3; letter-spacing: 0; }
+  .prompt.def { font-weight: 400; font-size: clamp(1.3rem, 4.5vw, 1.6rem); line-height: 1.3; letter-spacing: 0; }
 
   #feedback { display: flex; flex-direction: column; gap: var(--s4); margin-top: var(--s2); padding-top: var(--s4); border-top: 1px solid var(--line); }
-  #fb-word, #fb-def { font-size: var(--t-headline-sm); font-weight: 700; line-height: 1.3; }
+  #fb-word, #fb-def { font-size: var(--t-list); font-weight: 600; line-height: 1.3; color: var(--ink); }
   /* Bij een goed antwoord geen herhaling van vraag en invoer. */
   #feedback.only-verdict .fb-list { display: none; }
   #fb-official { font-size: var(--t-label); color: var(--muted); }
-  #fb-official b { display: block; font-size: var(--t-headline-sm); color: var(--ink); line-height: 1.3; margin-top: 2px; }
+  #fb-official b { display: block; font-size: var(--t-list); font-weight: 600; color: var(--ink); line-height: 1.3; margin-top: 2px; }
   #btn-override { align-self: flex-start; }
   .assess { display: flex; flex-direction: column; gap: var(--s3); }
-  .assess p { line-height: 1.4; }
+  .assess p { line-height: 1.4; color: var(--ink-feedback); }
 
   /* samenvatting: het scorecijfer is de held */
   .summary-grid { grid-template-columns: 1fr 1fr; }
   .summary-grid .stat:first-child {
-    grid-column: 1 / -1; padding: 28px 20px; border: 0;
-    background: var(--tertiary-container); color: var(--on-tertiary-container);
-    border-radius: var(--shape-xl); animation: pop var(--m3-spatial-slow) both;
+    grid-column: 1 / -1; padding: 28px 20px;
+    background: var(--reward); color: var(--on-reward);
+    clip-path: var(--cut-card); animation: pop var(--m3-spatial-slow) both;
   }
   .summary-grid .stat:first-child > span { color: inherit; opacity: .8; }
   #sum-first { font-family: var(--display); font-weight: 700; font-size: 3.5rem; line-height: 1; }
-  #sum-perfect { display: flex; align-items: center; justify-content: center; gap: var(--s2); margin-top: var(--s2); font-weight: 700; font-size: var(--t-label); color: var(--on-tertiary-container); }
-  #sum-perfect .icon { font-size: 1.4em; color: var(--tertiary); }
+  #sum-perfect { display: flex; align-items: center; justify-content: center; gap: var(--s2); margin-top: var(--s2); font-weight: 600; font-size: var(--t-meta); color: var(--on-reward); }
+  #sum-perfect .icon { font-size: 1.4em; color: var(--reward-icon); }
   .summary-grid .stat:first-child b { display: flex; align-items: center; justify-content: center; gap: var(--s3); }
 
   /* eerst lezen */
-  .sec-title td { background: var(--bg); font-weight: 700; font-family: var(--body); }
+  .sec-title td { background: var(--mark); font-weight: 600; font-family: var(--body); }
 
   /* rapport */
   .rep { display: flex; flex-direction: column; gap: var(--s3); }
@@ -683,17 +791,16 @@
   /* hoe werkt het */
   .info h3 { margin-top: 6px; }
   .info ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: var(--s2); }
-  .info .ref { font-size: .85rem; color: var(--muted); }
+  .info .ref { font-size: var(--t-meta); color: var(--muted); }
   .info table { font-size: .9rem; }
 
   /* lijst toevoegen */
-  .add-list-btn { display: block; margin: var(--s2) auto 0; border: 1.5px dashed var(--line-strong); background: transparent; color: var(--muted); font-size: .95rem; padding: 10px 24px; border-radius: var(--shape-l); }
-  .add-list-btn:hover { color: var(--accent); border-color: var(--accent); }
+  /* rustige knop: markering, geen schaduw */
+  .btn.add-list-btn { --surf: var(--mark); --drop: none; display: flex; margin: var(--s2) auto 0; color: var(--accent-strong); }
 
   /* import keuze */
   .import-choices { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); margin-top: var(--s3); }
-  .import-choice { display: flex; flex-direction: column; align-items: center; gap: var(--s1); padding: var(--s5) var(--s3); text-align: center; cursor: pointer; border: none; background: var(--surface); transition: border-color var(--m3-effects-fast); }
-  .import-choice:hover { border-color: var(--accent); }
+  .import-choice { display: flex; flex-direction: column; align-items: center; gap: var(--s1); padding: var(--s5) var(--s3); text-align: center; cursor: pointer; font: inherit; color: var(--ink); }
   .import-choice-icon { font-size: 2rem; }
   .import-choice b { font-size: 1.1rem; }
   .import-choice .hint { font-size: .85rem; }
@@ -708,9 +815,9 @@
   .photo-lang-pick .row { gap: var(--s2); }
   .photo-label { cursor: pointer; }
   .photo-label input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
-  .photo-preview { width: 100%; max-height: 300px; object-fit: contain; border-radius: var(--shape-m); margin-top: var(--s3); }
+  .photo-preview { width: 100%; max-height: 300px; object-fit: contain; margin-top: var(--s3); }
   .photo-wait { display: flex; flex-direction: column; align-items: center; gap: var(--s3); padding: var(--s5) 0; }
-  .spinner { width: 36px; height: 36px; border: 3px solid var(--line-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--track); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .photo-items { display: flex; flex-direction: column; gap: var(--s2); margin: var(--s3) 0; }
@@ -718,8 +825,8 @@
   .photo-row input { flex: 1; min-width: 0; padding: 8px 10px; font-size: .95rem; }
   .photo-row .photo-cls { max-width: 120px; }
   .photo-del { flex-shrink: 0; padding: 4px; color: var(--muted); }
-  .photo-del:hover { color: var(--wrong); }
-  #photo-error { color: var(--wrong); text-align: center; }
+  .photo-del:hover { color: var(--bad-ink); }
+  #photo-error { color: var(--bad-ink); text-align: center; }
 }
 
 /* =============================================================
@@ -728,7 +835,7 @@
 @layer responsive {
   /* telefoon */
   @media (max-width: 420px) {
-    .stat b { font-size: 1.4rem; }
+    .stat > b { font-size: 1.5rem; }
   }
   /* geen toetsenbord: hints zijn ruis */
   @media (pointer: coarse) {
@@ -736,11 +843,13 @@
   }
   /* wel een muis of trackpad: hover mag bestaan zonder te blijven plakken */
   @media (hover: hover) and (pointer: fine) {
-    .lesson:hover { border-color: var(--accent); background: var(--control-hover); }
-    .btn:hover:not(:disabled) { background: var(--control-hover); border-color: var(--accent); }
-    .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
-    .choice:hover:not(:disabled):not(.on) { border-color: var(--accent); background: var(--control-hover); }
-    .seg button:hover:not(.on) { border-color: var(--accent); background: var(--control-hover); }
+    /* hover kleurt alleen het vlak; de vorm en schaduw blijven */
+    .lesson:hover:not(.is-mix), .import-choice:hover { --surf: linear-gradient(115deg, var(--card-1) 0 45%, var(--mark) 45% 100%); }
+    .lesson.is-mix:hover { --surf: color-mix(in srgb, var(--accent) 14%, var(--card-1)); }
+    .btn:hover:not(:disabled):not(.primary):not(.ok),
+    .choice:hover:not(:disabled):not(.on):not(.right):not(.wrong),
+    .seg button:hover:not(.on) { --surf: var(--control-hover); }
+    .btn.primary:hover:not(:disabled), .seg button.on:hover { --surf: color-mix(in srgb, var(--accent) 88%, white); }
     .link:hover { text-decoration-thickness: 3px; }
   }
   /* breed scherm: benut de ruimte in overzichten */
@@ -750,6 +859,7 @@
     #scr-lessons .lessons { display: flex; }
     #scr-lessons .vak-lijsten { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s4); }
     #scr-lessons .lesson { min-height: 150px; padding: 20px; }
+    #scr-lessons .vak-lijsten { row-gap: var(--s5); }
     #report-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: var(--s4); align-items: start; max-width: none; }
   }
   /* Alleen bij echt weinig hoogte de feedback naast de vraag zetten, zodat
@@ -779,7 +889,7 @@
   }
   /* weinig hoogte: hoogte winnen */
   @media (max-height: 760px) {
-    .choice { padding: 12px 10px; font-size: .95rem; }
+    .choice { padding: 10px 18px; min-height: var(--tap); font-size: .95rem; }
     .card { padding: 18px 20px; gap: var(--s4); }
     #q-keys-hint { display: none; }
   }
