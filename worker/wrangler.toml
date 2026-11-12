@@ -7,4 +7,5 @@ binding = "SYNC"
 id = "1eb8d2473fb947da974dcb358d1dcca0"
 
 [vars]
-ALLOWED_ORIGIN = "*"
+# Allowlist, gescheiden door komma's. Alleen deze origins krijgen CORS-koppen.
+ALLOWED_ORIGIN = "https://overhoren.vandaan.net,https://dspbrg.github.io"
