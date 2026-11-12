@@ -71,6 +71,7 @@
         <li><b>2026-11-08</b> Fonts lokaal laden, geen Google Fonts.</li>
         <li><b>2026-11-08</b> Later: themakleur instelbaar. Nu nog niet.</li>
         <li><b>2026-11-12</b> Zes vaste katten met een eigen karakter, in twee standen (goed en bijna). De kat kijkt altijd naar binnen: links zoals hij is, rechts gespiegeld.</li>
+        <li><b>2026-11-12</b> Ruimte en padding: semantische tokens voor nabijheid, elke stap naar buiten groter. Afstand telt vanaf de onderkant van de schaduw, één schaduw van 6px. Alles links uitgelijnd, ook de themakiezer.</li>
         <li><b>2026-11-12</b> Eén kat maakt het leuk, niet verzamelen. Elke ronde komt er vanzelf een andere kat langs, binnen de ronde steeds dezelfde. Niets te verdienen, geen Mijn katten. De kat is nooit verdrietig en vraagt nooit om terug te komen.</li>
       </ul>
       <span class="eyebrow">Rules</span>
@@ -79,6 +80,7 @@
         <li>Vormen via <code>clip-path</code>, nooit <code>border-radius</code>. De schaduw zit als <code>filter: drop-shadow</code> op het element, het geknipte vlak op <code>::before</code>, zodat schaduw en focusrand niet weggeknipt worden.</li>
         <li>Alle tekst haalt minstens 4,5:1 contrast, gemeten in de levende pagina, ook in het donkere thema.</li>
         <li>Warm is voor prestatie en de toetsdatum. Nergens anders.</li>
+        <li>Afstanden komen uit de semantische tokens (<code>--gap-*</code>, <code>--pad-*</code>, <code>--page-*</code>), niet rechtstreeks uit <code>--s1</code> tot <code>--s7</code>.</li>
       </ul>
     </div>
   </section>
@@ -125,14 +127,16 @@
     <h2>Shape</h2>
     <div class="card">
       <div class="sg-grid">
-        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-card)"></div><b>--cut-card</b><code>16px, card</code></div>
-        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-point)"></div><b>--cut-point</b><code>12px, button</code></div>
-        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-chip)"></div><b>--cut-chip</b><code>8px, chip, choice, segment</code></div>
+        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-card)"></div><b>--cut-card</b><code>--corner 16px, card</code></div>
+        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-point)"></div><b>--cut-point</b><code>--point 12px, button</code></div>
+        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-chip)"></div><b>--cut-chip</b><code>--slant 8px, chip, choice, segment</code></div>
         <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-meter);height:16px"></div><b>--cut-meter</b><code>4px, meter</code></div>
         <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-small)"></div><b>--cut-small</b><code>6px, stat</code></div>
       </div>
-      <div class="sg-spec"><span>Card shadow</span><code>--card-shadow: drop-shadow(0 6px 0 #D2C8F2)</code></div>
-      <div class="sg-spec"><span>Primary button shadow</span><code>drop-shadow(0 5px 0 #4B2A99)</code></div>
+      <div class="sg-spec"><span>Shadow, every shape</span><code>--drop-y: 6px</code></div>
+      <div class="sg-spec"><span>Card shadow</span><code>--card-shadow: drop-shadow(0 var(--drop-y) 0 #D2C8F2)</code></div>
+      <div class="sg-spec"><span>Primary button shadow</span><code>drop-shadow(0 var(--drop-y) 0 #4B2A99)</code></div>
+      <div class="sg-spec"><span>Pressed</span><code>1 to 3px</code></div>
     </div>
   </section>
 
@@ -140,8 +144,47 @@
   <section class="sg-section" id="spacing">
     <h2>Spacing</h2>
     <div class="card">
-      <p class="hint">8px-ritme. Pagina: padding 24px 16px, 24px tussen blokken.</p>
+      <p class="hint">8px-ritme. Elke vorm met schaduw krijgt <code>margin-bottom: var(--drop-y)</code>, dus elke afstand telt vanaf de onderkant van de schaduw.</p>
+      <span class="eyebrow">Scale</span>
       <div class="sg-grid" id="sg-spacing"></div>
+    </div>
+    <div class="card">
+      <h2>Proximity</h2>
+      <p class="hint">Wat bij elkaar hoort staat dichter bij elkaar. Elke stap naar buiten is groter dan de vorige.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Tussen</th><th>Token</th><th>px</th></tr></thead>
+        <tbody>
+          <tr><td>Label en control, control en hint</td><td><code>--gap-label</code></td><td>8</td></tr>
+          <tr><td>Controls in een groep (zichtbaar)</td><td><code>--gap-inline</code></td><td>12</td></tr>
+          <tr><td>Kaarten in een lijst</td><td><code>--gap-stack</code></td><td>16</td></tr>
+          <tr><td>Groepen in een kaart, blokken op een pagina</td><td><code>--gap-group</code></td><td>24</td></tr>
+          <tr><td>Secties: vakken, footer</td><td><code>--gap-section</code></td><td>32</td></tr>
+          <tr><td>Paginarand opzij</td><td><code>--page-x</code></td><td>16, vanaf 600px 24</td></tr>
+          <tr><td>Paginarand boven en onder</td><td><code>--page-y</code></td><td>24</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h2>Padding</h2>
+      <p class="hint">Blok / inline. Bij schuine en puntige vormen telt de vorm inline mee, zodat de tekst overal even ver van de rand staat.</p>
+      <div id="sg-padding"></div>
+    </div>
+    <div class="card">
+      <h2>Optical correction</h2>
+      <div class="field">
+        <span class="eyebrow">Slanted gap</span>
+        <div class="seg">
+          <button type="button">Kort · 10</button>
+          <button type="button" class="on">Normaal · 15</button>
+          <button type="button">Lang · alles</button>
+        </div>
+        <p class="hint">Box-gap <code>calc(var(--gap-inline) - var(--slant))</code> is 4px; met de schuinte erbij is de zichtbare ruimte 12px. De rij schuift <code>calc(var(--slant) / -2)</code> op, zodat hij onder het label optisch uitlijnt.</p>
+      </div>
+      <div class="field">
+        <span class="eyebrow">Chips you don't tap</span>
+        <div class="lesson-chips"><span class="deadline-chip">over 3 dagen</span><span class="due-chip">5 aan de beurt</span></div>
+        <p class="hint">Box-gap 0: de schuinte geeft de ruimte.</p>
+      </div>
     </div>
   </section>
 
@@ -217,7 +260,14 @@
   };
   for (const id in groups) $(id).innerHTML = groups[id].map(g => swatch(g[0], g[1], g[2])).join("");
 
-  $("sg-spacing").innerHTML = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6"].map(t =>
+  $("sg-padding").innerHTML = [
+    ["--pad-btn", "Knop, 12 / 28"], ["--pad-btn-big", "Grote knop, 16 / 28"], ["--pad-seg", "Segment, 12 / 20"],
+    ["--pad-choice", "Keuze, 12 / 24"], ["--pad-choice-low", "Keuze bij weinig hoogte, 10 / 20"], ["--pad-chip", "Chip, 4 / 16"],
+    ["--pad-card", "Kaart, 24"], ["--pad-card-compact", "Lijstkaart en melding, 16 / 24"], ["--pad-field", "Invoerveld, 12 / 16"],
+    ["--pad-stat", "Getal, 12 / 8"], ["--pad-stat-hero", "Scorecijfer, 24"]
+  ].map(t => '<div class="sg-spec"><span>' + esc(t[1]) + '</span><code>' + esc(t[0]) + '</code></div>').join("");
+
+  $("sg-spacing").innerHTML = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7"].map(t =>
     '<div class="sg-row"><div style="height:16px;width:var(' + t + ');background:var(--accent);clip-path:var(--cut-meter)"></div>' +
     '<b>' + t + '</b><code>' + getComputedStyle(document.documentElement).getPropertyValue(t).trim() + '</code></div>').join("");
 
