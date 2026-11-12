@@ -28,6 +28,7 @@ al het andere externe verkeer wordt geblokkeerd en als fout gemeld.
 | `thema.test.mjs` | Themaknop op het startscherm: elke stand (data-theme, aria-pressed, theme-color), keuze blijft na herladen en staat er al voor de app-scripts, afwijkend thema op alle schermen (contrast, overloop, JS-fouten), datumveld volgt de stand, werkt zonder localStorage, toetsenbord en tikdoelen. |
 | `knopvlak.test.mjs` | Lesscherm ("Eerst lezen", niet-gekozen keuzeknoppen) en vraagscherm (woordsoortknoppen), licht en donker, 360 en 1280 px: het knopvlak steekt op elk punt af tegen de kaartbaan eronder (OKLab-verschil minstens 0,025 in licht, 0,05 in donker), en hover geeft een ander vlak dan rust. |
 | `fotokeuze.test.mjs` | Foto-import na het kiezen van een (zelfgemaakt) testplaatje: contrast van alle tekst bij de vier typeknoppen, in rust en bij hover op elke knop, licht en donker, 360 en 1280 px. De worker wordt niet aangeroepen. |
+| `cloudflare.test.mjs` | Server zoals Cloudflare (307 van /index.html naar /): start_url wordt niet doorgestuurd, geen gecachte response met redirected=true, en offline geven /, /index.html en /index.html?query de app uit de service worker. |
 | `ui.test.mjs` | De zeshoekige Ring en de confettikleuren, zonder browser. |
 
 Contrast wordt gemeten in de levende pagina: per tekst worden alle lagen

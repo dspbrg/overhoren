@@ -85,9 +85,22 @@ const MIME = {
   ".svg": "image/svg+xml", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8"
 };
 
-export function startServer() {
+//
+// Optie { zoalsCloudflare: true } bootst Workers static assets met
+// html_handling "auto-trailing-slash" na: /index.html geeft een 307 naar /,
+// /pagina.html een 307 naar /pagina, en /pagina serveert pagina.html.
+export function startServer({ zoalsCloudflare = false } = {}) {
   const server = createServer((req, res) => {
-    const pad = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
+    const u = new URL(req.url, "http://localhost");
+    let pad = decodeURIComponent(u.pathname);
+    if (zoalsCloudflare) {
+      if (pad.endsWith(".html")) {
+        const doel = pad.endsWith("/index.html") ? pad.slice(0, -"index.html".length) : pad.slice(0, -".html".length);
+        res.writeHead(307, { Location: doel + u.search, "Cache-Control": "no-store" });
+        return res.end();
+      }
+      if (!extname(pad) && !pad.endsWith("/") && existsSync(join(REPO, pad + ".html"))) pad += ".html";
+    }
     let bestand = normalize(join(REPO, pad));
     if (!bestand.startsWith(REPO)) { res.writeHead(403); return res.end(); }
     if (existsSync(bestand) && statSync(bestand).isDirectory()) bestand = join(bestand, "index.html");

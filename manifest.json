@@ -2,7 +2,7 @@
   "name": "Overhoren",
   "short_name": "Overhoren",
   "description": "Woordjes leren met slimme herhaling",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
