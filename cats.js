@@ -1,5 +1,5 @@
 // Automatisch gegenereerd door maak-catalogus.sh. Niet met de hand aanpassen:
-// zet een bestand in app/cats/ met de naam <rang>-<naam>.jpg en draai het script.
+// zet een bestand in cats/ met de naam <rang>-<naam>.jpg en draai het script.
 window.CAT_CATALOG = [
   { src: "cats/bijzonder-ballonnenkat.jpg", naam: "Ballonnenkat", rang: "bijzonder" },
   { src: "cats/bijzonder-feestmuts.jpg", naam: "Feestmuts", rang: "bijzonder" },
