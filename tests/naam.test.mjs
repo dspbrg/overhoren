@@ -32,6 +32,7 @@ async function open({ naam = false, sync = false, zaai = {}, thema = "light", br
   await wachtOpScherm(page, "scr-lessons");
   return { context, page, fouten, extern };
 }
+const BEVESTIGD = "overhoor:naam-bevestigd";
 const syncVerzoeken = extern => extern.filter(u => /\/sync\//.test(u));
 const opslag = page => page.evaluate(() => {
   const o = {};
@@ -97,7 +98,7 @@ test("naam: een opgeslagen naam blijft, met voortgang en sync naar die naam", as
   })();
   const { context, page, fouten, extern } = await open({ naam: false, sync: true, zaai: {
     "overhoor:learner": JSON.stringify("Pia"), "overhoor:learners": JSON.stringify(["Pia"]),
-    ["overhoor:progress:pia:" + lid]: voortgang
+    [BEVESTIGD]: "true", ["overhoor:progress:pia:" + lid]: voortgang
   } });
   for (let i = 0; i < 40 && !syncVerzoeken(extern).length; i++) await page.waitForTimeout(50);
   const v = await naamVeld(page);
@@ -167,6 +168,241 @@ test("naam: het open naamveld met de vraag, contrast en overloop in licht en don
     // tikdoel van Opslaan
     const h = await page.locator("#btn-learner-save").evaluate(b => b.getBoundingClientRect().height);
     if (h < 44) problemen.push(`${stand}: Opslaan is ${h}px hoog`);
+    for (const f of fouten) problemen.push(`${stand}: ${f}`);
+    await context.close();
+  }
+  assert.deepEqual(problemen, []);
+});
+
+// ---------- ronde 2 ----------
+const LETTERS = "Gebruik letters of cijfers in je naam.";
+const EERST = "Typ eerst je naam.";
+async function eersteLes(naam = true) {
+  const { context, page } = await open({ naam });
+  const id = await page.evaluate(() => document.querySelector("#lessons .lesson").dataset.id);
+  await context.close();
+  return id;
+}
+const VOORTGANG = JSON.stringify({ items: { 0: { box: 3, lapses: 0, seen: 2, due: 0, partWrong: {}, dirWrong: {} } }, sessions: [{ at: 1, n: 1, firstTry: 1 }], updated: 5 });
+
+test("naam: zonder gewone letters of cijfers geweigerd, met melding en zonder sync", async () => {
+  for (const [naam, melding] of [["???", LETTERS], ["😺", LETTERS], ["Мария", LETTERS], ["李", LETTERS], ["  ", EERST]]) {
+    const { context, page, fouten, extern } = await open({ sync: true });
+    await page.fill("#learner-name", naam);
+    await page.click("#btn-learner-save");
+    const v = await naamVeld(page);
+    assert.ok(v.form, `[${naam}] naamveld ging dicht`);
+    assert.equal(v.focus, "learner-name", `[${naam}] focus niet in het naamveld`);
+    assert.ok(await page.locator("#learner-hint").isVisible(), `[${naam}] geen melding`);
+    assert.equal((await page.locator("#learner-hint").textContent()).trim(), melding, `[${naam}] verkeerde melding`);
+    assert.equal(await page.locator("#learner-hint").getAttribute("role"), "status", "melding zonder role=status");
+    await page.press("#learner-name", "Enter");
+    await page.locator("#lessons .lesson").first().click();
+    await page.waitForTimeout(2300);
+    assert.ok(!(await page.locator("#scr-home").isVisible()), `[${naam}] les ging open`);
+    assert.deepEqual(syncVerzoeken(extern), [], `[${naam}] sync`);
+    const o = await opslag(page);
+    assert.equal(o["overhoor:learner"], undefined, `[${naam}] naam opgeslagen`);
+    assert.deepEqual(onderNaam(o), [], `[${naam}] iets onder een naam bewaard`);
+    assert.ok(!Object.keys(o).some(k => /leerling/.test(k)), `[${naam}] sleutel onder leerling`);
+    assert.deepEqual(fouten, [], naam);
+    await context.close();
+  }
+});
+
+test("naam: letters met accenten gaan gewoon mee (Pía, Zoë)", async () => {
+  for (const [naam, slug] of [["Pía", "pia"], ["Zoë", "zoe"]]) {
+    const { context, page, fouten, extern } = await open({ sync: true });
+    await page.fill("#learner-name", naam);
+    await page.click("#btn-learner-save");
+    await page.locator("#learner-view").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#learner-label").textContent(), naam);
+    for (let i = 0; i < 40 && !syncVerzoeken(extern).length; i++) await page.waitForTimeout(50);
+    assert.ok(syncVerzoeken(extern).length && syncVerzoeken(extern).every(u => u.endsWith("/sync/" + slug)), `[${naam}] sync: ` + syncVerzoeken(extern).join(", "));
+    assert.deepEqual(fouten, []);
+    await context.close();
+  }
+});
+
+test("naam: een opgeslagen naam zonder letters telt als geen naam", async () => {
+  const { context, page, fouten, extern } = await open({ sync: true, zaai: { "overhoor:learner": JSON.stringify("???") } });
+  await page.waitForTimeout(800);
+  assert.ok((await naamVeld(page)).form, "naamveld staat niet open");
+  assert.deepEqual(syncVerzoeken(extern), [], "sync met een naam zonder letters");
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("naam: Pia-toestel zonder bevestiging ziet een keer de vraag, en synchroniseert niet", async () => {
+  const lid = await eersteLes();
+  const { context, page, fouten, extern } = await open({ sync: true, zaai: {
+    "overhoor:learner": JSON.stringify("Pia"), "overhoor:learners": JSON.stringify(["Pia"]), ["overhoor:progress:pia:" + lid]: VOORTGANG } });
+  const vraag = page.locator("#naam-vraag");
+  await vraag.waitFor({ state: "visible", timeout: 2000 });
+  assert.equal((await vraag.locator("p").textContent()).trim(), "Ben jij Pia?");
+  assert.equal((await page.locator("#btn-naam-ja").innerText()).trim(), "Ja, ik ben Pia");
+  assert.equal(await page.locator("#btn-naam-ja").evaluate(b => b.children.length), 0, "losse delen in de knop geven een te brede spatie");
+  assert.equal((await page.locator("#btn-naam-nee").textContent()).trim(), "Nee, ik ben iemand anders");
+  // starten mag wel
+  await page.locator("#lessons .lesson").first().click();
+  await wachtOpScherm(page, "scr-home");
+  await page.click("#btn-start");
+  await wachtOpScherm(page, "scr-quiz");
+  await page.waitForTimeout(2500);
+  assert.deepEqual(syncVerzoeken(extern), [], "sync voor bevestiging");
+  assert.equal(await page.evaluate(k => localStorage.getItem(k), BEVESTIGD), null);
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("naam: Ja, ik ben Pia houdt alles en zet sync aan", async () => {
+  const lid = await eersteLes();
+  const { context, page, fouten, extern } = await open({ sync: true, zaai: {
+    "overhoor:learner": JSON.stringify("Pia"), "overhoor:learners": JSON.stringify(["Pia"]), ["overhoor:progress:pia:" + lid]: VOORTGANG } });
+  await page.locator("#naam-vraag").waitFor({ state: "visible", timeout: 2000 });
+  assert.deepEqual(syncVerzoeken(extern), []);
+  await page.click("#btn-naam-ja");
+  assert.ok(!(await page.locator("#naam-vraag").isVisible()), "vraag blijft staan");
+  assert.equal(await page.locator("#learner-label").textContent(), "Pia");
+  for (let i = 0; i < 40 && !syncVerzoeken(extern).length; i++) await page.waitForTimeout(50);
+  assert.ok(syncVerzoeken(extern).length && syncVerzoeken(extern).every(u => u.endsWith("/sync/pia")), "sync: " + syncVerzoeken(extern).join(", "));
+  const o = await opslag(page);
+  assert.equal(o[BEVESTIGD], "true");
+  assert.equal(o["overhoor:learner"], JSON.stringify("Pia"));
+  assert.equal(o["overhoor:progress:pia:" + lid], VOORTGANG);
+  await page.reload(); await wachtOpScherm(page, "scr-lessons"); await page.waitForTimeout(300);
+  assert.ok(!(await page.locator("#naam-vraag").isVisible()), "vraag na herladen weer");
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("naam: Nee vraagt een naam, de voortgang van Pia blijft staan maar gaat niet mee", async () => {
+  const lid = await eersteLes();
+  const { context, page, fouten, extern } = await open({ sync: true, zaai: {
+    "overhoor:learner": JSON.stringify("Pia"), "overhoor:learners": JSON.stringify(["Pia"]), ["overhoor:progress:pia:" + lid]: VOORTGANG } });
+  await page.locator("#naam-vraag").waitFor({ state: "visible", timeout: 2000 });
+  await page.click("#btn-naam-nee");
+  const v = await naamVeld(page);
+  assert.ok(v.form, "naamveld niet open"); assert.equal(v.waarde, ""); assert.equal(v.focus, "learner-name");
+  assert.ok(!(await page.locator("#naam-vraag").isVisible()), "vraag blijft staan");
+  assert.equal(await page.evaluate(() => localStorage.getItem("overhoor:learner")), null, "Pia blijft de oefenaar");
+  await page.locator("#lessons .lesson").first().click();
+  assert.ok(!(await page.locator("#scr-home").isVisible()), "les opent zonder naam");
+  await page.fill("#learner-name", "Noor"); await page.click("#btn-learner-save");
+  await page.locator("#learner-view").waitFor({ state: "visible" });
+  for (let i = 0; i < 40 && !syncVerzoeken(extern).length; i++) await page.waitForTimeout(50);
+  assert.ok(syncVerzoeken(extern).length && syncVerzoeken(extern).every(u => u.endsWith("/sync/noor")), "sync: " + syncVerzoeken(extern).join(", "));
+  const o = await opslag(page);
+  assert.equal(o["overhoor:progress:pia:" + lid], VOORTGANG, "voortgang van Pia is weg of veranderd");
+  assert.equal(o["overhoor:progress:noor:" + lid], undefined, "voortgang van Pia is meegegaan");
+  await page.reload(); await wachtOpScherm(page, "scr-lessons"); await page.waitForTimeout(300);
+  assert.ok(!(await page.locator("#naam-vraag").isVisible()));
+  assert.equal(await page.locator("#learner-label").textContent(), "Noor");
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("naam: een andere opgeslagen naam krijgt geen vraag; zelf Pia typen ook niet", async () => {
+  {
+    const { context, page, fouten, extern } = await open({ sync: true, zaai: { "overhoor:learner": JSON.stringify("Noor") } });
+    for (let i = 0; i < 40 && !syncVerzoeken(extern).length; i++) await page.waitForTimeout(50);
+    assert.ok(!(await page.locator("#naam-vraag").isVisible()), "vraag bij Noor");
+    assert.ok(syncVerzoeken(extern).every(u => u.endsWith("/sync/noor")) && syncVerzoeken(extern).length);
+    assert.deepEqual(fouten, []);
+    await context.close();
+  }
+  {
+    const { context, page, fouten } = await open();
+    await page.fill("#learner-name", "Pia"); await page.click("#btn-learner-save");
+    await page.reload(); await wachtOpScherm(page, "scr-lessons"); await page.waitForTimeout(300);
+    assert.ok(!(await page.locator("#naam-vraag").isVisible()), "vraag na zelf Pia typen");
+    assert.deepEqual(fouten, []);
+    await context.close();
+  }
+});
+
+test("naam: + Nieuwe lijst zonder naam vraagt eerst de naam", async () => {
+  const { context, page, fouten } = await open();
+  await page.click("#btn-import");
+  assert.ok(await page.locator("#scr-lessons").isVisible(), "naar het importscherm zonder naam");
+  assert.equal((await page.locator("#learner-hint").textContent()).trim(), EERST);
+  assert.equal(await page.evaluate(() => document.activeElement.id), "learner-name");
+  // met naam: Typ zelf, drie regels, Opslaan, Start
+  await page.fill("#learner-name", "Noor"); await page.click("#btn-learner-save");
+  await page.click("#btn-import"); await wachtOpScherm(page, "scr-import");
+  await page.click("#btn-type-start");
+  await page.fill("#imp-text", "le chien | de hond\nle chat | de kat\nla maison | het huis");
+  await page.click("#btn-import-save"); await wachtOpScherm(page, "scr-home");
+  await page.click("#btn-start"); await wachtOpScherm(page, "scr-quiz");
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("naam: Start op een les zonder naam toont de naamvraag op het startscherm", async () => {
+  // het oude pad: Typ zelf zonder naam en dan Start. Het importscherm kan
+  // niet meer zonder naam; hier zetten we het scherm daarom zelf open.
+  const { context, page, fouten } = await open();
+  await page.evaluate(() => { document.querySelectorAll(".screen").forEach(s => { s.hidden = s.id !== "scr-import"; }); });
+  await page.click("#btn-type-start");
+  await page.fill("#imp-text", "le chien | de hond\nle chat | de kat\nla maison | het huis");
+  await page.click("#btn-import-save"); await wachtOpScherm(page, "scr-home");
+  await page.click("#btn-start");
+  await wachtOpScherm(page, "scr-lessons");
+  assert.ok(await page.locator("#learner-hint").isVisible(), "geen naamvraag");
+  assert.ok((await naamVeld(page)).form, "naamveld niet open");
+  assert.equal(await page.evaluate(() => document.activeElement.id), "learner-name");
+  assert.ok(!(await page.locator("#scr-quiz").isVisible()));
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("naam: welkom zonder naam zegt geen Hoi, daarna focus in het naamveld", async () => {
+  const context = await browser.newContext({ welkom: true, naam: false, viewport: { width: 360, height: 780 }, serviceWorkers: "block" });
+  await schermNetwerkAf(context);
+  const page = await context.newPage();
+  const fouten = volgFouten(page);
+  await page.goto(server.url + "/index.html");
+  const w = page.locator("body > .welkom");
+  await w.waitFor({ state: "attached", timeout: 1500 });
+  assert.doesNotMatch(await w.innerText(), /Hoi/, "welkom zegt Hoi zonder naam");
+  await w.waitFor({ state: "detached", timeout: 8000 });
+  assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), "learner-name", "focus niet in het naamveld na het welkom");
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("naam: oude voortgang zonder oefenaar wordt zonder naam niet omgezet", async () => {
+  const lid = await eersteLes();
+  const { context, page, fouten } = await open({ zaai: { ["overhoor:progress:" + lid]: VOORTGANG, "overhoor:current": JSON.stringify(lid) } });
+  await page.waitForTimeout(300);
+  const o = await opslag(page);
+  assert.equal(o["overhoor:progress:" + lid], VOORTGANG, "oude voortgang is weg");
+  assert.deepEqual(Object.keys(o).filter(k => k.startsWith("overhoor:progress:") && k !== "overhoor:progress:" + lid), [], "omgezet zonder naam");
+  // met een naam gaat de omzetting zoals altijd
+  await page.fill("#learner-name", "Noor"); await page.click("#btn-learner-save");
+  const n = await opslag(page);
+  assert.equal(n["overhoor:progress:noor:" + lid], VOORTGANG, "met naam niet omgezet");
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("naam: de vraag Ben jij Pia, contrast, overloop en tikdoelen in licht en donker", async () => {
+  const problemen = [];
+  for (const thema of THEMAS) for (const breedte of BREEDTES) {
+    const { context, page, fouten } = await open({ thema, breedte, zaai: { "overhoor:learner": JSON.stringify("Pia") } });
+    const stand = thema + " " + breedte;
+    if (!(await page.locator("#naam-vraag").isVisible())) { problemen.push(`${stand}: vraag niet zichtbaar`); await context.close(); continue; }
+    await page.evaluate(rondAnimatiesAf);
+    const c = await page.evaluate(contrastMeting, { min: MIN_CONTRAST });
+    for (const f of c.fouten) problemen.push(`${stand}: contrast ${f.ratio}:1 bij ${f.waar} "${f.tekst}"`);
+    for (const f of c.nietMeetbaar) problemen.push(`${stand}: niet meetbaar bij ${f.waar} "${f.tekst}"`);
+    const o = await page.evaluate(overloopMeting);
+    if (o.overloop) problemen.push(`${stand}: overloop ${o.scrollWidth}px: ${o.boosdoeners.join(", ")}`);
+    for (const id of ["btn-naam-ja", "btn-naam-nee"]) {
+      const h = await page.locator("#" + id).evaluate(b => b.getBoundingClientRect().height);
+      if (h < 44) problemen.push(`${stand}: ${id} is ${h}px hoog`);
+    }
+    await page.screenshot({ path: process.env.NAAM_SCHERM ? `${process.env.NAAM_SCHERM}/vraag-${thema}-${breedte}.png` : undefined });
     for (const f of fouten) problemen.push(`${stand}: ${f}`);
     await context.close();
   }

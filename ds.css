@@ -887,6 +887,9 @@
   .learner-row input { max-width: 200px; }
   /* de vraag om een naam staat op een eigen regel onder het veld */
   .learner-row .hint { flex-basis: 100%; }
+  .naam-vraag { display: flex; flex-direction: column; gap: var(--gap-inline); flex-basis: 100%; }
+  /* twee lange knoppen: op smal scherm onder elkaar in plaats van over de rand */
+  .naam-vraag .row > .btn { flex: 1 1 auto; }
 
   /* quiz */
   .q-card { gap: var(--gap-group); }
