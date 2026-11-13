@@ -20,6 +20,7 @@ const ALLE = ["strepen", "tuxedo", "lapjes", "sokjes", "stippen", "rodestreep"];
 const LASTIG = naam => `Dat was een stevige ronde. Die woorden krijg je straks nog een keer. Dag ${naam}.`;
 const GEWOON = naam => `Dat was de ronde. Dag ${naam}.`;
 const VLEKKELOOS = naam => `Alles in één keer goed. Dag ${naam}.`;
+const GESTOPT = naam => `Even pauze. Wat je deed, telt al mee. Dag ${naam}.`;
 // zinnen die niet bij de toon passen: verdrietig, schuld, of "kom terug"
 const VERBODEN = /\b(jammer|helaas|verdrietig|teleurgesteld|sorry|balen|spijt|huil\w*|zonde|tot snel|we missen|mis je)\b|\bkom\b[^.!?]*\bterug\b|kom je terug/i;
 
@@ -60,7 +61,7 @@ test("toon: geen enkele kattekst in de code is verdrietig, zegt 'kom terug' of r
   const { C } = laad();
   const teksten = [...Object.values(C.ZEGT), ...Object.values(C.GEDAG)].map(z => z.tekst);
   teksten.push(...Object.values(C.HOUDING), ...C.KATTEN.flatMap(k => [k.naam, k.karakter]));
-  for (const soort of ["vlekkeloos", "gewoon", "lastig"]) teksten.push(C.gedag(soort, "Pia").tekst);
+  for (const soort of ["vlekkeloos", "gewoon", "lastig", "gestopt"]) teksten.push(C.gedag(soort, "Pia").tekst);
   for (const id of ALLE) for (const s of C.STANDEN) teksten.push(C.beeld(id, s).alt);
   // alle tekst rond de katten in index.html: Celebrate-, kat- en kat-regels
   const html = lees("index.html").split("\n").filter(r => /kat|Kat|Celebrate|size-kans|setVerdict|fb-verdict/.test(r));
@@ -392,6 +393,9 @@ for (const thema of THEMAS) for (const reduced of [false, true]) {
     }
     assert.ok(twijfel, "geen twijfelgeval kunnen maken in vijftien vragen");
     await page.click("#btn-quit"); await wachtOpScherm(page, "scr-summary");
+    assert.equal((await page.locator("#sum-title").textContent()).trim(), "Ronde gestopt");
+    // zelf gestopt: een eigen gedag, tenzij het een stevige ronde was
+    assert.ok([GESTOPT("Pia"), LASTIG("Pia")].includes((await page.locator("#sum-kat .spraak").textContent()).trim()), "gestopte ronde zonder eigen gedag");
     await moment("gestopt na twijfel");
     await naarLessen(page);
 
@@ -417,3 +421,4 @@ for (const thema of THEMAS) for (const reduced of [false, true]) {
     if (problemen.length) assert.fail("\n  " + problemen.join("\n  "));
   });
 }
+

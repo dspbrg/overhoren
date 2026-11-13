@@ -24,6 +24,7 @@ const ZIN = {
   wacht: "Ik kijk mee.",
   goed: "Dat zat erin.",
   fout: "Hm, wat zag je in dit woord? Hij komt straks nog een keer.",
+  gestopt: naam => `Even pauze. Wat je deed, telt al mee. Dag ${naam}.`,
   vlekkeloos: naam => `Alles in één keer goed. Dag ${naam}.`,
   gewoon: naam => `Dat was de ronde. Dag ${naam}.`,
   lastig: naam => `Dat was een stevige ronde. Die woorden krijg je straks nog een keer. Dag ${naam}.`
@@ -164,6 +165,7 @@ test("teksten: de kat zegt per moment de vaste zin in de goede stand, en gedag m
   assert.deepEqual(json(C.zegt("wacht")), { stand: "bijna", tekst: ZIN.wacht });
   assert.deepEqual(json(C.zegt("goed")), { stand: "goed", tekst: ZIN.goed });
   assert.deepEqual(json(C.zegt("fout")), { stand: "bijna", tekst: ZIN.fout });
+  assert.deepEqual(json(C.gedag("gestopt", "Pia")), { stand: "goed", tekst: ZIN.gestopt("Pia") });
   assert.deepEqual(json(C.zegt("onbekend")), { stand: "bijna", tekst: ZIN.wacht });
   assert.deepEqual(json(C.gedag("vlekkeloos", "Pia")), { stand: "goed", tekst: ZIN.vlekkeloos("Pia") });
   assert.deepEqual(json(C.gedag("gewoon", "Tom")), { stand: "goed", tekst: ZIN.gewoon("Tom") });

@@ -100,10 +100,12 @@
     goed:  { stand: "goed",  tekst: "Dat zat erin." },
     fout:  { stand: "bijna", tekst: "Hm, wat zag je in dit woord? Hij komt straks nog een keer." }
   };
-  // Einde van de ronde: soort is "vlekkeloos", "lastig" of iets anders (gewoon).
+  // Einde van de ronde: soort is "vlekkeloos", "lastig", "gestopt" of iets
+  // anders (gewoon). Gestopt: zelf gestopt en geen stevige ronde.
   const GEDAG = {
     vlekkeloos: { stand: "goed",  tekst: "Alles in één keer goed." },
     gewoon:     { stand: "goed",  tekst: "Dat was de ronde." },
+    gestopt:    { stand: "goed",  tekst: "Even pauze. Wat je deed, telt al mee." },
     lastig:     { stand: "bijna", tekst: "Dat was een stevige ronde. Die woorden krijg je straks nog een keer." }
   };
   function zegt(moment) {
