@@ -584,7 +584,7 @@ test("welkom: de goed-clip van de kat van de volgende ronde, minstens 1,2 s, en 
       assert.equal(css.anim, 0, "nog een css-sprong of wiebel op de kat");
       assert.equal(css.transform, "none", "de kat in het welkom staat in het midden en wordt nooit gespiegeld");
       assert.deepEqual([css.w, css.h], [String(KAT.breedte), String(KAT.hoogte)]);
-      await page.locator("body > .welkom").waitFor({ state: "detached", timeout: 4000 });
+      await page.locator("body > .welkom").waitFor({ state: "detached", timeout: 6000 });
       const w = await page.evaluate(() => window.__welkom);
       const wissels = await page.evaluate(() => window.__wissels.filter(x => x.waar === "welkom-kat"));
       const kat = w.laatste.kat, d = KAT.katten[kat].goed.duurMs;
@@ -594,14 +594,14 @@ test("welkom: de goed-clip van de kat van de volgende ronde, minstens 1,2 s, en 
       const duur = w.uit - w.in;
       if (reduced) {
         assert.deepEqual(wissels.map(x => x.beeld), ["goed-eind"], "reduced motion: niet meteen het eindbeeld");
-        assert.ok(duur > 1150 && duur < 1600, `reduced motion: welkom stond ${Math.round(duur)} ms, verwacht 1200`);
+        assert.ok(duur > 3450 && duur < 3900, `reduced motion: welkom stond ${Math.round(duur)} ms, verwacht 3500`);
       } else {
         assert.equal(wissels[0].beeld, "goed"); assert.match(wissels[0].src, /^blob:/, "de clip speelt niet");
         const eind = wissels.find(x => x.beeld === "goed-eind");
         assert.ok(eind && eind.t <= w.uit, "het eindbeeld kwam niet voor het sluiten");
         assert.ok(duur >= 1180, `welkom stond maar ${Math.round(duur)} ms`);
         assert.ok(duur >= d, `welkom sloot na ${Math.round(duur)} ms, de clip duurt ${d} ms`);
-        assert.ok(duur < Math.max(1200, d + 300) + 400, `welkom stond te lang: ${Math.round(duur)} ms (clip ${d} ms)`);
+        assert.ok(duur < Math.max(3500, d + 300) + 400, `welkom stond te lang: ${Math.round(duur)} ms (clip ${d} ms)`);
         const u = await page.evaluate(() => window.__urls);
         assert.deepEqual([...u.weg].sort(), [...u.gemaakt].sort(), "de object-URL van het welkom is niet opgeruimd");
       }

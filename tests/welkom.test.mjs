@@ -24,7 +24,7 @@ const ALLE = ["strepen", "tuxedo", "lapjes", "sokjes", "stippen", "rodestreep"];
 const VORIGE = "overhoor:kat:vorige";
 const KAT = JSON.parse(lees("katten/clips/katten.json"));
 // hoe lang het welkom met deze kat staat: minstens 1,2 s, en de clip uit plus het vervagen
-const verwacht = (kat, stil) => (stil ? 1200 : Math.max(1200, KAT.katten[kat].goed.duurMs + 300));
+const verwacht = (kat, stil) => (stil ? 3500 : Math.max(3500, KAT.katten[kat].goed.duurMs + 300));
 
 // ---------- zonder browser ----------
 function laad({ opslag = {} } = {}) {
@@ -109,7 +109,7 @@ test("UI.Welkom: de naam gaat door esc(), zonder naam geen Hoi, de kat is versie
 
 test("welkom in ds.css: minstens 1,2 s, alleen transform en opacity, geen sprong of wiebel op de kat, uit bij reduced motion", () => {
   const css = lees("ds.css");
-  assert.match(css, /--welkom-duur:\s*1200ms;/);
+  assert.match(css, /--welkom-duur:\s*3500ms;/);
   assert.match(css, /--welkom-vervaag:\s*300ms;/);
   const frames = [...css.matchAll(/@keyframes (welkom-[\w-]+)\s*\{((?:[^{}]*\{[^}]*\})+)\s*\}/g)];
   assert.deepEqual(frames.map(f => f[1]).sort(), ["welkom-in", "welkom-uit"], "keyframes van het welkom");
@@ -185,7 +185,7 @@ test("welkom: bij het openen, heel scherm, app inert, Hoi Pia, na 1,2 s weg; gee
   assert.equal(r.merk, "Overhoren Beta");
   assert.equal(await page.evaluate(k => localStorage.getItem(k), WELKOM_DAG), null, "de dagsleutel wordt nog geschreven");
   const kat = await page.locator("body > .welkom img.welkom-kat").getAttribute("data-kat");
-  await welkomEl(page).waitFor({ state: "detached", timeout: 4000 });
+  await welkomEl(page).waitFor({ state: "detached", timeout: 6000 });
   const w = await page.evaluate(() => window.__welkom);
   const duur = w.weg - w.gezien;
   assert.ok(duur > verwacht(kat) - 150 && duur < verwacht(kat) + 400, `welkom stond ${Math.round(duur)} ms, verwacht ${verwacht(kat)}`);
@@ -204,7 +204,7 @@ test("welkom: elke keer openen; een nieuw tabblad dezelfde dag wel, ook met een 
   const twee = await openPagina(context);
   await welkomEl(twee.page).waitFor({ state: "attached", timeout: 1500 });
   // nog een, nadat het vorige welkom al weg is
-  await welkomEl(twee.page).waitFor({ state: "detached", timeout: 4000 });
+  await welkomEl(twee.page).waitFor({ state: "detached", timeout: 6000 });
   const drie = await openPagina(context);
   await welkomEl(drie.page).waitFor({ state: "attached", timeout: 1500 });
   // een oude dagsleutel blijft ongemoeid en telt niet mee
@@ -217,7 +217,7 @@ test("welkom: niet opnieuw in hetzelfde tabblad (herladen, terug naar het tabbla
   const { context } = await nieuweContext();
   const { page, fouten } = await openPagina(context);
   await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
-  await welkomEl(page).waitFor({ state: "detached", timeout: 4000 });
+  await welkomEl(page).waitFor({ state: "detached", timeout: 6000 });
   await page.reload(); await wachtOpScherm(page, "scr-lessons");
   assert.equal((await geenWelkom(page)).gezien, 0, "welkom na herladen in hetzelfde tabblad");
   // terug naar het tabblad: de pagina blijft staan, er komt niets bij
@@ -250,7 +250,7 @@ test("welkom: de kat is die van de eerstvolgende ronde, en nooit de vorige", asy
     const kat = await page.locator("body > .welkom img.welkom-kat").getAttribute("data-kat");
     assert.ok(ALLE.includes(kat), "geen kat in het welkom");
     assert.notEqual(kat, vorige, "het welkom toont de kat van de vorige ronde");
-    await welkomEl(page).waitFor({ state: "detached", timeout: 4000 });
+    await welkomEl(page).waitFor({ state: "detached", timeout: 6000 });
     await page.locator(".lesson").first().click(); await wachtOpScherm(page, "scr-home");
     await page.click("#btn-start"); await wachtOpScherm(page, "scr-quiz");
     assert.equal(await page.evaluate(k => JSON.parse(localStorage.getItem(k)), VORIGE), kat, "de ronde heeft een andere kat dan het welkom");
@@ -313,10 +313,10 @@ test("welkom bij reduced motion: een stilstaand eindbeeld, en op dezelfde tijd w
   assert.deepEqual(r.beweging, [], "de kat staat niet in zijn eindstand");
   assert.equal(r.groet, "Hoi Pia");
   assert.equal(await page.locator("body > .welkom img.welkom-kat").getAttribute("data-beeld"), "goed-eind", "niet meteen het eindbeeld");
-  await welkomEl(page).waitFor({ state: "detached", timeout: 2500 });
+  await welkomEl(page).waitFor({ state: "detached", timeout: 5000 });
   const w = await page.evaluate(() => window.__welkom);
   const duur = w.weg - w.gezien;
-  assert.ok(duur > 1050 && duur < 1600, `welkom stond ${Math.round(duur)} ms, verwacht 1200`);
+  assert.ok(duur > 3350 && duur < 3900, `welkom stond ${Math.round(duur)} ms, verwacht 3500`);
   assert.deepEqual(fouten, []);
   await context.close();
 });

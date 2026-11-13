@@ -269,7 +269,7 @@
     /* --- welkom: hoe lang het welkom bij het openen minstens staat, alles bij
        elkaar. index.html leest deze waarde (in ms) en haalt het daarna
        weg; de tijdlijn in .welkom past erbinnen. --- */
-    --welkom-duur: 1200ms;
+    --welkom-duur: 3500ms;
     --welkom-vervaag: 300ms;  /* het laatste stuk: alles vervaagt */
     --t-welkom:    2.5rem;    /* 40px, de naam van de app in het welkom */
 
@@ -679,7 +679,7 @@
        daarna, zodra --welkom-duur min --welkom-vervaag voorbij is en de
              clip op zijn eindbeeld staat: .vervaagt, alles vervaagt in
              --welkom-vervaag, en index.html haalt het weg
-     Samen minstens --welkom-duur (1200 ms). De kat beweegt alleen met
+     Samen minstens --welkom-duur (3500 ms, keuze van Daan: "veeeel te kort", "nog een seconde langer"). De kat beweegt alleen met
      zijn clip, er zit geen sprong of wiebel op. Alleen transform en
      opacity. Bij reduced motion staat alles stil in het eindbeeld (regel
      onderaan) en gaat het na --welkom-duur weg. */

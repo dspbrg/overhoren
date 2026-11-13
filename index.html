@@ -1920,7 +1920,7 @@ function toonWelkom(beeld, stil){
   app.inert = true;
   // de tijden staan in ds.css, in ms
   const css = getComputedStyle(document.documentElement);
-  const duur = parseFloat(css.getPropertyValue("--welkom-duur")) || 1200;
+  const duur = parseFloat(css.getPropertyValue("--welkom-duur")) || 3500;
   const vervaag = parseFloat(css.getPropertyValue("--welkom-vervaag")) || 300;
   const speler = Celebrate.speler(el.querySelector(".welkom-kat"), { plaats: "midden" });
   let klok = null, weg = false;
