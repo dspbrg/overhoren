@@ -142,6 +142,36 @@
     return kind ? '<span class="chip ' + esc(kind) + '">' + esc(kind) + '</span>' : "";
   }
 
+  // --- Beta: het chipje naast de naam van de app --------------
+  // Een knop die een korte uitleg eronder opent en sluit. Het vlak is
+  // klein, het tikdoel 44 px (ds.css). Zet BetaUitleg ergens onder de
+  // kop en koppel ze met bindBeta(knop). uitlegId is het id van die regel.
+  const BETA_UITLEG = "We leren nog. Dingen kunnen veranderen.";
+  function Beta(o) {
+    o = o || {};
+    return '<button type="button" class="beta"' + attr("id", o.id) +
+      ' aria-expanded="' + (o.open ? "true" : "false") + '"' + attr("aria-controls", o.uitlegId) + '>' +
+      '<span class="beta-chip">Beta</span></button>';
+  }
+  function BetaUitleg(o) {
+    o = o || {};
+    return '<p class="beta-uitleg"' + attr("id", o.id) + (o.open ? "" : " hidden") + '>' + esc(BETA_UITLEG) + '</p>';
+  }
+  // Tikken, Enter of Spatie wisselt (dat doet een <button> vanzelf),
+  // Escape sluit en zet de focus terug op de knop.
+  function bindBeta(knop) {
+    if (!knop || knop.dataset.betaDone) return;
+    const uitleg = document.getElementById(knop.getAttribute("aria-controls"));
+    if (!uitleg) return;
+    const zet = open => { uitleg.hidden = !open; knop.setAttribute("aria-expanded", open ? "true" : "false"); };
+    knop.addEventListener("click", () => zet(uitleg.hidden));
+    document.addEventListener("keydown", e => {
+      if (e.key !== "Escape" || uitleg.hidden) return;
+      zet(false); knop.focus();
+    });
+    knop.dataset.betaDone = "1";
+  }
+
   // --- Choice: woordsoortknop met toetshint -------------------
   function Choice(o) {
     o = o || {};
@@ -266,5 +296,5 @@
   }
 
   root.UI = { esc, cls, pct, Icon, ICONS, Button, Link, TopBar, Stat, StatsRow, Meter, Ring, Chip,
-              Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, hydrateIcons };
+              Beta, BetaUitleg, BETA_UITLEG, bindBeta, Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, hydrateIcons };
 })(typeof window === "object" ? window : globalThis);

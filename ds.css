@@ -503,6 +503,36 @@
   .chip.noun { color: var(--noun); }
   .chip.adverb { color: var(--adv); }
 
+  /* --- beta: chipje naast de naam van de app ---
+     Een knop zonder eigen vlak; het chipje erin is het vlak, klein en
+     schuin zoals de andere chips. ::after maakt het tikdoel minstens
+     --tap groot zonder dat de kop hoger wordt. De focusrand zit op de
+     knop zelf, dus de clip-path van het chipje knipt hem niet weg. */
+  h1:has(> .beta) { display: flex; align-items: center; gap: var(--s2); }
+  .beta {
+    position: relative; flex: none;
+    background: none; border: 0; padding: 0; margin: 0;
+    font: inherit; color: inherit; cursor: pointer;
+  }
+  .beta::after {
+    content: ""; position: absolute; inset-block-start: 50%; inset-inline-start: 50%; translate: -50% -50%;
+    inline-size: max(100%, var(--tap)); block-size: max(100%, var(--tap));
+  }
+  .beta-chip {
+    display: block; clip-path: var(--cut-chip); padding: var(--pad-chip);
+    background: var(--control-surf); color: var(--accent-strong);
+    font-family: var(--body); font-size: var(--t-label-sm); font-weight: 600; line-height: 1.4;
+    letter-spacing: .1em; text-transform: uppercase;
+    transition: background var(--m3-effects), color var(--m3-effects);
+  }
+  .beta[aria-expanded="true"] .beta-chip { background: var(--accent); color: var(--accent-ink); }
+  /* de uitleg eronder: een rustig vlak, zoals de spraakbalk */
+  .beta-uitleg {
+    margin: 0; padding: var(--pad-spraak); clip-path: var(--cut-small);
+    background: var(--mark); color: var(--ink);
+    font-size: var(--t-meta); line-height: var(--lh-spraak);
+  }
+
   /* --- meter: elke voortgangsbalk in de app. Licht schuin. --- */
   .meter { background: var(--track); clip-path: var(--cut-meter); overflow: hidden; display: flex; height: 8px; }
   .meter i { display: block; height: 100%; }
@@ -903,6 +933,7 @@
     .btn:hover:not(:disabled):not(.primary):not(.ok),
     .choice:hover:not(:disabled):not(.on):not(.right):not(.wrong),
     .seg button:hover:not(.on) { --surf: var(--control-hover); }
+    .beta:hover[aria-expanded="false"] .beta-chip { background: var(--control-hover); }
     .btn.primary:hover:not(:disabled), .seg button.on:hover { --surf: color-mix(in srgb, var(--accent) 88%, white); }
     .link:hover { text-decoration-thickness: 3px; }
   }
@@ -960,7 +991,9 @@
     .choice.right { border-style: double; border-width: 5px; }
     .choice.wrong { border-style: dashed; }
     .q-card.is-good { animation: none; }
-    .card, .notice, .stat, .empty, .chip, .due-chip, .deadline-chip, .meter, .streak, .verdict, .spraak { clip-path: none; }
+    .card, .notice, .stat, .empty, .chip, .due-chip, .deadline-chip, .meter, .streak, .verdict, .spraak,
+    .beta-chip, .beta-uitleg { clip-path: none; }
+    .beta-chip { border: 1px solid ButtonText; }
     .ring-arc { stroke: Highlight; }
     input[type=range]::-webkit-slider-runnable-track { background: ButtonText; }
     input[type=range]::-moz-range-track { background: ButtonText; }

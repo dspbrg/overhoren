@@ -38,7 +38,8 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
 <section id="scr-lessons" class="screen">
   <div class="app">
     <div class="start-kop">
-      <header class="brand"><h1>Overhoren</h1><p class="tag">Woordjes leren met slimme herhaling</p></header>
+      <header class="brand"><h1 id="app-titel">Overhoren</h1><p class="tag">Woordjes leren met slimme herhaling</p></header>
+      <!-- hier komt de uitleg bij Beta (zie zetBeta) -->
       <div class="learner-row">
         <span id="learner-view">Wie oefent: <b id="learner-label"></b> <button class="link" id="btn-learner">wissel</button></span>
         <span class="row" id="learner-form" hidden><input type="text" id="learner-name" placeholder="Naam" autocomplete="off"><button class="btn" id="btn-learner-save">Opslaan</button></span>
@@ -1844,8 +1845,18 @@ function registreerSW(){
   navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
 
+// Beta naast de naam, met de uitleg onder de kop (UI.Beta, UI.bindBeta)
+function zetBeta(){
+  const titel = $("app-titel");
+  if(!titel || titel.querySelector(".beta")) return;
+  titel.insertAdjacentHTML("beforeend", UI.Beta({ uitlegId: "beta-uitleg" }));
+  titel.closest(".brand").insertAdjacentHTML("afterend", UI.BetaUitleg({ id: "beta-uitleg" }));
+  UI.bindBeta(titel.querySelector(".beta"));
+}
+
 function init(){
   registreerSW();
+  zetBeta();
   UI.hydrateIcons(document);
   lists = allLists();
   if(!lists.length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
