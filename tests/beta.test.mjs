@@ -1,6 +1,7 @@
 // Het Beta-label naast Overhoren in de kop van het startscherm. Een klein
 // chipje; tikken, Enter of Spatie opent een regel eronder, nog een keer of
-// Escape sluit hem. aria-expanded volgt mee, het tikdoel is minstens 44 px
+// Escape sluit hem. Onder de uitleg een kleine regel met de versie.
+// aria-expanded volgt mee, het tikdoel is minstens 44 px
 // en de tekst haalt 4,5:1, open en dicht, licht en donker, 360 en 1280 px.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -27,7 +28,7 @@ const knop = page => page.locator("#scr-lessons .brand h1 button.beta");
 const staat = page => page.evaluate(() => {
   const b = document.querySelector("#scr-lessons .brand h1 button.beta");
   const u = document.getElementById(b.getAttribute("aria-controls"));
-  return { expanded: b.getAttribute("aria-expanded"), zichtbaar: !!u && u.checkVisibility(), tekst: u?.textContent.trim(), focus: document.activeElement === b };
+  return { expanded: b.getAttribute("aria-expanded"), zichtbaar: !!u && u.checkVisibility(), tekst: u?.firstChild?.textContent.trim(), focus: document.activeElement === b };
 });
 
 test("Beta: een knop in de kop naast Overhoren, dicht bij de start", async () => {
@@ -37,6 +38,12 @@ test("Beta: een knop in de kop naast Overhoren, dicht bij de start", async () =>
   assert.equal((await b.textContent()).trim(), "Beta");
   assert.equal(await b.getAttribute("type"), "button");
   assert.deepEqual(await staat(page), { expanded: "false", zichtbaar: false, tekst: UITLEG, focus: false });
+  // onder de uitleg een kleine regel met de versie: de eerste zeven tekens van de ?v= van ui.js
+  const versie = await page.evaluate(() => ({
+    regel: document.querySelector("#beta-uitleg > .beta-versie")?.textContent.trim(),
+    v: new URL(document.querySelector('script[src^="ui.js"]').src).searchParams.get("v")
+  }));
+  assert.equal(versie.regel, "Versie " + versie.v.slice(0, 7));
   // naast de titel, op dezelfde regel
   const r = await page.evaluate(() => {
     const h = document.querySelector("#scr-lessons .brand h1"), b = h.querySelector(".beta");
