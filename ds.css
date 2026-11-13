@@ -269,16 +269,16 @@
 
     /* --- katten --- */
     --kat-rand-h:    104px;   /* kat op de bovenrand van een kaart */
-    --kat-rand-b:    80px;    /* kolom voor die kat: de breedste kat op die hoogte, zodat de spraakbalk niet verspringt */
     --kat-oor:       30px;    /* zoveel zit de kat over de bovenrand van de kaart */
     --lh-spraak:     1.35;    /* regelhoogte in de spraakbalk */
     --spraak-regels: 3;       /* zoveel regels houdt de rand vrij, zodat de kaart niet verspringt */
     --kat-welkom-h:  232px;   /* kat in het welkom */
 
-    /* --- welkom: hoe lang het welkom bij het openen staat, alles bij
+    /* --- welkom: hoe lang het welkom bij het openen minstens staat, alles bij
        elkaar. index.html leest deze waarde (in ms) en haalt het daarna
        weg; de tijdlijn in .welkom past erbinnen. --- */
-    --welkom-duur: 1200ms;
+    --welkom-duur: 3500ms;
+    --welkom-vervaag: 300ms;  /* het laatste stuk: alles vervaagt */
     --t-welkom:    2.5rem;    /* 40px, de naam van de app in het welkom */
 
     /* kleinste tikdoel op een telefoon; knoppen zijn 48 */
@@ -638,14 +638,15 @@
     pointer-events: none;
   }
 
-  /* --- katten (bouwopdracht 2) ---
-     Zes vrijstaande katten. Ze kijken naar rechts of recht vooruit, en
-     altijd naar binnen: rechts van de inhoud gespiegeld. Spiegelen zit
-     op transform; de entree gebruikt daarom translate, scale en opacity,
-     zodat die elkaar niet overschrijven. Geen lus, korter dan 400 ms, en
-     uit bij reduced motion (regel onderaan). Afmetingen staan als
-     width/height op het <img>. */
+  /* --- katten (bouwopdracht 3, kattenclips) ---
+     Zes vrijstaande katten op een doek van 400 x 480 (katten.json). Ze
+     bewegen alleen met hun eigen clip, 6 beelden per seconde, daarna het
+     eindbeeld (Celebrate.speler). Geen css-beweging bovenop. Afmetingen
+     staan als width/height op het <img>, dus de maat staat al vast voor
+     het beeld binnen is. De kat kijkt naar binnen: rechts van de inhoud
+     en naar rechts kijkend krijgt hij .gespiegeld. */
   .kat { display: block; max-inline-size: 100%; block-size: auto; }
+  .kat.gespiegeld { transform: scaleX(-1); }
 
   /* Spraak: wat de kat zegt. Een rustig vlak met afgeschuinde hoekjes,
      lopende tekst. */
@@ -660,12 +661,13 @@
   .kat-kaart { display: flex; flex-direction: column; }
   /* KatRand: spraakbalk links, kat rechts op de rand van de kaart eronder.
      De rand houdt ruimte vrij voor --spraak-regels regels (plus de
-     binnenruimte van de balk), en de kat heeft een vaste kolom. Zo
-     verspringt de kaart niet als de kat iets langers zegt of van stand
-     wisselt. position en z-index: de kat ligt over de kaart. */
+     binnenruimte van de balk), en de kat heeft een vaste kolom: zijn
+     hoogte is vast en zijn breedte volgt uit width/height van het doek.
+     Zo verspringt de kaart niet als de kat iets langers zegt of van
+     beeld wisselt. position en z-index: de kat ligt over de kaart. */
   .kat-rand {
     position: relative; z-index: 1;
-    display: grid; grid-template-columns: minmax(0, 1fr) var(--kat-rand-b);
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
     column-gap: var(--gap-inline); align-items: start;
     padding-inline-end: var(--corner);
     font-size: var(--t-body);
@@ -676,28 +678,26 @@
     align-self: end; justify-self: end;
     block-size: var(--kat-rand-h); inline-size: auto; max-inline-size: none;
     margin-block-end: calc(-1 * var(--kat-oor));
-    transform: scaleX(-1);
-    animation: kat-in var(--m3-spatial-fast) both;
   }
 
   /* --- welkom: bij het openen, een keer per sessie ---
-     Heel scherm over de app (die is zolang inert). Tijdlijn, samen
-     --welkom-duur (1200 ms):
-       0     de naam verschijnt, de kat springt omhoog (350 ms)
-       350   de kat wiebelt twee keer (2 x 250 ms)
+     Heel scherm over de app (die is zolang inert). Tijdlijn:
+       0     de naam verschijnt (200 ms), de goed-clip van de kat begint
        400   "Hoi <naam>" verschijnt (200 ms)
-       900   alles vervaagt (300 ms), daarna haalt index.html het weg
-     Alleen transform en opacity. Bij reduced motion staat alles stil in
-     het eindbeeld (regel onderaan) en gaat het op dezelfde tijd weg.
-     .beweegt-zelf: het beeld is zelf een animatie (zie welkomBeeld in
-     celebrate.js), dan geen sprong en geen wiebel. */
+       daarna, zodra --welkom-duur min --welkom-vervaag voorbij is en de
+             clip op zijn eindbeeld staat: .vervaagt, alles vervaagt in
+             --welkom-vervaag, en index.html haalt het weg
+     Samen minstens --welkom-duur (3500 ms, keuze van Daan: "veeeel te kort", "nog een seconde langer"). De kat beweegt alleen met
+     zijn clip, er zit geen sprong of wiebel op. Alleen transform en
+     opacity. Bij reduced motion staat alles stil in het eindbeeld (regel
+     onderaan) en gaat het na --welkom-duur weg. */
   .welkom {
     position: fixed; inset: 0; z-index: 100;
     display: grid; place-content: center; justify-items: center; gap: var(--gap-group);
     padding: var(--rand-boven) var(--rand-rechts) var(--rand-onder) var(--rand-links); text-align: center; cursor: pointer;
     background: var(--page); color: var(--ink);
-    animation: welkom-uit var(--m3-effects-slow) calc(var(--welkom-duur) - 300ms) both;
   }
+  .welkom.vervaagt { animation: welkom-uit var(--welkom-vervaag) ease-out both; }
   .welkom-merk {
     display: flex; align-items: center; gap: var(--s3); margin: 0;
     font-family: var(--display); font-weight: 700; font-size: var(--t-welkom); line-height: 1.1;
@@ -711,12 +711,7 @@
     background: var(--card-shadow-color);
     clip-path: polygon(12% 0, 88% 0, 100% 50%, 88% 100%, 12% 100%, 0 50%);
   }
-  .welkom-kat {
-    display: block; block-size: min(var(--kat-welkom-h), 40dvh); inline-size: auto;
-    transform-origin: 50% 100%;
-    animation: welkom-hop var(--m3-spatial-fast) both, welkom-wiebel 250ms ease-in-out 350ms 2 both;
-  }
-  .welkom.beweegt-zelf .welkom-kat { animation: none; }
+  .welkom-kat { display: block; block-size: min(var(--kat-welkom-h), 40dvh); inline-size: auto; }
   .welkom-groet {
     margin: 0; font-family: var(--display); font-weight: 600; font-size: var(--t-card); line-height: 1.15;
     animation: welkom-in var(--m3-effects) 400ms both;
@@ -862,11 +857,7 @@
   @keyframes bump { 0% { transform: scale(1) } 40% { transform: scale(1.22) } 100% { transform: scale(1) } }
   /* welkom: alleen translate, scale, rotate en opacity */
   @keyframes welkom-in     { from { opacity: 0; translate: 0 var(--s2); } }
-  @keyframes welkom-hop    { from { opacity: 0; translate: 0 calc(var(--kat-welkom-h) / 3); scale: .92; } }
-  @keyframes welkom-wiebel { 0%, 100% { rotate: 0deg; } 30% { rotate: -4deg; } 70% { rotate: 4deg; } }
   @keyframes welkom-uit    { to { opacity: 0; } }
-  /* entree van een kat: alleen translate, scale en opacity (transform is van het spiegelen) */
-  @keyframes kat-in { from { opacity: 0; translate: 0 var(--s3); scale: .92; } }
   @keyframes ring {
     0%   { filter: drop-shadow(0 var(--drop-y) 0 var(--card-shadow-color)) drop-shadow(0 0 0 color-mix(in srgb, var(--ok) 55%, transparent)) }
     100% { filter: drop-shadow(0 var(--drop-y) 0 var(--card-shadow-color)) drop-shadow(0 0 14px transparent) }

@@ -1,8 +1,9 @@
 // Het welkom bij het openen (variant A uit de opzet van Dieter): heel
-// scherm, de naam van de app, de kat van de eerstvolgende ronde springt
-// omhoog en wiebelt twee keer, dan "Hoi <naam>", daarna vervaagt alles.
-// Samen 1,2 s. Tik of toets haalt het eerder weg, de app eronder is zolang
-// inert. Bij elke keer openen (nieuw tabblad, nieuwe sessie), maar niet
+// scherm, de naam van de app, de goed-clip van de kat van de eerstvolgende
+// ronde (geen css-sprong of wiebel), dan "Hoi <naam>", daarna vervaagt
+// alles. Minstens 1,2 s en pas weg als de clip op zijn eindbeeld staat
+// (de clip zelf: kattenclips.test.mjs). Tik of toets haalt het eerder weg,
+// de app eronder is zolang inert. Bij elke keer openen (nieuw tabblad, nieuwe sessie), maar niet
 // opnieuw binnen dezelfde sessie en niet als er een ronde openstaat. Alleen als het beeld
 // binnen 300 ms klaar is. Reduced motion: een stilstaand eindbeeld.
 //
@@ -21,14 +22,17 @@ const MIN_CONTRAST = Number(process.env.MIN_CONTRAST || 4.5);
 const lees = f => readFileSync(join(REPO, f), "utf8");
 const ALLE = ["strepen", "tuxedo", "lapjes", "sokjes", "stippen", "rodestreep"];
 const VORIGE = "overhoor:kat:vorige";
-const katVan = src => /katten\/(\w+)-goed\.webp$/.exec(src || "")?.[1];
+const KAT = JSON.parse(lees("katten/clips/katten.json"));
+// hoe lang het welkom met deze kat staat: minstens 1,2 s, en de clip uit plus het vervagen
+const verwacht = (kat, stil) => (stil ? 3500 : Math.max(3500, KAT.katten[kat].goed.duurMs + 300));
 
 // ---------- zonder browser ----------
 function laad({ opslag = {} } = {}) {
   const store = opslag;
   const ctx = vm.createContext({
     localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } },
-    __r: null
+    __r: null,
+    fetch: async pad => { const buf = readFileSync(join(REPO, pad)); return { ok: true, json: async () => JSON.parse(buf.toString("utf8")), blob: async () => ({ pad }) }; }
   });
   ctx.window = ctx;
   ctx.matchMedia = () => ({ matches: true });
@@ -80,16 +84,21 @@ test("volgende kat: 300 willekeurige reeksen, nooit twee keer dezelfde kat na el
   }
 });
 
-test("UI.Welkom: de naam gaat door esc(), zonder naam geen Hoi, de kat is versiering", () => {
+test("UI.Welkom: de naam gaat door esc(), zonder naam geen Hoi, de kat is versiering", async () => {
   const { C, UI } = laad();
   assert.equal(typeof UI.Welkom, "function", "UI.Welkom ontbreekt");
+  await C.laadCatalogus();
   const b = C.welkomBeeld("tuxedo");
-  assert.equal(b.src, "katten/tuxedo-goed.webp");
+  // eerst rust (het eerste beeld van de goed-clip), stil is het eindbeeld
+  assert.equal(b.src, "katten/clips/tuxedo-rust.webp");
+  assert.equal(b.stil, "katten/clips/tuxedo-goed-eind.webp");
+  assert.equal(b.duurMs, KAT.katten.tuxedo.goed.duurMs);
   assert.equal(b.width, C.beeld("tuxedo", "goed").width);
+  assert.match(UI.Welkom({ beeld: b, stil: true }), /<img class="welkom-kat" src="katten\/clips\/tuxedo-goed-eind\.webp" width="400" height="480" alt="" data-kat="tuxedo" data-beeld="goed-eind"/);
   const html = UI.Welkom({ beeld: b, naam: '<img src=x onerror="alert(1)">' });
   assert.doesNotMatch(html, /<img src=x/, "naam niet ontsnapt");
   assert.match(html, /Hoi &lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
-  assert.match(html, /<img class="welkom-kat" src="katten\/tuxedo-goed\.webp" width="\d+" height="480" alt="">/);
+  assert.match(html, /<img class="welkom-kat" src="katten\/clips\/tuxedo-rust\.webp" width="400" height="480" alt="" data-kat="tuxedo" data-beeld="rust"/);
   for (const naam of ["", "   ", null, undefined]) assert.doesNotMatch(UI.Welkom({ beeld: b, naam }), /Hoi/, `"Hoi" bij naam ${JSON.stringify(naam)}`);
   assert.match(UI.Welkom({ beeld: b, naam: " Pia " }), /<p class="welkom-groet">Hoi Pia<\/p>/);
   assert.equal(UI.Welkom({ naam: "Pia" }), "", "zonder beeld geen welkom");
@@ -98,11 +107,15 @@ test("UI.Welkom: de naam gaat door esc(), zonder naam geen Hoi, de kat is versie
   assert.doesNotMatch(tekst, /[!—]/);
 });
 
-test("welkom in ds.css: duur 1,2 s, alleen transform en opacity, uit bij reduced motion", () => {
+test("welkom in ds.css: minstens 1,2 s, alleen transform en opacity, geen sprong of wiebel op de kat, uit bij reduced motion", () => {
   const css = lees("ds.css");
-  assert.match(css, /--welkom-duur:\s*1200ms;/);
+  assert.match(css, /--welkom-duur:\s*3500ms;/);
+  assert.match(css, /--welkom-vervaag:\s*300ms;/);
   const frames = [...css.matchAll(/@keyframes (welkom-[\w-]+)\s*\{((?:[^{}]*\{[^}]*\})+)\s*\}/g)];
-  assert.ok(frames.length >= 4, "keyframes van het welkom niet gevonden");
+  assert.deepEqual(frames.map(f => f[1]).sort(), ["welkom-in", "welkom-uit"], "keyframes van het welkom");
+  assert.doesNotMatch(css, /welkom-hop|welkom-wiebel|beweegt-zelf/, "de css-sprong of het wiebelen staat er nog");
+  assert.match(css, /\.welkom-kat\s*\{[^}]*\}/);
+  assert.doesNotMatch(css.match(/\.welkom-kat\s*\{([^}]*)\}/)[1], /animation|transform/, "css-beweging op de kat in het welkom");
   for (const [, naam, body] of frames) {
     const props = [...body.matchAll(/([\w-]+)\s*:/g)].map(m => m[1]);
     for (const p of props) assert.ok(["opacity", "translate", "scale", "rotate", "transform"].includes(p), `${naam} animeert ${p}`);
@@ -171,10 +184,11 @@ test("welkom: bij het openen, heel scherm, app inert, Hoi Pia, na 1,2 s weg; gee
   assert.equal(r.kat, "", "de kat is versiering, alt hoort leeg");
   assert.equal(r.merk, "Overhoren Beta");
   assert.equal(await page.evaluate(k => localStorage.getItem(k), WELKOM_DAG), null, "de dagsleutel wordt nog geschreven");
-  await welkomEl(page).waitFor({ state: "detached", timeout: 2500 });
+  const kat = await page.locator("body > .welkom img.welkom-kat").getAttribute("data-kat");
+  await welkomEl(page).waitFor({ state: "detached", timeout: 6000 });
   const w = await page.evaluate(() => window.__welkom);
   const duur = w.weg - w.gezien;
-  assert.ok(duur > 1050 && duur < 1600, `welkom stond ${Math.round(duur)} ms, verwacht 1200`);
+  assert.ok(duur > verwacht(kat) - 150 && duur < verwacht(kat) + 400, `welkom stond ${Math.round(duur)} ms, verwacht ${verwacht(kat)}`);
   assert.equal(await page.evaluate(() => document.querySelector("body > .app").inert), false, "app blijft inert na het welkom");
   // de app werkt daarna gewoon
   await page.locator(".lesson").first().click(); await wachtOpScherm(page, "scr-home");
@@ -190,7 +204,7 @@ test("welkom: elke keer openen; een nieuw tabblad dezelfde dag wel, ook met een 
   const twee = await openPagina(context);
   await welkomEl(twee.page).waitFor({ state: "attached", timeout: 1500 });
   // nog een, nadat het vorige welkom al weg is
-  await welkomEl(twee.page).waitFor({ state: "detached", timeout: 2500 });
+  await welkomEl(twee.page).waitFor({ state: "detached", timeout: 6000 });
   const drie = await openPagina(context);
   await welkomEl(drie.page).waitFor({ state: "attached", timeout: 1500 });
   // een oude dagsleutel blijft ongemoeid en telt niet mee
@@ -203,7 +217,7 @@ test("welkom: niet opnieuw in hetzelfde tabblad (herladen, terug naar het tabbla
   const { context } = await nieuweContext();
   const { page, fouten } = await openPagina(context);
   await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
-  await welkomEl(page).waitFor({ state: "detached", timeout: 2500 });
+  await welkomEl(page).waitFor({ state: "detached", timeout: 6000 });
   await page.reload(); await wachtOpScherm(page, "scr-lessons");
   assert.equal((await geenWelkom(page)).gezien, 0, "welkom na herladen in hetzelfde tabblad");
   // terug naar het tabblad: de pagina blijft staan, er komt niets bij
@@ -233,14 +247,14 @@ test("welkom: de kat is die van de eerstvolgende ronde, en nooit de vorige", asy
     const { context } = await nieuweContext({ zaai: { [VORIGE]: JSON.stringify(vorige) } });
     const { page, fouten } = await openPagina(context);
     await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
-    const kat = katVan(await page.locator("body > .welkom img.welkom-kat").getAttribute("src"));
+    const kat = await page.locator("body > .welkom img.welkom-kat").getAttribute("data-kat");
     assert.ok(ALLE.includes(kat), "geen kat in het welkom");
     assert.notEqual(kat, vorige, "het welkom toont de kat van de vorige ronde");
-    await welkomEl(page).waitFor({ state: "detached", timeout: 2500 });
+    await welkomEl(page).waitFor({ state: "detached", timeout: 6000 });
     await page.locator(".lesson").first().click(); await wachtOpScherm(page, "scr-home");
     await page.click("#btn-start"); await wachtOpScherm(page, "scr-quiz");
     assert.equal(await page.evaluate(k => JSON.parse(localStorage.getItem(k)), VORIGE), kat, "de ronde heeft een andere kat dan het welkom");
-    const inBeeld = katVan(await page.locator("#scr-quiz img.kat").first().getAttribute("src").catch(() => null));
+    const inBeeld = await page.locator("#scr-quiz img.kat").first().getAttribute("data-kat", { timeout: 2000 }).catch(() => null);
     if (inBeeld) assert.equal(inBeeld, kat);
     assert.deepEqual(fouten, []);
     await context.close();
@@ -298,17 +312,18 @@ test("welkom bij reduced motion: een stilstaand eindbeeld, en op dezelfde tijd w
   assert.deepEqual(r.opacity, [], "niet alles is helemaal zichtbaar");
   assert.deepEqual(r.beweging, [], "de kat staat niet in zijn eindstand");
   assert.equal(r.groet, "Hoi Pia");
-  await welkomEl(page).waitFor({ state: "detached", timeout: 2500 });
+  assert.equal(await page.locator("body > .welkom img.welkom-kat").getAttribute("data-beeld"), "goed-eind", "niet meteen het eindbeeld");
+  await welkomEl(page).waitFor({ state: "detached", timeout: 5000 });
   const w = await page.evaluate(() => window.__welkom);
   const duur = w.weg - w.gezien;
-  assert.ok(duur > 1050 && duur < 1600, `welkom stond ${Math.round(duur)} ms, verwacht 1200`);
+  assert.ok(duur > 3350 && duur < 3900, `welkom stond ${Math.round(duur)} ms, verwacht 3500`);
   assert.deepEqual(fouten, []);
   await context.close();
 });
 
 test("welkom: komt het beeld niet binnen 300 ms, dan stil overslaan", async () => {
   const { context } = await nieuweContext();
-  await context.route(/\/katten\/\w+-goed\.webp/, async route => { await new Promise(r => setTimeout(r, 900)); await route.continue(); });
+  await context.route(/\/katten\/clips\/\w+-goed\.webp/, async route => { await new Promise(r => setTimeout(r, 900)); await route.continue(); });
   const { page, fouten } = await openPagina(context);
   const r = await geenWelkom(page);
   assert.equal(r.gezien, 0, "welkom ondanks een traag beeld");

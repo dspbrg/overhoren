@@ -78,6 +78,7 @@
         <li><b>2026-11-12</b> Ruimte en padding: semantische tokens voor nabijheid, elke stap naar buiten groter. Afstand telt vanaf de onderkant van de schaduw, één schaduw van 6px. Alles links uitgelijnd, ook de themakiezer.</li>
         <li><b>2026-11-12</b> Eén kat maakt het leuk, niet verzamelen. Elke ronde komt er vanzelf een andere kat langs, binnen de ronde steeds dezelfde. Niets te verdienen, geen Mijn katten. De kat is nooit verdrietig en vraagt nooit om terug te komen.</li>
         <li><b>2026-11-13</b> De kat is een maatje, geen beloning. Hij zit de hele ronde rechts op de bovenrand van de vraagkaart, kijkt naar binnen en zegt iets in een spraakbalk. Het oordeel (Goed, Nog niet) staat in de kaart. Aan het eind zegt hij gedag met de naam. Geen beloningskaart, geen beker en geen warm vlak rond het scorecijfer; confetti alleen na een vlekkeloze ronde.</li>
+        <li><b>2026-11-13</b> De kat beweegt met korte clips van zes beelden per seconde, bewust een beetje schokkerig, en blijft daarna in zijn eindstand staan. Per kat rust, een goed-clip en een bijna-clip, allemaal op hetzelfde doek van 400 bij 480 (katten.json). Geen css-beweging bovenop de clips, ook niet in het welkom. Rechts van de inhoud wordt een kat die naar rechts kijkt gespiegeld; een kat die recht vooruit kijkt nooit. Bij minder beweging meteen het eindbeeld.</li>
       </ul>
       <span class="eyebrow">Rules</span>
       <ul class="sg-decisions">
@@ -286,6 +287,8 @@
   const iconList = Object.keys(UI.ICONS).map(n =>
     '<span class="sg-row" style="align-items:center;font-size:1.5rem">' + UI.Icon(n) + '<code>' + n + '</code></span>').join("");
 
+  // De katten komen uit katten.json; daarom eerst die, dan de componenten.
+  function toonComponenten() {
   const html = [
     block("Icon", "Inline SVG in currentColor, schaalt mee met de tekst. Nooit de enige betekenisdrager.",
       [['UI.Icon(name)', iconList]]),
@@ -391,27 +394,36 @@
         UI.BetaUitleg({ id: "sg-beta-uitleg-open", open: true }) + '</div>']
     ], { col: true }),
 
-    // De katten: de beelden en namen komen uit celebrate.js, net als in de app.
+    // De katten: de beelden en namen komen uit celebrate.js en katten.json, net als in de app.
     block("Spraak", "Wat de kat zegt: een rustig vlak (--mark) met afgeschuinde hoekjes, lopende tekst 17px, regelhoogte 1,35. Alleen tekst, alles gaat door esc(). Geen uitroeptekens.", [
       ['UI.Spraak({ text })', '<div style="width:100%;max-width:320px">' + UI.Spraak({ text: "Ik kijk mee." }) + '</div>']
     ], { col: true }),
 
-    block("KatRand", "De kat van de ronde rechts op de bovenrand van een kaart, 104 px hoog, gespiegeld zodat hij naar binnen kijkt, 30 px over de rand. Links een Spraak. Zet hem met de kaart in een .kat-kaart. De rand houdt ruimte voor drie regels en de kat heeft een vaste kolom, zodat de kaart niet verspringt. De kat is versiering (alt leeg), de zin zegt het. Celebrate.zegt(moment) en Celebrate.gedag(soort, naam) geven stand en zin.", [
-      ['UI.KatRand({ beeld, text }) · Celebrate.zegt("wacht")',
-        '<div class="app" style="width:100%"><div class="kat-kaart">' + UI.KatRand({ beeld: Celebrate.beeld("strepen", "bijna"), text: Celebrate.zegt("wacht").tekst }) +
+    block("KatRand", "De kat van de ronde rechts op de bovenrand van een kaart, 104 px hoog, 30 px over de rand. Links een Spraak. Zet hem met de kaart in een .kat-kaart. De rand houdt ruimte voor drie regels en de kat heeft een vaste kolom (zijn breedte volgt uit het doek van 400 bij 480), zodat de kaart niet verspringt. Hij kijkt naar binnen: kijkt hij naar rechts, dan gespiegeld (.gespiegeld); kijkt hij vooruit, dan niet. De kat is versiering (alt leeg), de zin zegt het. Celebrate.zegt(moment) en Celebrate.gedag(soort, naam) geven stand en zin. Hier stilstaand: rust of het eindbeeld.", [
+      ['UI.KatRand({ beeld, text }) · Celebrate.zegt("wacht"), rust',
+        '<div class="app" style="width:100%"><div class="kat-kaart">' + UI.KatRand({ beeld: Celebrate.beeld("strepen", "rust"), text: Celebrate.zegt("wacht").tekst }) +
         '<div class="card"><span class="eyebrow">Woord</span><p class="prompt">awesome</p></div></div></div>'],
-      ['UI.KatRand({ beeld, text }) · Celebrate.zegt("goed")',
+      ['UI.KatRand({ beeld, text }) · Celebrate.zegt("goed"), goed-eind',
         '<div class="app" style="width:100%"><div class="kat-kaart">' + UI.KatRand({ beeld: Celebrate.beeld("sokjes", "goed"), text: Celebrate.zegt("goed").tekst }) +
         '<div class="card"><span class="eyebrow">Woord</span><p class="prompt">la maison</p><div><span class="verdict good" style="animation:none">Goed</span></div></div></div></div>'],
-      ['UI.KatRand({ beeld, text }) · Celebrate.zegt("fout")',
+      ['UI.KatRand({ beeld, text }) · Celebrate.zegt("fout"), bijna-eind',
         '<div class="app" style="width:100%"><div class="kat-kaart">' + UI.KatRand({ beeld: Celebrate.beeld("tuxedo", "bijna"), text: Celebrate.zegt("fout").tekst }) +
         '<div class="card"><span class="eyebrow">Definitie</span><p class="prompt">very good</p><div><span class="verdict bad" style="animation:none">Nog niet</span></div></div></div></div>'],
-      ['UI.KatRand({ beeld, text }) · Celebrate.gedag("lastig", naam)',
+      ['UI.KatRand({ beeld, text }) · Celebrate.gedag("lastig", naam), bijna-eind',
         '<div class="app" style="width:100%"><div class="kat-kaart">' + UI.KatRand({ beeld: Celebrate.beeld("lapjes", "bijna"), text: Celebrate.gedag("lastig", "Pia").tekst }) +
         '<div class="card"><p>Ronde klaar: 4 van 12 in één keer goed.</p></div></div></div>']
     ], { col: true }),
 
-    block("Welkom", "Bij elke keer openen van de app, een keer per sessie (niet bij herladen of terugkeren naar hetzelfde tabblad), heel scherm over de app (die is zolang inert). De kat van de eerstvolgende ronde (Celebrate.volgende) springt omhoog en wiebelt twee keer, dan Hoi met de naam; zonder naam alleen de kat. Daarna vervaagt alles. Samen --welkom-duur, 1,2 s. Tik of toets haalt het eerder weg. Niet bij een ronde die openstaat, en alleen als het beeld binnen 300 ms klaar is. Reduced motion: stilstaand eindbeeld, zelfde tijd. Het beeld per kat komt uit Celebrate.welkomBeeld(id); daar hangt later een geanimeerde kat in. Hier in een vak, zonder vervagen.", [
+    block("Kattenclips", "Celebrate.speler(img, { plaats }) speelt per moment: rust staat stil, goed en bijna spelen hun clip (6 beelden per seconde, uit een nieuwe object-URL) en zetten na duurMs uit katten.json het eindbeeld. Een nieuw moment breekt een lopende clip af. Alleen de kat van de ronde wordt geladen (Celebrate.laadKat). Bij minder beweging meteen het eindbeeld. Kies een kat en een moment; twee keer hetzelfde moment speelt opnieuw.", [
+      ['Celebrate.speler(img, { plaats: "rechts" }).speel(id, moment)',
+        '<div style="width:100%" class="sg-demo col">' +
+        '<div class="sg-demo" id="sg-clip-katten">' + Celebrate.KATTEN.map((k, i) => UI.Button({ id: "sg-clip-" + k.id, label: k.naam, variant: i ? "" : "primary" })).join("") + '</div>' +
+        '<div class="sg-demo">' + UI.Button({ id: "sg-clip-rust", label: "Rust" }) + UI.Button({ id: "sg-clip-goed", label: "Goed" }) + UI.Button({ id: "sg-clip-bijna", label: "Bijna" }) + '</div>' +
+        '<div class="app" style="width:100%"><div class="kat-kaart">' + UI.KatRand({ id: "sg-clip-rand", beeld: Celebrate.beeld("strepen", "rust"), text: Celebrate.zegt("wacht").tekst }) +
+        '<div class="card"><span class="eyebrow">Woord</span><p class="prompt">awesome</p></div></div></div></div>']
+    ], { col: true }),
+
+    block("Welkom", "Bij elke keer openen van de app, een keer per sessie (niet bij herladen of terugkeren naar hetzelfde tabblad), heel scherm over de app (die is zolang inert). De goed-clip van de kat van de eerstvolgende ronde (Celebrate.volgende, Celebrate.welkomBeeld), dan Hoi met de naam; zonder naam alleen de kat. De kat staat in het midden, wordt nooit gespiegeld en krijgt geen css-beweging bovenop zijn clip. Het staat minstens --welkom-duur (3,5 s) en vervaagt pas als de clip op zijn eindbeeld staat. Tik of toets haalt het eerder weg. Niet bij een ronde die openstaat, en alleen als de beelden binnen 300 ms klaar zijn. Reduced motion: meteen het eindbeeld, na 3,5 s weg. Hier in een vak, zonder vervagen.", [
       ['UI.Welkom({ beeld: Celebrate.welkomBeeld(id), naam })',
         '<div class="sg-welkom" id="sg-welkom">' + UI.Welkom({ beeld: Celebrate.welkomBeeld("sokjes"), naam: "Pia" }) + '</div>' +
         UI.Button({ id: "sg-welkom-opnieuw", label: "Opnieuw afspelen", icon: "play" })]
@@ -424,9 +436,37 @@
   $("sg-components").innerHTML = html.join("");
   UI.hydrateIcons(document);
   document.querySelectorAll("#sg-components .beta").forEach(UI.bindBeta);
-  $("sg-welkom-opnieuw").addEventListener("click", () => {
-    $("sg-welkom").innerHTML = UI.Welkom({ beeld: Celebrate.welkomBeeld("sokjes"), naam: "Pia" });
-  });
+  // het welkom: de goed-clip, net als in de app
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let welkomSpeler = null;
+  function speelWelkom() {
+    if (welkomSpeler) welkomSpeler.stop();
+    $("sg-welkom").innerHTML = UI.Welkom({ beeld: Celebrate.welkomBeeld("sokjes"), naam: "Pia", stil: reduced });
+    welkomSpeler = Celebrate.speler($("sg-welkom").querySelector(".welkom-kat"), { plaats: "midden" });
+    welkomSpeler.speel("sokjes", "goed");
+  }
+  Celebrate.laadKat("sokjes").then(speelWelkom);
+  $("sg-welkom-opnieuw").addEventListener("click", () => Celebrate.laadKat("sokjes").then(speelWelkom));
+  // kattenclips: een kat kiezen laadt alleen die, een moment speelt hem
+  const clipSpeler = Celebrate.speler($("sg-clip-rand").querySelector(".kat"), { plaats: "rechts" });
+  let clipKat = "strepen";
+  const zin = { rust: Celebrate.zegt("wacht").tekst, goed: Celebrate.zegt("goed").tekst, bijna: Celebrate.zegt("fout").tekst };
+  function moment(m) {
+    $("sg-clip-rand").querySelector(".spraak").textContent = zin[m];
+    Celebrate.laadKat(clipKat).then(() => clipSpeler.speel(clipKat, m));
+  }
+  function kiesKat(id) {
+    clipKat = id;
+    for (const j of Celebrate.KATTEN) {
+      $("sg-clip-" + j.id).classList.toggle("primary", j.id === id);
+      $("sg-clip-" + j.id).setAttribute("aria-pressed", String(j.id === id));
+    }
+  }
+  kiesKat(clipKat);
+  for (const k of Celebrate.KATTEN) $("sg-clip-" + k.id).addEventListener("click", () => { kiesKat(k.id); moment("rust"); });
+  for (const m of ["rust", "goed", "bijna"]) $("sg-clip-" + m).addEventListener("click", () => moment(m));
+  }
+  Celebrate.laadCatalogus().then(toonComponenten);
   paintValues();
   // systeemthema kan wisselen terwijl de pagina open staat
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paintValues);

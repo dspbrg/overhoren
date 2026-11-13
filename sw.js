@@ -36,13 +36,15 @@ const SCHIL = [
   "./fonts/chakra-petch-latin-ext-700-normal.woff2",
   "./fonts/inter-latin-wght-normal.woff2",
   "./fonts/inter-latin-ext-wght-normal.woff2",
-  // de zes katten, elk in twee standen (zie KATTEN in celebrate.js)
-  "./katten/strepen-goed.webp", "./katten/strepen-bijna.webp",
-  "./katten/tuxedo-goed.webp", "./katten/tuxedo-bijna.webp",
-  "./katten/lapjes-goed.webp", "./katten/lapjes-bijna.webp",
-  "./katten/sokjes-goed.webp", "./katten/sokjes-bijna.webp",
-  "./katten/stippen-goed.webp", "./katten/stippen-bijna.webp",
-  "./katten/rodestreep-goed.webp", "./katten/rodestreep-bijna.webp"
+  // de zes katten (katten/clips/katten.json): per kat rust, twee clips en
+  // twee eindbeelden. Komt er een kat bij, dan hier ook.
+  "./katten/clips/katten.json",
+  "./katten/clips/strepen-rust.webp", "./katten/clips/strepen-goed.webp", "./katten/clips/strepen-goed-eind.webp", "./katten/clips/strepen-bijna.webp", "./katten/clips/strepen-bijna-eind.webp",
+  "./katten/clips/tuxedo-rust.webp", "./katten/clips/tuxedo-goed.webp", "./katten/clips/tuxedo-goed-eind.webp", "./katten/clips/tuxedo-bijna.webp", "./katten/clips/tuxedo-bijna-eind.webp",
+  "./katten/clips/lapjes-rust.webp", "./katten/clips/lapjes-goed.webp", "./katten/clips/lapjes-goed-eind.webp", "./katten/clips/lapjes-bijna.webp", "./katten/clips/lapjes-bijna-eind.webp",
+  "./katten/clips/sokjes-rust.webp", "./katten/clips/sokjes-goed.webp", "./katten/clips/sokjes-goed-eind.webp", "./katten/clips/sokjes-bijna.webp", "./katten/clips/sokjes-bijna-eind.webp",
+  "./katten/clips/stippen-rust.webp", "./katten/clips/stippen-goed.webp", "./katten/clips/stippen-goed-eind.webp", "./katten/clips/stippen-bijna.webp", "./katten/clips/stippen-bijna-eind.webp",
+  "./katten/clips/rodestreep-rust.webp", "./katten/clips/rodestreep-goed.webp", "./katten/clips/rodestreep-goed-eind.webp", "./katten/clips/rodestreep-bijna.webp", "./katten/clips/rodestreep-bijna-eind.webp"
 ];
 
 // Alleen gewone, directe antwoorden bewaren. De kopie wordt meteen

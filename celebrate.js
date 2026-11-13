@@ -1,12 +1,21 @@
 // =============================================================
 // Overhoren katten en viering
 //
-// Zes vaste katten, elk met een eigen karakter en twee standen:
-//   goed   blij, bij een goed antwoord en na een vlekkeloze ronde
-//   bijna  rustig, bij een fout of bijna-goed antwoord
-// De beelden staan in katten/<id>-<stand>.webp, vrijstaand, 480 px hoog.
-// Ze kijken naar rechts of recht vooruit. Regel: de kat kijkt naar
-// binnen. Links van de inhoud zoals hij is, rechts gespiegeld (ds.css).
+// Zes vaste katten, elk met een eigen karakter. Ze bewegen met korte
+// clips (geanimeerde WebP, 6 beelden per seconde, bewust een beetje
+// schokkerig) en blijven daarna in hun eindstand staan. Per kat:
+//   rust         stilstaand, als de vraag openstaat
+//   goed         clip, daarna goed-eind: bij een goed antwoord en bij gedag
+//   bijna        clip, daarna bijna-eind: bij een fout of bijna-goed
+//                antwoord, en bij gedag na een stevige ronde
+// Alles staat in katten/clips/, en katten/clips/katten.json beschrijft
+// het: bestandsnamen, maat van het doek, duur per clip en kijkrichting.
+// Hier staat daarvan niets vast; laadCatalogus() leest het.
+//
+// Regel: de kat kijkt naar binnen. Staat hij rechts van de inhoud en
+// kijkt hij "rechts", dan spiegelen we hem (klasse .gespiegeld in ds.css).
+// Kijkt hij "voor", dan nooit. Rust is het eerste beeld van de goed-clip,
+// dus rust volgt de kijkrichting van goed.
 //
 // De kat is een maatje, geen beloning. Hij zit de hele ronde op de
 // rand van de vraagkaart, kijkt mee en zegt iets bij elk antwoord. Aan
@@ -23,67 +32,204 @@
 // per oefenaar) blijft ongemoeid staan en wordt niet meer gelezen.
 //
 // Confetti alleen na een vlekkeloze ronde, met de hand getekend op een
-// canvas, geen library. Respecteert prefers-reduced-motion: dan geen confetti.
+// canvas, geen library. Respecteert prefers-reduced-motion: dan geen
+// confetti, en de kat staat meteen in zijn eindstand.
 // =============================================================
 (function (root) {
   "use strict";
 
   // --- de zes katten -----------------------------------------------
-  // breed: breedte in pixels per stand bij een hoogte van HOOG, zodat
-  // elk <img> vaste afmetingen krijgt en er niets verspringt.
-  const HOOG = 480;
+  // Naam en karakter; de beelden komen uit katten.json.
   const KATTEN = [
-    { id: "strepen",    naam: "Strepen",     karakter: "knus",         breed: { goed: 275, bijna: 347 } },
-    { id: "tuxedo",     naam: "Tuxedo",      karakter: "muziek",       breed: { goed: 360, bijna: 335 } },
-    { id: "lapjes",     naam: "Lapjes",      karakter: "leergierig",   breed: { goed: 315, bijna: 366 } },
-    { id: "sokjes",     naam: "Sokjes",      karakter: "sportief",     breed: { goed: 368, bijna: 341 } },
-    { id: "stippen",    naam: "Stippen",     karakter: "avontuurlijk", breed: { goed: 339, bijna: 346 } },
-    { id: "rodestreep", naam: "Rode streep", karakter: "ondeugend",    breed: { goed: 338, bijna: 339 } }
+    { id: "strepen",    naam: "Strepen",     karakter: "knus" },
+    { id: "tuxedo",     naam: "Tuxedo",      karakter: "muziek" },
+    { id: "lapjes",     naam: "Lapjes",      karakter: "leergierig" },
+    { id: "sokjes",     naam: "Sokjes",      karakter: "sportief" },
+    { id: "stippen",    naam: "Stippen",     karakter: "avontuurlijk" },
+    { id: "rodestreep", naam: "Rode streep", karakter: "ondeugend" }
   ];
-  const STANDEN = ["goed", "bijna"];
+  const STANDEN = ["rust", "goed", "bijna"];
+  const CLIPS = ["goed", "bijna"];
   // houding voor de alt-tekst: "Strepen, knus, blij"
-  const HOUDING = { goed: "blij", bijna: "rustig" };
+  const HOUDING = { rust: "kijkt mee", goed: "blij", bijna: "rustig" };
 
   function zoek(id) { return KATTEN.find(k => k.id === id) || null; }
   function bestaat(id) { return !!zoek(id); }
 
-  // Alles wat nodig is om een kat te tekenen. ui.js kent de catalogus
-  // niet; die krijgt dit object en tekent het.
+  // --- katten.json ----------------------------------------------------
+  const MAP = "katten/clips/";
+  let catalogus = null, catalogusBelofte = null;
+  const bestand = s => typeof s === "string" && /^[a-z0-9-]+\.webp$/.test(s);
+  const maat = n => Number.isInteger(n) && n > 0 && n <= 4096;
+  // Alleen wat klopt komt erin: veilige bestandsnamen, een duur, een
+  // kijkrichting. Een kat die niet klopt, valt weg (dan geen kat).
+  function controleer(c) {
+    if (!c || typeof c !== "object" || !maat(c.breedte) || !maat(c.hoogte) || !c.katten || typeof c.katten !== "object") return null;
+    const katten = {};
+    for (const k of KATTEN) {
+      const x = c.katten[k.id];
+      if (!x || !bestand(x.rust)) continue;
+      const ok = CLIPS.every(m => x[m] && bestand(x[m].anim) && bestand(x[m].eind) &&
+        Number.isFinite(x[m].duurMs) && x[m].duurMs > 0 && x[m].duurMs <= 10000 && (x[m].kijkt === "rechts" || x[m].kijkt === "voor"));
+      if (!ok) continue;
+      katten[k.id] = { rust: x.rust };
+      for (const m of CLIPS) katten[k.id][m] = { anim: x[m].anim, eind: x[m].eind, duurMs: x[m].duurMs, kijkt: x[m].kijkt };
+    }
+    return { breedte: c.breedte, hoogte: c.hoogte, katten };
+  }
+  // Haalt katten.json een keer op (uit de service worker als die er is).
+  // Lukt het niet, dan null, en de volgende keer opnieuw proberen.
+  function laadCatalogus() {
+    if (catalogus) return Promise.resolve(catalogus);
+    if (!catalogusBelofte) {
+      catalogusBelofte = Promise.resolve()
+        .then(() => root.fetch(MAP + "katten.json"))
+        .then(r => { if (!r.ok) throw new Error("katten.json " + r.status); return r.json(); })
+        .then(c => { catalogus = controleer(c); if (!catalogus) throw new Error("katten.json klopt niet"); return catalogus; })
+        .catch(() => { catalogusBelofte = null; return null; });
+    }
+    return catalogusBelofte;
+  }
+  function gegevens(id) { return (catalogus && catalogus.katten[id]) || null; }
+
+  // Kijkrichting per stand. Rust is het eerste beeld van de goed-clip.
+  function kijkt(id, stand) {
+    const k = gegevens(id);
+    if (!k) return "voor";
+    return (stand === "bijna" ? k.bijna : k.goed).kijkt;
+  }
+  // De regel: alleen rechts van de inhoud en naar rechts kijkend spiegelen.
+  function spiegel(richting, plaats) { return plaats === "rechts" && richting === "rechts"; }
+
+  // Alles om een kat stil te tekenen: rust, of het eindbeeld van een stand.
+  // ui.js kent de catalogus niet; die krijgt dit object en tekent het.
   function beeld(id, stand) {
-    const k = zoek(id);
-    if (!k) return null;
-    const s = STANDEN.includes(stand) ? stand : "goed";
+    const k = zoek(id), g = gegevens(id);
+    if (!k || !g) return null;
+    const s = STANDEN.includes(stand) ? stand : "rust";
     return {
       id: k.id, naam: k.naam, karakter: k.karakter, stand: s, houding: HOUDING[s],
-      src: "katten/" + k.id + "-" + s + ".webp",
-      width: k.breed[s], height: HOOG,
+      src: MAP + (s === "rust" ? g.rust : g[s].eind), beeld: s === "rust" ? "rust" : s + "-eind",
+      width: catalogus.breedte, height: catalogus.hoogte, kijkt: kijkt(id, s),
       alt: k.naam + ", " + k.karakter + ", " + HOUDING[s]
     };
   }
 
   // --- het beeld van het welkom -------------------------------------
-  // De enige plek waar het welkom zijn beeld per kat kiest. Nu de blije
-  // stand ("goed") als stilstaand beeld; de sprong en het wiebelen doet
-  // ds.css (.welkom-kat).
-  //
-  // Een geanimeerde kat per kat inhangen:
-  //   1. Zet het bestand in katten/, bijvoorbeeld katten/<id>-welkom.webp
-  //      (geanimeerde WebP, speelt een keer af) of katten/<id>-welkom.mp4.
-  //   2. Zet het in SCHIL in sw.js, anders werkt het welkom offline niet en
-  //      slaat het stil over. katten/ staat al in .assetsignore.
-  //   3. Geef hier src, width en height van dat bestand terug, met
-  //      beweegtZelf: true. Dan laat ds.css de sprong en het wiebelen weg en
-  //      speelt alleen het bestand. Voor een geanimeerde WebP is dat alles:
-  //      het blijft een <img>. Laat stil naar het stilstaande beeld wijzen:
-  //      dat krijgt wie minder beweging wil (UI.Welkom met stil: true).
-  //   4. Video kan nog niet: geef dan soort: "video", voeg in UI.Welkom een
-  //      <video muted playsinline autoplay> toe met stil als poster, en laat
-  //      welkom() in index.html op "canplaythrough" wachten in plaats van op
-  //      img.decode(). Totale duur blijft --welkom-duur in ds.css.
+  // De goed-clip van de kat. UI.Welkom tekent eerst src (rust, het eerste
+  // beeld van de clip), of stil bij reduced motion (het eindbeeld). Daarna
+  // speelt index.html de clip met speler().
   function welkomBeeld(id) {
-    const b = beeld(id, "goed");
-    if (!b) return null;
-    return { id: b.id, soort: "img", src: b.src, stil: b.src, width: b.width, height: b.height, beweegtZelf: false };
+    const r = beeld(id, "rust"), e = beeld(id, "goed");
+    if (!r || !e) return null;
+    return { id: r.id, src: r.src, stil: e.src, beeld: "rust", width: r.width, height: r.height, duurMs: gegevens(id).goed.duurMs };
+  }
+
+  // --- de beelden van een kat laden -------------------------------------
+  // Alleen de kat van de ronde: rust, twee clips en twee eindbeelden. De
+  // clips als Blob, zodat elke start een eigen object-URL krijgt en dus
+  // bij het eerste beeld begint. De stilstaande beelden alvast in de
+  // browser, zodat de wissel naar het eindbeeld niets laat zien. Een
+  // andere kat laden laat de vorige los.
+  let geladen = null;
+  function laadKat(id) {
+    if (geladen && geladen.id === id) return geladen.belofte;
+    const g = { id, clips: { goed: null, bijna: null }, klaar: false, volledig: false, beelden: [] };
+    geladen = g;
+    g.belofte = laadCatalogus().then(() => {
+      const k = gegevens(id);
+      if (!k) return [false];
+      const stil = typeof root.Image === "function" ? [k.rust, k.goed.eind, k.bijna.eind].map(f => {
+        const i = new root.Image();
+        i.src = MAP + f;
+        g.beelden.push(i);
+        return i.decode ? i.decode().then(() => true, () => false) : Promise.resolve(true);
+      }) : [];
+      const clips = CLIPS.map(m => root.fetch(MAP + k[m].anim)
+        .then(r => (r.ok ? r.blob() : null)).catch(() => null)
+        .then(b => { g.clips[m] = b || null; return !!b; }));
+      return Promise.all(stil.concat(clips));
+    }).then(ok => {
+      g.klaar = true;
+      g.volledig = ok.length > 0 && ok.every(Boolean);
+      return g;
+    });
+    return g.belofte;
+  }
+
+  // --- de speler ------------------------------------------------------
+  // Een gewoon <img> en een timer. speel(id, stand):
+  //   rust          meteen het rustbeeld
+  //   goed, bijna   de clip uit een nieuwe object-URL, na duurMs het
+  //                 eindbeeld (gelijk aan het laatste beeld van de clip,
+  //                 en het vangt een browser op die de clip toch herhaalt)
+  // Een nieuw moment stopt de timer en begint meteen. De vorige URL wordt
+  // opgeruimd zodra hij niet meer te zien is. Bij reduced motion, of als
+  // de clip niet te laden is, meteen het eindbeeld. Geeft een belofte die
+  // true wordt als het eindbeeld (of rust) staat, false als hij is afgebroken.
+  // Het <img> houdt vaste width en height; alle beelden hebben hetzelfde doek.
+  // plaats: "rechts" (rechts van de inhoud, dan geldt de spiegelregel),
+  // of "midden" (nooit spiegelen).
+  const WACHT_OP_CLIP = 600;   // ms; is de clip er dan nog niet, het eindbeeld
+  function speler(img, opties) {
+    const plaats = (opties && opties.plaats) || "midden";
+    let timer = null, url = null, beurt = 0, lopend = null;
+    function ruimOp(behalve) {
+      if (url && url !== behalve) { root.URL.revokeObjectURL(url); url = null; }
+    }
+    function zet(src, id, naam, richting) {
+      img.src = src;
+      img.setAttribute("data-kat", id);
+      img.setAttribute("data-beeld", naam);
+      img.classList.toggle("gespiegeld", spiegel(richting, plaats));
+    }
+    function onderbreek() {
+      beurt++;
+      if (timer !== null) { clearTimeout(timer); timer = null; }
+      if (lopend) { const af = lopend; lopend = null; af(false); }
+    }
+    function speel(id, stand) {
+      onderbreek();
+      const mijn = beurt;
+      return new Promise(af => {
+        lopend = af;
+        const klaar = () => { if (mijn === beurt) { lopend = null; af(true); } };
+        const k = gegevens(id);
+        if (!k) { klaar(); return; }
+        laadKat(id);
+        if (stand !== "goed" && stand !== "bijna") {
+          zet(MAP + k.rust, id, "rust", kijkt(id, "rust")); ruimOp(); klaar(); return;
+        }
+        const c = k[stand];
+        const eind = () => {
+          if (mijn !== beurt) return;
+          timer = null;
+          zet(MAP + c.eind, id, stand + "-eind", c.kijkt); ruimOp(); klaar();
+        };
+        if (reduced()) { eind(); return; }
+        const start = blob => {
+          if (mijn !== beurt) return;
+          if (!blob) { eind(); return; }
+          const nieuw = root.URL.createObjectURL(blob);
+          zet(nieuw, id, stand, c.kijkt);
+          ruimOp(nieuw);
+          url = nieuw;
+          timer = setTimeout(eind, c.duurMs);
+        };
+        const g = geladen && geladen.id === id ? geladen : null;
+        if (g && g.klaar) { start(g.clips[stand]); return; }
+        // nog aan het laden: even wachten, dan de clip of het eindbeeld
+        let gewacht = false;
+        timer = setTimeout(() => { gewacht = true; timer = null; eind(); }, WACHT_OP_CLIP);
+        laadKat(id).then(x => {
+          if (gewacht || mijn !== beurt) return;
+          clearTimeout(timer); timer = null;
+          start(x.id === id ? x.clips[stand] : null);
+        });
+      });
+    }
+    function stop() { onderbreek(); ruimOp(); }
+    return { speel, stop };
   }
 
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
@@ -130,9 +276,10 @@
 
   // --- wat de kat zegt ----------------------------------------------
   // Altijd vriendelijk en vooruit kijkend, geen uitroeptekens.
-  // Per moment de tekst en de stand van de kat.
+  // Per moment de tekst en de stand van de kat: rust staat stil, goed en
+  // bijna spelen hun clip en blijven dan in het eindbeeld.
   const ZEGT = {
-    wacht: { stand: "bijna", tekst: "Ik kijk mee." },
+    wacht: { stand: "rust",  tekst: "Ik kijk mee." },
     goed:  { stand: "goed",  tekst: "Dat zat erin." },
     fout:  { stand: "bijna", tekst: "Hm, wat zag je in dit woord? Hij komt straks nog een keer." }
   };
@@ -257,5 +404,6 @@
     if (!reduced()) confetti(opts.duration);
   }
 
-  root.Celebrate = { celebrate, confetti, KATTEN, STANDEN, HOUDING, beeld, welkomBeeld, bestaat, nieuweRonde, volgende, onthoud, vorige, zegt, gedag, ZEGT, GEDAG, VORIGE };
+  root.Celebrate = { celebrate, confetti, KATTEN, STANDEN, HOUDING, MAP, laadCatalogus, catalogus: () => catalogus, beeld, welkomBeeld, kijkt, spiegel,
+    laadKat, speler, bestaat, nieuweRonde, volgende, onthoud, vorige, zegt, gedag, ZEGT, GEDAG, VORIGE };
 })(typeof window === "object" ? window : globalThis);
