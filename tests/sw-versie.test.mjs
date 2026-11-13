@@ -486,7 +486,7 @@ test("ongestempeld: katten en fonts komen meteen uit de cache en worden op de ac
     const t = performance.now(); const r = await fetch(u); await r.arrayBuffer();
     return { ms: performance.now() - t, versie: r.headers.get("X-Testversie"), ok: r.ok };
   }, u);
-  const bestanden = ["katten/strepen-goed.webp", "fonts/inter-latin-wght-normal.woff2"];
+  const bestanden = ["katten/clips/strepen-rust.webp", "katten/clips/katten.json", "fonts/inter-latin-wght-normal.woff2"];
   // het net is traag en heeft een nieuwe versie (B)
   zet({ app: "B", gestempeld: false, traag: { "/katten/": 2000, "/fonts/": 2000 } });
   for (const u of bestanden) {
