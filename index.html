@@ -37,23 +37,27 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
 <!-- LESSEN -->
 <section id="scr-lessons" class="screen">
   <div class="app">
-    <header class="brand"><h1>Overhoren</h1><p class="tag">Woordjes leren met slimme herhaling</p></header>
-    <div class="learner-row">
-      <span id="learner-view">Wie oefent: <b id="learner-label"></b> <button class="link" id="btn-learner">wissel</button></span>
-      <span class="row" id="learner-form" hidden><input type="text" id="learner-name" placeholder="Naam" autocomplete="off"><button class="btn" id="btn-learner-save">Opslaan</button></span>
-      <span class="sync" id="sync-state"></span>
-    </div>
-    <div class="lessons" id="lessons"></div>
-    <p class="foot"><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button></p>
-    <div class="theme-row" role="group" aria-labelledby="theme-label">
-      <span class="eyebrow" id="theme-label">Thema</span>
-      <div class="seg" id="theme-seg">
-        <button type="button" data-theme="" aria-pressed="true" class="on">Systeem</button>
-        <button type="button" data-theme="light" aria-pressed="false">Licht</button>
-        <button type="button" data-theme="dark" aria-pressed="false">Donker</button>
+    <div class="start-kop">
+      <header class="brand"><h1>Overhoren</h1><p class="tag">Woordjes leren met slimme herhaling</p></header>
+      <div class="learner-row">
+        <span id="learner-view">Wie oefent: <b id="learner-label"></b> <button class="link" id="btn-learner">wissel</button></span>
+        <span class="row" id="learner-form" hidden><input type="text" id="learner-name" placeholder="Naam" autocomplete="off"><button class="btn" id="btn-learner-save">Opslaan</button></span>
+        <span class="sync" id="sync-state"></span>
       </div>
     </div>
-    <button class="btn add-list-btn" id="btn-import">+ Nieuwe lijst</button>
+    <div class="lessons" id="lessons"></div>
+    <div class="start-acties"><button class="btn add-list-btn" id="btn-import">+ Nieuwe lijst</button></div>
+    <footer class="start-foot">
+      <p class="foot"><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button></p>
+      <div class="theme-row" role="group" aria-labelledby="theme-label">
+        <span class="eyebrow" id="theme-label">Thema</span>
+        <div class="seg" id="theme-seg">
+          <button type="button" data-theme="" aria-pressed="true" class="on">Systeem</button>
+          <button type="button" data-theme="light" aria-pressed="false">Licht</button>
+          <button type="button" data-theme="dark" aria-pressed="false">Donker</button>
+        </div>
+      </div>
+    </footer>
   </div>
 </section>
 
