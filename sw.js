@@ -29,7 +29,7 @@ const CACHE = "overhoren-" + VERSIE;
 const SCHIL = [
   "./", "./ds.css", "./ui.js",
   "./celebrate.js", "./engine.js", "./lists.js", "./manifest.json",
-  "./icons/icoon-192.png", "./icons/icoon-512.png",
+  "./icons/icoon-192.png", "./icons/icoon-512.png", "./icons/favicon-32.png",
   "./fonts/chakra-petch-latin-600-normal.woff2",
   "./fonts/chakra-petch-latin-ext-600-normal.woff2",
   "./fonts/chakra-petch-latin-700-normal.woff2",

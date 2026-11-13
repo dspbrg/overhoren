@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#6B3FD1"/>
+  <!-- kat binnen de veilige zone van een maskable icoon (midden 80%) -->
+  <g transform="translate(256 268) scale(2.05) translate(-100 -108)">
+    <path d="M58 110 C58 94 59 86 62 80 L57 52 L90 77 Q100 74 110 77 L143 52 L138 80
+             C141 86 142 94 142 110 C142 140 125 152 100 152 C75 152 58 140 58 110 Z"
+          fill="#F4F1FB" stroke="#4A2896" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M68 87 L65 62 L86 80 Z" fill="#F4A6B8"/><path d="M132 87 L135 62 L114 80 Z" fill="#F4A6B8"/>
+    <circle cx="80" cy="104" r="9" fill="#2A2733"/><circle cx="120" cy="104" r="9" fill="#2A2733"/>
+    <circle cx="83" cy="101" r="3" fill="#fff"/><circle cx="123" cy="101" r="3" fill="#fff"/>
+    <path d="M100 118 l-6 -5 h12 z" fill="#E8476B"/>
+    <path d="M100 118 v6 M100 124 q-7 6 -13 1 M100 124 q7 6 13 1"
+          stroke="#2A2733" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <g stroke="#C9C2E4" stroke-width="3" stroke-linecap="round">
+      <path d="M58 114 h-16 M58 122 h-14 M142 114 h16 M142 122 h14"/></g>
+  </g>
+</svg>

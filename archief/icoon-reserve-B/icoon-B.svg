@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<rect width="1024" height="1024" fill="#6B3FD1"/>
+<polygon points="0,0 1024,0 1024,330 0,640" fill="#7547DC"/>
+<polygon points="0,640 1024,330 1024,640 0,900" fill="#6339C6"/>
+<polygon points="0,900 1024,640 1024,1024 0,1024" fill="#4B2A99"/>
+<polygon points="0,0 380,0 0,260" fill="#8359EA" opacity=".55"/>
+<defs><clipPath id="h"><polygon points="512.0,162.0 815.1,337.0 815.1,687.0 512.0,862.0 208.9,687.0 208.9,337.0"/></clipPath>
+<clipPath id="o"><path clip-rule="evenodd" d="M388.0,312.0 L636.0,312.0 L712.0,388.0 L712.0,636.0 L636.0,712.0 L388.0,712.0 L312.0,636.0 L312.0,388.0Z M448.0,408.0 L576.0,408.0 L616.0,448.0 L616.0,576.0 L576.0,616.0 L448.0,616.0 L408.0,576.0 L408.0,448.0Z"/></clipPath>
+<filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="22" stdDeviation="0" flood-color="#2E1A66" flood-opacity=".85"/></filter></defs>
+<g filter="url(#s)"><polygon points="512.0,162.0 815.1,337.0 815.1,687.0 512.0,862.0 208.9,687.0 208.9,337.0" fill="#EEEAFA"/></g>
+<g clip-path="url(#h)"><polygon points="512.0,512.0 512.0,162.0 815.1,337.0" fill="#F4F1FC"/><polygon points="512.0,512.0 815.1,337.0 815.1,687.0" fill="#E4DCF8"/><polygon points="512.0,512.0 815.1,687.0 512.0,862.0" fill="#EEEAFA"/><polygon points="512.0,512.0 512.0,862.0 208.9,687.0" fill="#D9CEF5"/><polygon points="512.0,512.0 208.9,687.0 208.9,337.0" fill="#F7F4FE"/><polygon points="512.0,512.0 208.9,337.0 512.0,162.0" fill="#E4DCF8"/></g>
+<g clip-path="url(#o)"><rect x="300" y="300" width="424" height="424" fill="#6B3FD1"/>
+<polygon points="300,300 724,300 724,430 300,560" fill="#7D52E0"/>
+<polygon points="300,724 724,724 724,560 300,690" fill="#4B2A99"/></g>
+</svg>
