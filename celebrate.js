@@ -163,6 +163,11 @@
   //   goed, bijna   de clip uit een nieuwe object-URL, na duurMs het
   //                 eindbeeld (gelijk aan het laatste beeld van de clip,
   //                 en het vangt een browser op die de clip toch herhaalt)
+  // speel(id, stand, { lus: true }), alleen voor het welkom: na elke duurMs
+  // begint de clip opnieuw met een nieuwe object-URL (de WebP's spelen zelf
+  // een keer), de vorige wordt opgeruimd. Het laatste beeld staat al 600 ms,
+  // dus de herstart valt precies na dat beeld. uitlopen() maakt de lopende
+  // ronde af en zet dan het eindbeeld; stop() houdt meteen op.
   // Een nieuw moment stopt de timer en begint meteen. De vorige URL wordt
   // opgeruimd zodra hij niet meer te zien is. Bij reduced motion, of als
   // de clip niet te laden is, meteen het eindbeeld. Geeft een belofte die
@@ -173,7 +178,7 @@
   const WACHT_OP_CLIP = 600;   // ms; is de clip er dan nog niet, het eindbeeld
   function speler(img, opties) {
     const plaats = (opties && opties.plaats) || "midden";
-    let timer = null, url = null, beurt = 0, lopend = null;
+    let timer = null, url = null, beurt = 0, lopend = null, lus = false;
     function ruimOp(behalve) {
       if (url && url !== behalve) { root.URL.revokeObjectURL(url); url = null; }
     }
@@ -188,8 +193,9 @@
       if (timer !== null) { clearTimeout(timer); timer = null; }
       if (lopend) { const af = lopend; lopend = null; af(false); }
     }
-    function speel(id, stand) {
+    function speel(id, stand, opties) {
       onderbreek();
+      lus = !!(opties && opties.lus);
       const mijn = beurt;
       return new Promise(af => {
         lopend = af;
@@ -214,7 +220,7 @@
           zet(nieuw, id, stand, c.kijkt);
           ruimOp(nieuw);
           url = nieuw;
-          timer = setTimeout(eind, c.duurMs);
+          timer = setTimeout(() => (lus ? start(blob) : eind()), c.duurMs);
         };
         const g = geladen && geladen.id === id ? geladen : null;
         if (g && g.klaar) { start(g.clips[stand]); return; }
@@ -228,8 +234,9 @@
         });
       });
     }
-    function stop() { onderbreek(); ruimOp(); }
-    return { speel, stop };
+    function stop() { lus = false; onderbreek(); ruimOp(); }
+    function uitlopen() { lus = false; }
+    return { speel, stop, uitlopen };
   }
 
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }

@@ -28,6 +28,9 @@
    laten erven: anders krijgt een vorm binnen een kaart de kaartschaduw.
    --surf en --cut moeten wel erven, want ::before leest ze van zijn element. */
 @property --drop { syntax: "*"; inherits: false; }
+/* --gat is hoe ver het zeshoekige gat in het welkom open is, van 0 tot 1.
+   Geregistreerd als getal, zodat het vloeiend groeit in een animatie. */
+@property --gat { syntax: "<number>"; inherits: false; initial-value: 0; }
 
 /* =============================================================
    0. FONTS
@@ -266,11 +269,13 @@
     --spraak-regels: 3;       /* zoveel regels houdt de rand vrij, zodat de kaart niet verspringt */
     --kat-welkom-h:  232px;   /* kat in het welkom */
 
-    /* --- welkom: hoe lang het welkom bij het openen minstens staat, alles bij
-       elkaar. index.html leest deze waarde (in ms) en haalt het daarna
-       weg; de tijdlijn in .welkom past erbinnen. --- */
+    /* --- welkom: hoe lang het welkom bij het openen staat, alles bij
+       elkaar, met de overgang erin. index.html leest deze waarden (in ms);
+       de tijdlijn in .welkom past erbinnen. --- */
     --welkom-duur: 3500ms;
-    --welkom-vervaag: 300ms;  /* het laatste stuk: alles vervaagt */
+    --welkom-overgang: 500ms;       /* het laatste stuk: het zeshoekige gat opent */
+    --welkom-overgang-snel: 250ms;  /* hetzelfde gat na een tik of toets */
+    --welkom-curve: cubic-bezier(0.6, 0, 0.4, 1);    /* rustig open, snel over het midden, rustig de hoeken uit */
     --t-welkom:    2.5rem;    /* 40px, de naam van de app in het welkom */
 
     /* kleinste tikdoel op een telefoon; knoppen zijn 48 */
@@ -676,20 +681,46 @@
      Heel scherm over de app (die is zolang inert). Tijdlijn:
        0     de naam verschijnt (200 ms), de goed-clip van de kat begint
        400   "Hoi <naam>" verschijnt (200 ms)
-       daarna, zodra --welkom-duur min --welkom-vervaag voorbij is en de
-             clip op zijn eindbeeld staat: .vervaagt, alles vervaagt in
-             --welkom-vervaag, en index.html haalt het weg
-     Samen minstens --welkom-duur (3500 ms, keuze van Daan: "veeeel te kort", "nog een seconde langer"). De kat beweegt alleen met
-     zijn clip, er zit geen sprong of wiebel op. Alleen transform en
-     opacity. Bij reduced motion staat alles stil in het eindbeeld (regel
-     onderaan) en gaat het na --welkom-duur weg. */
+       0 tot 3000  de goed-clip speelt in een lus (alleen hier, in de ronde een keer)
+       3000  .opent: vanuit het midden opent een plat zeshoekig gat dat in
+             --welkom-overgang groeit tot over het hele scherm; door het gat
+             verschijnt de app. Tegelijk vervaagt het welkom. Daarna haalt
+             index.html het weg en is de app niet meer inert.
+     Samen --welkom-duur (3500 ms, keuze van Daan: "veeeel te kort", "nog
+     een seconde langer"). Een tik of toets geeft .opent.snel: hetzelfde gat
+     in --welkom-overgang-snel. De kat beweegt alleen met zijn clip, er zit
+     geen sprong of wiebel op. Bij reduced motion geen gat en geen
+     vervaging: alles staat stil in het eindbeeld (regel onderaan) en is na
+     --welkom-duur, of na een tik, meteen weg. */
   .welkom {
     position: fixed; inset: 0; z-index: 100;
     display: grid; place-content: center; justify-items: center; gap: var(--gap-group);
     padding: var(--page-y) var(--page-x); text-align: center; cursor: pointer;
     background: var(--page); color: var(--ink);
+    /* zo groot wordt het gat op --gat 1: een platte zeshoek met straal R
+       bedekt het scherm als R minstens halve breedte plus hoogte/(2 wortel 3)
+       is, en minstens hoogte/wortel 3 (een smal, hoog scherm) */
+    --gat-max: max(50vw + 28.9vh, 57.8vh);
   }
-  .welkom.vervaagt { animation: welkom-uit var(--welkom-vervaag) ease-out both; }
+  /* De overgang. Een clip-path met evenodd: de rechthoek van het scherm en
+     daarin een platte zeshoek (punten links en rechts, vlak boven en onder),
+     dezelfde vorm als de schaduw onder het podium. Wat in beide zit, valt
+     weg: dat is het gat. Ook tikken in het gat valt erdoor, op de app die
+     nog inert is, dus er gebeurt niets. */
+  @media (prefers-reduced-motion: no-preference) {
+    .welkom.opent {
+      --gat-r: calc(var(--gat) * var(--gat-max));
+      --gat-h: calc(var(--gat-r) * 0.866);
+      clip-path: polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+        calc(50% - var(--gat-r) / 2) calc(50% - var(--gat-h)), calc(50% + var(--gat-r) / 2) calc(50% - var(--gat-h)),
+        calc(50% + var(--gat-r)) 50%,
+        calc(50% + var(--gat-r) / 2) calc(50% + var(--gat-h)), calc(50% - var(--gat-r) / 2) calc(50% + var(--gat-h)),
+        calc(50% - var(--gat-r)) 50%,
+        calc(50% - var(--gat-r) / 2) calc(50% - var(--gat-h)));
+      animation: welkom-open var(--welkom-overgang) var(--welkom-curve) both;
+    }
+    .welkom.opent.snel { animation-duration: var(--welkom-overgang-snel); }
+  }
   .welkom-merk {
     display: flex; align-items: center; gap: var(--s3); margin: 0;
     font-family: var(--display); font-weight: 700; font-size: var(--t-welkom); line-height: 1.1;
@@ -847,9 +878,10 @@
 
   @keyframes pop  { from { transform: scale(.7); opacity: 0 } to { transform: scale(1); opacity: 1 } }
   @keyframes bump { 0% { transform: scale(1) } 40% { transform: scale(1.22) } 100% { transform: scale(1) } }
-  /* welkom: alleen translate, scale, rotate en opacity */
+  /* welkom: alleen translate, scale, rotate, opacity en het gat */
   @keyframes welkom-in     { from { opacity: 0; translate: 0 var(--s2); } }
-  @keyframes welkom-uit    { to { opacity: 0; } }
+  /* het gat groeit, en vanaf de helft vervaagt de rest: een zachte zeshoek, geen harde wipe */
+  @keyframes welkom-open   { from { --gat: 0; } 50% { opacity: 1; } to { --gat: 1; opacity: 0; } }
   @keyframes ring {
     0%   { filter: drop-shadow(0 var(--drop-y) 0 var(--card-shadow-color)) drop-shadow(0 0 0 color-mix(in srgb, var(--ok) 55%, transparent)) }
     100% { filter: drop-shadow(0 var(--drop-y) 0 var(--card-shadow-color)) drop-shadow(0 0 14px transparent) }

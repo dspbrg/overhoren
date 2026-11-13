@@ -1874,8 +1874,12 @@ function zetBeta(){
 // hetzelfde tabblad. Niet als er een ronde openstaat die je kunt hervatten:
 // die heeft al een eigen kat. De beelden van die kat moeten binnen 300 ms
 // klaar zijn (uit de cache, ook offline); anders slaat het welkom stil
-// over. Het staat minstens --welkom-duur en sluit pas als de clip op zijn
-// eindbeeld staat. Tik of toets haalt het eerder weg.
+// over. De goed-clip speelt in een lus. Na --welkom-duur min
+// --welkom-overgang opent een zeshoekig gat (ds.css .welkom.opent), en na
+// --welkom-overgang is het weg. Tik of toets start hetzelfde gat in
+// --welkom-overgang-snel. De app blijft inert tot het welkom weg is. Bij
+// reduced motion geen lus en geen gat: na --welkom-duur, of na een tik,
+// meteen weg.
 //
 // Hoe vaak: WELKOM_PER_DAG. Op false (nu, keuze van Daan) elke sessie.
 // Op true komt het hooguit een keer per kalenderdag per apparaat; dan
@@ -1920,31 +1924,44 @@ function toonWelkom(beeld, stil){
   app.inert = true;
   // de tijden staan in ds.css, in ms
   const css = getComputedStyle(document.documentElement);
-  const duur = parseFloat(css.getPropertyValue("--welkom-duur")) || 3500;
-  const vervaag = parseFloat(css.getPropertyValue("--welkom-vervaag")) || 300;
+  const ms = naam => parseFloat(css.getPropertyValue(naam));
+  const duur = ms("--welkom-duur") || 3500;
+  const overgang = stil ? 0 : (ms("--welkom-overgang") || 500);
+  const snel = stil ? 0 : (ms("--welkom-overgang-snel") || 250);
   const speler = Celebrate.speler(el.querySelector(".welkom-kat"), { plaats: "midden" });
-  let klok = null, weg = false;
-  function sluit(e){
-    // de tik of toets die het welkom wegdoet, doet verder niets in de app
-    if(e){ e.preventDefault(); e.stopPropagation(); }
+  let klok = null, opent = false, weg = false;
+  function sluit(){
     if(weg) return;
     weg = true;
     clearTimeout(klok);
     speler.stop();
-    el.removeEventListener("click", sluit);
-    document.removeEventListener("keydown", sluit, true);
+    el.removeEventListener("click", tik);
+    document.removeEventListener("keydown", tik, true);
     el.remove();
     app.inert = false;
   }
-  // minstens de duur, en de clip op zijn eindbeeld; dan vervagen en weg
-  const tijd = new Promise(r => { klok = setTimeout(r, Math.max(0, duur - vervaag)); });
-  Promise.all([tijd, speler.speel(beeld.id, "goed")]).then(() => {
-    if(weg) return;
-    el.classList.add("vervaagt");
-    klok = setTimeout(() => sluit(), vervaag);
-  });
-  el.addEventListener("click", sluit);
-  document.addEventListener("keydown", sluit, true);
+  // het zeshoekige gat; de lus maakt zijn ronde af en stopt dan. Bij
+  // reduced motion (tijd 0) meteen weg.
+  function open(tijd, kort){
+    if(opent || weg) return;
+    opent = true;
+    clearTimeout(klok);
+    if(!tijd){ sluit(); return; }
+    speler.uitlopen();
+    el.classList.toggle("snel", kort);
+    el.classList.add("opent");
+    klok = setTimeout(sluit, tijd);
+  }
+  // de tik of toets die het welkom wegdoet, doet verder niets in de app,
+  // ook niet een tweede tijdens de overgang
+  function tik(e){
+    e.preventDefault(); e.stopPropagation();
+    open(snel, true);
+  }
+  speler.speel(beeld.id, "goed", { lus: true });
+  klok = setTimeout(() => open(overgang, false), Math.max(0, duur - overgang));
+  el.addEventListener("click", tik);
+  document.addEventListener("keydown", tik, true);
 }
 
 function init(){

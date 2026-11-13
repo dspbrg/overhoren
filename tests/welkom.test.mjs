@@ -1,11 +1,14 @@
 // Het welkom bij het openen (variant A uit de opzet van Dieter): heel
 // scherm, de naam van de app, de goed-clip van de kat van de eerstvolgende
-// ronde (geen css-sprong of wiebel), dan "Hoi <naam>", daarna vervaagt
-// alles. Minstens 1,2 s en pas weg als de clip op zijn eindbeeld staat
-// (de clip zelf: kattenclips.test.mjs). Tik of toets haalt het eerder weg,
-// de app eronder is zolang inert. Bij elke keer openen (nieuw tabblad, nieuwe sessie), maar niet
+// ronde in een lus (geen css-sprong of wiebel), dan "Hoi <naam>". Na
+// --welkom-duur min --welkom-overgang opent vanuit het midden een plat
+// zeshoekig gat dat in --welkom-overgang groeit tot over het hele scherm,
+// terwijl het welkom vervaagt (de lus zelf: kattenclips.test.mjs). Tik of
+// toets start dezelfde overgang in --welkom-overgang-snel; de app eronder
+// is inert tot het welkom helemaal weg is. Bij elke keer openen (nieuw tabblad, nieuwe sessie), maar niet
 // opnieuw binnen dezelfde sessie en niet als er een ronde openstaat. Alleen als het beeld
-// binnen 300 ms klaar is. Reduced motion: een stilstaand eindbeeld.
+// binnen 300 ms klaar is. Reduced motion: een stilstaand eindbeeld, geen
+// zeshoek, na --welkom-duur meteen weg.
 //
 // Alle andere tests zetten de sessievlag van het welkom al (zie
 // tests/lib/omgeving.mjs); hier opent elke context met { welkom: true }.
@@ -23,8 +26,9 @@ const lees = f => readFileSync(join(REPO, f), "utf8");
 const ALLE = ["strepen", "tuxedo", "lapjes", "sokjes", "stippen", "rodestreep"];
 const VORIGE = "overhoor:kat:vorige";
 const KAT = JSON.parse(lees("katten/clips/katten.json"));
-// hoe lang het welkom met deze kat staat: minstens 1,2 s, en de clip uit plus het vervagen
-const verwacht = (kat, stil) => (stil ? 3500 : Math.max(3500, KAT.katten[kat].goed.duurMs + 300));
+// hoe lang het welkom staat: --welkom-duur, met de overgang erin, voor elke kat
+const verwacht = () => 3500;
+const OVERGANG = 500, SNEL = 250;
 
 // ---------- zonder browser ----------
 function laad({ opslag = {} } = {}) {
@@ -107,18 +111,27 @@ test("UI.Welkom: de naam gaat door esc(), zonder naam geen Hoi, de kat is versie
   assert.doesNotMatch(tekst, /[!—]/);
 });
 
-test("welkom in ds.css: minstens 1,2 s, alleen transform en opacity, geen sprong of wiebel op de kat, uit bij reduced motion", () => {
+test("welkom in ds.css: 3,5 s met een zeshoekige overgang van 500 ms (250 ms bij wegtikken), alleen transform, opacity en het gat, uit bij reduced motion", () => {
   const css = lees("ds.css");
   assert.match(css, /--welkom-duur:\s*3500ms;/);
-  assert.match(css, /--welkom-vervaag:\s*300ms;/);
+  assert.match(css, new RegExp(`--welkom-overgang:\\s*${OVERGANG}ms;`));
+  assert.match(css, new RegExp(`--welkom-overgang-snel:\\s*${SNEL}ms;`));
+  assert.doesNotMatch(css, /--welkom-vervaag/, "--welkom-vervaag is vervangen door --welkom-overgang");
+  // het gat: een geregistreerd getal, zodat het vloeiend groeit
+  assert.match(css, /@property --gat\s*\{[^}]*syntax:\s*"<number>"[^}]*inherits:\s*false[^}]*initial-value:\s*0[^}]*\}/);
+  // de zeshoek staat alleen in de overgang, en alleen zonder reduced motion
+  const zonder = css.match(/@media \(prefers-reduced-motion: no-preference\)\s*\{([\s\S]*?)\n  \}/);
+  assert.ok(zonder, "geen blok voor prefers-reduced-motion: no-preference");
+  assert.match(zonder[1], /\.welkom\.opent\s*\{[^}]*clip-path:\s*polygon\(evenodd,/, "geen zeshoekig gat in .welkom.opent");
+  assert.equal((css.match(/polygon\(evenodd/g) || []).length, 1, "het zeshoekige gat staat buiten de overgang");
   const frames = [...css.matchAll(/@keyframes (welkom-[\w-]+)\s*\{((?:[^{}]*\{[^}]*\})+)\s*\}/g)];
-  assert.deepEqual(frames.map(f => f[1]).sort(), ["welkom-in", "welkom-uit"], "keyframes van het welkom");
+  assert.deepEqual(frames.map(f => f[1]).sort(), ["welkom-in", "welkom-open"], "keyframes van het welkom");
   assert.doesNotMatch(css, /welkom-hop|welkom-wiebel|beweegt-zelf/, "de css-sprong of het wiebelen staat er nog");
   assert.match(css, /\.welkom-kat\s*\{[^}]*\}/);
   assert.doesNotMatch(css.match(/\.welkom-kat\s*\{([^}]*)\}/)[1], /animation|transform/, "css-beweging op de kat in het welkom");
   for (const [, naam, body] of frames) {
     const props = [...body.matchAll(/([\w-]+)\s*:/g)].map(m => m[1]);
-    for (const p of props) assert.ok(["opacity", "translate", "scale", "rotate", "transform"].includes(p), `${naam} animeert ${p}`);
+    for (const p of props) assert.ok(["opacity", "translate", "scale", "rotate", "transform", "--gat"].includes(p), `${naam} animeert ${p}`);
   }
   // reduced motion zet alle animaties uit (de algemene regel onderaan)
   assert.match(css, /prefers-reduced-motion: reduce\)\s*\{\s*\*\s*\{[^}]*animation: none !important/);
@@ -134,14 +147,21 @@ before(async () => {
 after(async () => { await browser?.close(); await server?.stop(); });
 
 // Houdt bij of het welkom ooit verscheen en wanneer, ook als het al weg is.
+// Ook: wanneer de overgang begon, of hij snel was, of het welkom toen het
+// zeshoekige gat had en of de app toen nog inert was.
 function kijker() {
-  window.__welkom = { gezien: 0, weg: 0, inert: false };
+  window.__welkom = { gezien: 0, weg: 0, inert: false, opent: 0, snel: null, zeshoek: false, inertTijdens: null, inertNa: null };
   new MutationObserver(() => {
     const el = document.querySelector("body > .welkom");
     const w = window.__welkom;
     if (el && !w.gezien) { w.gezien = performance.now(); w.inert = !!document.querySelector("body > .app")?.inert; }
-    if (!el && w.gezien && !w.weg) w.weg = performance.now();
-  }).observe(document, { childList: true, subtree: true });
+    if (el && el.classList.contains("opent") && !w.opent) {
+      w.opent = performance.now(); w.snel = el.classList.contains("snel");
+      w.inertTijdens = !!document.querySelector("body > .app")?.inert;
+    }
+    if (el && /polygon\(evenodd/.test(getComputedStyle(el).clipPath)) w.zeshoek = true;
+    if (!el && w.gezien && !w.weg) { w.weg = performance.now(); w.inertNa = !!document.querySelector("body > .app")?.inert; }
+  }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
 }
 
 async function nieuweContext({ thema = "light", breedte = 360, reduced = false, zaai = {} } = {}) {
@@ -168,7 +188,7 @@ const welkomEl = page => page.locator("body > .welkom");
 // wacht lang genoeg om zeker te weten dat er geen welkom komt (300 ms beeld plus marge)
 const geenWelkom = async page => { await page.waitForTimeout(700); return page.evaluate(() => ({ ...window.__welkom, nu: !!document.querySelector(".welkom") })); };
 
-test("welkom: bij het openen, heel scherm, app inert, Hoi Pia, na 1,2 s weg; geen dagsleutel", async () => {
+test("welkom: bij het openen, heel scherm, app inert, Hoi Pia, na 3,5 s weg met de overgang; geen dagsleutel", async () => {
   const { context } = await nieuweContext();
   const { page, fouten } = await openPagina(context);
   await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
@@ -189,9 +209,64 @@ test("welkom: bij het openen, heel scherm, app inert, Hoi Pia, na 1,2 s weg; gee
   const w = await page.evaluate(() => window.__welkom);
   const duur = w.weg - w.gezien;
   assert.ok(duur > verwacht(kat) - 150 && duur < verwacht(kat) + 400, `welkom stond ${Math.round(duur)} ms, verwacht ${verwacht(kat)}`);
+  // de overgang: het laatste stuk, met het zeshoekige gat, de app nog inert
+  assert.ok(w.opent, "geen overgang aan het eind");
+  assert.equal(w.snel, false);
+  assert.ok(w.zeshoek, "het welkom had geen zeshoekig gat");
+  assert.equal(w.inertTijdens, true, "de app was al bereikbaar tijdens de overgang");
+  const overgang = w.weg - w.opent;
+  assert.ok(overgang > OVERGANG - 60 && overgang < OVERGANG + 250, `de overgang duurde ${Math.round(overgang)} ms, verwacht ${OVERGANG}`);
   assert.equal(await page.evaluate(() => document.querySelector("body > .app").inert), false, "app blijft inert na het welkom");
   // de app werkt daarna gewoon
   await page.locator(".lesson").first().click(); await wachtOpScherm(page, "scr-home");
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+// Vroeg in de overgang (150 ms van 500) zetten we de animatie stil en
+// tikken we het scherm af: in het midden zit een gat, de hoeken zijn nog
+// welkom, en het gat is een platte zeshoek (punten links en rechts, vlak
+// boven en onder), geen cirkel en geen rechthoek.
+function peiler() {
+  window.__gat = null;
+  new MutationObserver(() => {
+    const el = document.querySelector("body > .welkom.opent");
+    if (!el || window.__gat) return;
+    el.getAnimations().forEach(a => { a.pause(); a.currentTime = 150; });
+    const cs = getComputedStyle(el), W = innerWidth, H = innerHeight, cx = W / 2, cy = H / 2;
+    const gat = parseFloat(cs.getPropertyValue("--gat"));
+    const R = gat * Math.max(W / 2 + H / (2 * Math.sqrt(3)), H / Math.sqrt(3));
+    const buiten = [];
+    const welkom = (x, y) => {
+      if (x < 0 || y < 0 || x >= W || y >= H) buiten.push([Math.round(x), Math.round(y)]);
+      return el.contains(document.elementFromPoint(x, y));
+    };
+    window.__gat = { gat, R, clip: cs.clipPath.slice(0, 20), inert: document.querySelector("body > .app").inert,
+      midden: welkom(cx, cy), rechts: welkom(cx + 0.9 * R, cy), links: welkom(cx - 0.9 * R, cy),
+      onder: welkom(cx, cy + 0.95 * R), boven: welkom(cx, cy - 0.95 * R), schuin: welkom(cx + 0.8 * R, cy + 0.4 * R),
+      binnenSchuin: welkom(cx + 0.45 * R, cy + 0.7 * R), hoek: welkom(2, 2), buiten };
+  }).observe(document, { subtree: true, attributes: true, attributeFilter: ["class"] });
+}
+
+for (const breedte of BREEDTES) test(`welkom, ${breedte}px: tijdens de overgang een plat zeshoekig gat vanuit het midden, de app nog inert`, async () => {
+  const { context } = await nieuweContext({ breedte });
+  await context.addInitScript(peiler);
+  const { page, fouten } = await openPagina(context);
+  await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
+  await welkomEl(page).waitFor({ state: "detached", timeout: 6000 });
+  const g = await page.evaluate(() => window.__gat);
+  assert.ok(g, "de overgang begon niet");
+  assert.match(g.clip, /^polygon\(evenodd, 0/, "geen zeshoekig gat in de clip");
+  assert.ok(g.gat > 0.05 && g.gat < 0.6, `het gat is na 150 ms ${g.gat}`);
+  assert.deepEqual(g.buiten, [], "peilpunten buiten het scherm");
+  assert.equal(g.inert, true, "de app was al bereikbaar tijdens de overgang");
+  assert.equal(g.midden, false, "geen gat in het midden");
+  assert.equal(g.links, false, "het gat reikt niet tot links"); assert.equal(g.rechts, false, "het gat reikt niet tot rechts");
+  assert.equal(g.binnenSchuin, false, "het gat is geen zeshoek (binnen de schuine kant)");
+  assert.equal(g.onder, true, "het gat is rond of te hoog (onder)"); assert.equal(g.boven, true, "het gat is rond of te hoog (boven)");
+  assert.equal(g.schuin, true, "het gat is een rechthoek, geen zeshoek");
+  assert.equal(g.hoek, true, "de hoek is al vrij");
+  assert.equal(await page.evaluate(() => document.querySelector("body > .app").inert), false, "de app is inert na de overgang");
   assert.deepEqual(fouten, []);
   await context.close();
 });
@@ -261,16 +336,19 @@ test("welkom: de kat is die van de eerstvolgende ronde, en nooit de vorige", asy
   }
 });
 
-test("welkom wegtikken: een tik of een toets haalt het meteen weg en doet verder niets", async () => {
+test("welkom wegtikken: een tik of een toets start de snelle overgang (250 ms) en doet verder niets", async () => {
   // tik midden op het scherm, waar eronder een lijst ligt
   {
     const { context } = await nieuweContext();
     const { page, fouten } = await openPagina(context);
     await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
-    const t0 = Date.now();
     await page.mouse.click(180, 390);
-    await welkomEl(page).waitFor({ state: "detached", timeout: 300 });
-    assert.ok(Date.now() - t0 < 600, "wegtikken duurde te lang");
+    await welkomEl(page).waitFor({ state: "detached", timeout: 1000 });
+    const w = await page.evaluate(() => window.__welkom);
+    assert.equal(w.snel, true, "wegtikken start niet de snelle overgang");
+    assert.ok(w.zeshoek, "wegtikken zonder zeshoek");
+    assert.equal(w.inertTijdens, true, "de app was al bereikbaar tijdens de overgang");
+    assert.ok(w.weg - w.opent > SNEL - 60 && w.weg - w.opent < SNEL + 200, `wegtikken duurde ${Math.round(w.weg - w.opent)} ms, verwacht ${SNEL}`);
     assert.equal(await page.evaluate(() => document.querySelector("body > .app").inert), false);
     assert.ok(await page.locator("#scr-lessons").isVisible(), "de tik ging door naar de app");
     assert.deepEqual(fouten, []);
@@ -281,7 +359,10 @@ test("welkom wegtikken: een tik of een toets haalt het meteen weg en doet verder
     const { page, fouten } = await openPagina(context);
     await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
     await page.keyboard.press(toets);
-    await welkomEl(page).waitFor({ state: "detached", timeout: 300 });
+    // nog een toets tijdens de overgang doet ook niets in de app
+    await page.keyboard.press(toets);
+    await welkomEl(page).waitFor({ state: "detached", timeout: 1000 });
+    assert.equal(await page.evaluate(() => window.__welkom.snel), true, toets + ": niet de snelle overgang");
     assert.equal(await page.evaluate(() => document.querySelector("body > .app").inert), false, toets + ": app blijft inert");
     assert.ok(await page.locator("#scr-lessons").isVisible(), toets + " ging door naar de app");
     // daarna doen toetsen weer gewoon hun werk
@@ -291,7 +372,7 @@ test("welkom wegtikken: een tik of een toets haalt het meteen weg en doet verder
   }
 });
 
-test("welkom bij reduced motion: een stilstaand eindbeeld, en op dezelfde tijd weg", async () => {
+test("welkom bij reduced motion: een stilstaand eindbeeld, geen zeshoek, en op dezelfde tijd weg", async () => {
   const { context } = await nieuweContext({ reduced: true });
   const { page, fouten } = await openPagina(context);
   await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
@@ -317,6 +398,23 @@ test("welkom bij reduced motion: een stilstaand eindbeeld, en op dezelfde tijd w
   const w = await page.evaluate(() => window.__welkom);
   const duur = w.weg - w.gezien;
   assert.ok(duur > 3350 && duur < 3900, `welkom stond ${Math.round(duur)} ms, verwacht 3500`);
+  assert.equal(w.zeshoek, false, "reduced motion: toch een zeshoek");
+  assert.equal(w.opent, 0, "reduced motion: toch een overgang");
+  assert.equal(w.inertNa, false);
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("welkom bij reduced motion wegtikken: meteen weg, geen zeshoek", async () => {
+  const { context } = await nieuweContext({ reduced: true });
+  const { page, fouten } = await openPagina(context);
+  await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
+  await page.mouse.click(180, 390);
+  await welkomEl(page).waitFor({ state: "detached", timeout: 150 });
+  const w = await page.evaluate(() => window.__welkom);
+  assert.equal(w.zeshoek, false); assert.equal(w.opent, 0);
+  assert.equal(await page.evaluate(() => document.querySelector("body > .app").inert), false);
+  assert.ok(await page.locator("#scr-lessons").isVisible(), "de tik ging door naar de app");
   assert.deepEqual(fouten, []);
   await context.close();
 });
