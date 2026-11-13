@@ -408,3 +408,22 @@ test("naam: de vraag Ben jij Pia, contrast, overloop en tikdoelen in licht en do
   }
   assert.deepEqual(problemen, []);
 });
+
+test("naam: hooguit 20 tekens, 21 gaat niet en 20 wel", async () => {
+  const { context, page, fouten } = await open();
+  assert.equal(await page.locator("#learner-name").getAttribute("maxlength"), "20", "naamveld zonder maxlength 20");
+  // langs maxlength heen, zoals bij plakken of een oude browser
+  const zet = w => page.evaluate(w => { document.getElementById("learner-name").value = w; }, w);
+  await zet("  " + "a".repeat(21) + "  ");
+  await page.click("#btn-learner-save");
+  assert.ok((await naamVeld(page)).form, "21 tekens geaccepteerd");
+  assert.equal((await page.locator("#learner-hint").textContent()).trim(), "Je naam mag hooguit 20 tekens zijn.");
+  assert.equal(await page.evaluate(() => localStorage.getItem("overhoor:learner")), null, "21 tekens opgeslagen");
+  const twintig = "Lolbroek" + "x".repeat(12);
+  await zet("  " + twintig + "  ");
+  await page.click("#btn-learner-save");
+  await page.locator("#learner-view").waitFor({ state: "visible" });
+  assert.equal(await page.evaluate(() => localStorage.getItem("overhoor:learner")), JSON.stringify(twintig));
+  assert.deepEqual(fouten, []);
+  await context.close();
+});

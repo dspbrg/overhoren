@@ -42,7 +42,7 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       <!-- hier komt de uitleg bij Beta (zie zetBeta) -->
       <div class="learner-row">
         <span id="learner-view">Wie oefent: <b id="learner-label"></b> <button class="link" id="btn-learner">wissel</button></span>
-        <span class="row" id="learner-form" hidden><label for="learner-name">Wie oefent?</label><input type="text" id="learner-name" placeholder="Naam" autocomplete="off" aria-describedby="learner-hint"><button class="btn" id="btn-learner-save">Opslaan</button></span>
+        <span class="row" id="learner-form" hidden><label for="learner-name">Wie oefent?</label><input type="text" id="learner-name" placeholder="Naam" autocomplete="off" maxlength="20" aria-describedby="learner-hint"><button class="btn" id="btn-learner-save">Opslaan</button></span>
         <span class="hint" id="learner-hint" role="status" hidden>Typ eerst je naam.</span>
         <div class="naam-vraag" id="naam-vraag" hidden>
           <p>Ben jij <span id="naam-vraag-naam"></span>?</p>
@@ -505,6 +505,7 @@ function withAlts(item, i){
 // slug en telt als geen naam. Letters met accenten (Pía, Zoë) gaan wel mee.
 let learner = (v => typeof v === "string" && slug(v) ? v.trim() : "")(load(LEARNER_KEY, ""));
 const heeftNaam = () => !!slug(learner);
+const NAAM_MAX = 20;   // ook maxlength op #learner-name
 // Tot deze versie sloeg de app op elk toestel de standaard "Pia" op. Op een
 // toestel met "Pia" en zonder deze vlag vragen we een keer of dat klopt.
 // Tot die tijd geen sync; oefenen mag wel.
@@ -1835,6 +1836,8 @@ function bind(){
   const saveLearner = ()=>{
     const naam = $("learner-name").value.trim();
     if(naam && !slug(naam)){ vraagNaam(true, "Gebruik letters of cijfers in je naam."); return; }
+    // langer past niet in het welkom en de spraakbalk; maxlength op het veld, en hier voor plakken
+    if(Array.from(naam).length > NAAM_MAX){ vraagNaam(true, "Je naam mag hooguit "+NAAM_MAX+" tekens zijn."); return; }
     if(!naam && !heeftNaam()){ vraagNaam(true); return; }   // zonder naam blijft het veld open
     if(naam){ setLearner(naam); save(BEVESTIGD_KEY, true); } // zelf getypt, dus bevestigd; leeg bij wisselen: de naam blijft
     $("learner-form").hidden=true; $("learner-view").hidden=false; $("learner-hint").hidden=true;
