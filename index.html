@@ -272,8 +272,8 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
           <label><input type="radio" name="imp-mode" value="three"><span><b>Drie delen, twee kanten op</b><br><span class="hint">Zoals de Engelse lijsten: woord | woordsoort | definitie.</span></span></label>
         </div>
       </div>
-      <div class="two"><div class="field"><label class="label" for="imp-subject">Vak</label><input type="text" id="imp-subject" placeholder="Frans"></div><div class="field"><label class="label" for="imp-title">Naam</label><input type="text" id="imp-title" placeholder="Unité 2"></div></div>
-      <div class="two" id="imp-langs"><div class="field"><label class="label" for="imp-from">Van</label><input type="text" id="imp-from" placeholder="Frans"></div><div class="field"><label class="label" for="imp-to">Naar</label><input type="text" id="imp-to" placeholder="Nederlands"></div></div>
+      <div class="two"><div class="field"><label class="label" for="imp-subject">Vak</label><input type="text" id="imp-subject" placeholder="Frans" maxlength="200"></div><div class="field"><label class="label" for="imp-title">Naam</label><input type="text" id="imp-title" placeholder="Unité 2" maxlength="200"></div></div>
+      <div class="two" id="imp-langs"><div class="field"><label class="label" for="imp-from">Van</label><input type="text" id="imp-from" placeholder="Frans" maxlength="200"></div><div class="field"><label class="label" for="imp-to">Naar</label><input type="text" id="imp-to" placeholder="Nederlands" maxlength="200"></div></div>
       <div class="field"><label class="label" for="imp-text">Woorden</label>
         <textarea id="imp-text" placeholder="Eén woord per regel:&#10;le chien | de hond&#10;fais | doe / maak&#10;&#10;Een regel met alleen een letter (A, B, C) begint een nieuw deel."></textarea>
         <p class="hint">Gescheiden door | of een tab. Nummers vooraan worden genegeerd.</p>
@@ -326,8 +326,8 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
     <div class="card" id="photo-review" hidden>
       <h2>Controleer de lijst</h2>
       <p class="hint">Klopt alles? Pas aan of verwijder wat niet klopt.</p>
-      <div class="two"><div class="field"><label class="label" for="photo-subject">Vak</label><input type="text" id="photo-subject"></div><div class="field"><label class="label" for="photo-title">Naam</label><input type="text" id="photo-title"></div></div>
-      <div class="two" id="photo-langs" hidden><div class="field"><label class="label" for="photo-from">Van</label><input type="text" id="photo-from"></div><div class="field"><label class="label" for="photo-to">Naar</label><input type="text" id="photo-to"></div></div>
+      <div class="two"><div class="field"><label class="label" for="photo-subject">Vak</label><input type="text" id="photo-subject" maxlength="200"></div><div class="field"><label class="label" for="photo-title">Naam</label><input type="text" id="photo-title" maxlength="200"></div></div>
+      <div class="two" id="photo-langs" hidden><div class="field"><label class="label" for="photo-from">Van</label><input type="text" id="photo-from" maxlength="200"></div><div class="field"><label class="label" for="photo-to">Naar</label><input type="text" id="photo-to" maxlength="200"></div></div>
       <div class="photo-items" id="photo-items"></div>
       <p class="hint" id="photo-count"></p>
       <div class="row"><button class="btn primary big" id="btn-photo-save">Opslaan</button></div>
@@ -600,43 +600,61 @@ function gatherLocal(){
   var cats = load("overhoor:cats:" + s, {});
   var prog = {};
   for(var l of lists){
-    var p = load(PKEY(l.id), null);
+    var p = laadVoortgang(l.id);
     if(p) prog[l.id] = p;
   }
-  var customLists = load(LKEY, []);
+  // Wat de app verstuurt, gaat door dezelfde controle als wat binnenkomt.
+  // De rauwe lijsten in opslag blijven zoals ze zijn.
+  var customLists = schoneLijsten(load(LKEY, []));
   // De katten zelf gaan niet mee: er valt niets te verzamelen. De oude
   // cats gaan ongewijzigd mee, zodat ze in de worker niet verdwijnen.
   return { cats: cats, progress: prog, lists: customLists, updated: Date.now() };
 }
 
 // ---------- vorm van voortgang, eigen lijsten en oude cats ----------
-// Dezelfde regels staan in worker/src/merge.js. Pas ze samen aan.
+// Dezelfde regels staan in worker/src/merge.js. Pas ze samen aan; een
+// pariteitstest (tests/sync-vorm.test.mjs) vergelijkt ze.
 // Wat uit localStorage of van de worker komt, gaat hierdoor voordat de app
 // het leest. Elk onderdeel wordt nieuw opgebouwd met alleen de bekende
-// velden; wat de verkeerde vorm heeft, valt weg op het kleinste niveau dat
-// veilig is. Een woord zonder geldige word/def laat de hele lijst vallen,
-// want een woord weglaten verschuift de nummering van de voortgang.
+// velden. Herstellen gaat voor weggooien: een kapot getal in een
+// woordtoestand wordt 0, te lange tekst wordt afgekapt, een kapot woord
+// wordt een leeg woord op dezelfde plek (zodat de nummering van de
+// voortgang klopt). Alleen een lijst zonder geldig id of zonder
+// items-array valt weg. De rauwe lijsten in opslag blijven staan.
 const isObject = x => !!x && typeof x === "object" && !Array.isArray(x);
 const VORM = {
   grens: { id: 100, sleutel: 200, tekst: 200, woord: 1000, woorden: 5000, lijstje: 50 },
+  marge: 5 * 60 * 1000,   // speling voor klokken die iets voorlopen
+  maxBox: E.MAX_BOX,
   verboden: ["__proto__", "constructor", "prototype"],
   staat: ["box", "due", "seen", "correct", "wrong", "lapses", "streak", "last"],
   richtingen: ["wd", "dw", "ex"], delen: ["cls", "def", "word"],
-  ronde: ["date", "n", "first", "ms"], cat: ["aantal", "eerst", "laatst"],
+  ronde: ["date", "n", "first", "ms"],
   lijstTeksten: ["subtitle", "subject", "mode", "from", "to", "deadline"], lijstVlaggen: ["strict", "interleave"],
   woordTeksten: ["cls", "section"]
 };
 const isGetal = v => typeof v === "number" && Number.isFinite(v);
-const isTekst = (v, max) => typeof v === "string" && v.length <= max;
 const veiligeSleutel = (k, max) => typeof k === "string" && k.length > 0 && k.length <= max && !VORM.verboden.includes(k);
+// Tijdstempel: 0 tot nu plus de marge. Negatief of kapot wordt 0.
+function tijd(v, nu){
+  const t = isGetal(v) && v > 0 ? v : 0;
+  return Math.min(t, (nu === undefined ? Date.now() : nu) + VORM.marge);
+}
+// tekst afgekapt op max; geen tekst: undefined (kap) of "" (kapOfLeeg)
+const kap = (v, max) => typeof v === "string" ? v.slice(0, max) : undefined;
+const kapOfLeeg = (v, max) => typeof v === "string" ? v.slice(0, max) : "";
+// een kapot of negatief getal wordt 0
+const teller = v => isGetal(v) && v > 0 ? v : 0;
 function tekstLijst(v, max){
-  if(!Array.isArray(v) || v.length > VORM.grens.lijstje) return undefined;
-  return v.filter(x => isTekst(x, max));
+  if(!Array.isArray(v)) return undefined;
+  const out = [];
+  for(const x of v.slice(0, VORM.grens.lijstje)) if(typeof x === "string") out.push(x.slice(0, max));
+  return out;
 }
 function tekstMap(v){
   if(!isObject(v)) return undefined;
   const out = {};
-  for(const k of Object.keys(v)) if(veiligeSleutel(k, VORM.grens.tekst) && isTekst(v[k], VORM.grens.tekst)) out[k] = v[k];
+  for(const k of Object.keys(v)) if(veiligeSleutel(k, VORM.grens.tekst) && typeof v[k] === "string") out[k] = v[k].slice(0, VORM.grens.tekst);
   return out;
 }
 // ontbrekend wordt 0, aanwezig maar kapot: null
@@ -651,12 +669,15 @@ function getallen(v, namen){
 }
 function tellers(v, namen){
   const out = {};
-  for(const n of namen) out[n] = isObject(v) && isGetal(v[n]) ? v[n] : 0;
+  for(const n of namen) out[n] = teller(isObject(v) ? v[n] : undefined);
   return out;
 }
+// Woordtoestand: elk kapot of negatief getal wordt 0, box een heel getal tot en met MAX_BOX.
 function schoneStaat(s){
   if(!isObject(s)) return null;
-  const out = getallen(s, VORM.staat); if(!out) return null;
+  const out = {};
+  for(const n of VORM.staat) out[n] = teller(s[n]);
+  out.box = Math.min(Math.floor(out.box), VORM.maxBox);
   out.dirWrong = tellers(s.dirWrong, VORM.richtingen);
   out.partWrong = tellers(s.partWrong, VORM.delen);
   return out;
@@ -668,7 +689,7 @@ function schoneRonde(r){
   return out;
 }
 // Voortgang van een lijst: altijd een object met items (object) en sessions (array).
-function schoneVoortgang(p){
+function schoneVoortgang(p, nu){
   if(!isObject(p)) return null;
   const items = {}, sessions = [];
   if(isObject(p.items)) for(const k of Object.keys(p.items)){
@@ -677,57 +698,56 @@ function schoneVoortgang(p){
   }
   if(Array.isArray(p.sessions)) for(const r of p.sessions){ const x = schoneRonde(r); if(x) sessions.push(x); }
   const out = { items, sessions };
-  if(isGetal(p.updated)) out.updated = p.updated;
+  if(isGetal(p.updated)) out.updated = tijd(p.updated, nu);
   return out;
 }
-function schoneCat(c){
+function schoneCat(c, nu){
   if(!isObject(c)) return null;
   const out = {};
-  for(const n of VORM.cat){
+  for(const n of ["aantal", "eerst", "laatst"]){
     if(c[n] === undefined) continue;
     if(!isGetal(c[n])) return null;
-    out[n] = c[n];
+    out[n] = n === "aantal" ? teller(c[n]) : tijd(c[n], nu);
   }
   return out;
 }
+// Altijd een woord, ook als het kapot is: word en def worden dan "".
 function schoonWoord(it){
-  const g = VORM.grens;
-  if(!isObject(it) || !isTekst(it.word, g.woord) || !isTekst(it.def, g.woord)) return null;
-  const out = { word: it.word, def: it.def };
-  for(const n of VORM.woordTeksten) if(isTekst(it[n], g.tekst)) out[n] = it[n];
-  if(isTekst(it.ex, g.woord)) out.ex = it.ex;
-  else { const ex = tekstLijst(it.ex, g.woord); if(ex && ex.length) out.ex = ex; }
-  if(Array.isArray(it.keys) && it.keys.length <= g.lijstje){
+  const g = VORM.grens, w = isObject(it) ? it : {};
+  const out = { word: kapOfLeeg(w.word, g.woord), def: kapOfLeeg(w.def, g.woord) };
+  for(const n of VORM.woordTeksten){ const t = kap(w[n], g.tekst); if(t !== undefined) out[n] = t; }
+  if(typeof w.ex === "string") out.ex = w.ex.slice(0, g.woord);
+  else { const ex = tekstLijst(w.ex, g.woord); if(ex && ex.length) out.ex = ex; }
+  if(Array.isArray(w.keys)){
     const keys = [];
-    for(const groep of it.keys){ const x = tekstLijst(groep, g.woord); if(x && x.length) keys.push(x); }
+    for(const groep of w.keys.slice(0, g.lijstje)){ const x = tekstLijst(groep, g.woord); if(x && x.length) keys.push(x); }
     if(keys.length) out.keys = keys;
   }
-  const accept = tekstLijst(it.accept, g.woord); if(accept && accept.length) out.accept = accept;
+  const accept = tekstLijst(w.accept, g.woord); if(accept && accept.length) out.accept = accept;
   return out;
 }
-// Een eigen lijst. id, title en items zijn verplicht; mix en bronnen komen er niet in.
-function schoneLijst(l){
+// Een eigen lijst. Zonder geldig id of zonder items-array: null. Verder
+// wordt alles hersteld of afgekapt; mix en bronnen komen er niet in.
+function schoneLijst(l, nu){
   const g = VORM.grens;
   if(!isObject(l)) return null;
   if(typeof l.id === "number" ? !isGetal(l.id) : !veiligeSleutel(l.id, g.id)) return null;
-  if(!isTekst(l.title, g.tekst) || !Array.isArray(l.items) || l.items.length > g.woorden) return null;
-  const items = [];
-  for(const it of l.items){ const x = schoonWoord(it); if(!x) return null; items.push(x); }
-  const out = { id: l.id, title: l.title };
-  for(const n of VORM.lijstTeksten) if(isTekst(l[n], g.tekst)) out[n] = l[n];
+  if(!Array.isArray(l.items)) return null;
+  const out = { id: l.id, title: kapOfLeeg(l.title, g.tekst) };
+  for(const n of VORM.lijstTeksten){ const t = kap(l[n], g.tekst); if(t !== undefined) out[n] = t; }
   for(const n of VORM.lijstVlaggen) if(typeof l[n] === "boolean") out[n] = l[n];
-  if(isGetal(l.added)) out.added = l.added;
+  if(isGetal(l.added)) out.added = tijd(l.added, nu);
   const dirs = (tekstLijst(l.directions, g.tekst) || []).filter(d => VORM.richtingen.includes(d));
   if(dirs.length) out.directions = dirs;
   const classes = tekstLijst(l.classes, g.tekst); if(classes && classes.length) out.classes = classes;
   for(const n of ["sections", "instructions"]){ const m = tekstMap(l[n]); if(m) out[n] = m; }
-  out.items = items;
+  out.items = l.items.slice(0, g.woorden).map(schoonWoord);
   return out;
 }
-function schoneLijsten(d){
+function schoneLijsten(d, nu){
   if(!Array.isArray(d)) return [];
   const out = [];
-  for(const l of d){ const x = schoneLijst(l); if(x) out.push(x); }
+  for(const l of d){ const x = schoneLijst(l, nu); if(x) out.push(x); }
   return out;
 }
 // Voortgang uit opslag, altijd in de goede vorm. s: slug van de oefenaar (optioneel).
@@ -741,18 +761,19 @@ const legeVoortgang = () => ({ items: {}, sessions: [] });
 function applyRemote(remote, s){
   if(!isObject(remote)) return;
   s = s || slug(learner);
+  const nu = Date.now();
   if(isObject(remote.cats)){
     try{
       const lokaal = load("overhoor:cats:" + s, {});
       const localCats = {};
       if(isObject(lokaal)) for(const k of Object.keys(lokaal)){
-        const c = veiligeSleutel(k, VORM.grens.sleutel) && schoneCat(lokaal[k]); if(c) localCats[k] = c;
+        const c = veiligeSleutel(k, VORM.grens.sleutel) && schoneCat(lokaal[k], nu); if(c) localCats[k] = c;
       }
       for(const src of Object.keys(remote.cats)){
-        const rc = veiligeSleutel(src, VORM.grens.sleutel) && schoneCat(remote.cats[src]);
+        const rc = veiligeSleutel(src, VORM.grens.sleutel) && schoneCat(remote.cats[src], nu);
         if(!rc) continue;
-        if(!localCats[src] || (rc.laatst||0) > (localCats[src].laatst||0)) localCats[src] = rc;
-        else localCats[src].aantal = Math.max(localCats[src].aantal||0, rc.aantal||0);
+        if(!localCats[src] || tijd(rc.laatst, nu) > tijd(localCats[src].laatst, nu)) localCats[src] = rc;
+        else localCats[src].aantal = Math.max(teller(localCats[src].aantal), teller(rc.aantal));
       }
       save("overhoor:cats:" + s, localCats);
     } catch(e){ /* oude katten kapot: de rest gaat door */ }
@@ -761,25 +782,38 @@ function applyRemote(remote, s){
     try{
       for(const lid of Object.keys(remote.progress)){
         if(!veiligeSleutel(lid, VORM.grens.id)) continue;
-        const rp = schoneVoortgang(remote.progress[lid]);
+        const rp = schoneVoortgang(remote.progress[lid], nu);
         if(!rp) continue;
-        const local = laadVoortgang(lid, s);
-        if(!local || (rp.updated||0) > (local.updated||0)){
+        const rauw = load(PKEY(lid, s), null);
+        const local = schoneVoortgang(rauw, nu);
+        if(!local || tijd(rp.updated, nu) > tijd(local.updated, nu)){
           save(PKEY(lid, s), rp);
           if(list && list.id === lid) progress = rp;
+        } else if(isGetal(rauw.updated) && rauw.updated > local.updated){
+          // Lokaal staat een tijd verder dan nu plus de marge (bijvoorbeeld
+          // 1e308 van een oude sync). Begrensd opslaan, zodat hij veroudert
+          // zoals in de worker en nieuwere voortgang later weer wint.
+          save(PKEY(lid, s), local);
+          if(list && list.id === lid) progress = local;
         }
       }
     } catch(e){ /* voortgang kapot: de rest gaat door */ }
   }
   if(Array.isArray(remote.lists) && remote.lists.length){
     try{
-      const byId = new Map();
-      for(const el of schoneLijsten(load(LKEY, []))) byId.set(String(el.id), el);
-      for(const rl of schoneLijsten(remote.lists)){
-        const oud = byId.get(String(rl.id));
-        if(!oud || (rl.added||0) > (oud.added||0)) byId.set(String(rl.id), rl);
+      // De lokale lijsten blijven rauw staan, ook als ze niet door de
+      // controle komen. Alleen een lijst met hetzelfde id wordt vervangen
+      // door de gecontroleerde lijst van de worker: als die nieuwer is, of
+      // als de lokale onbruikbaar is (geen items-array).
+      const rauw = load(LKEY, []);
+      const opslag = Array.isArray(rauw) ? rauw.slice() : [];
+      for(const rl of schoneLijsten(remote.lists, nu)){
+        const i = opslag.findIndex(el => isObject(el) && (typeof el.id === "string" || typeof el.id === "number") && String(el.id) === String(rl.id));
+        if(i < 0){ opslag.push(rl); continue; }
+        const oud = schoneLijst(opslag[i], nu);
+        if(!oud || tijd(rl.added, nu) > tijd(oud.added, nu)) opslag[i] = rl;
       }
-      save(LKEY, Array.from(byId.values()));
+      save(LKEY, opslag);
     } catch(e){ /* lijsten kapot: de rest gaat door */ }
   }
 }
@@ -979,7 +1013,7 @@ function renderHome(){
     const laatste = list.items[n-1];
     $("grens-hint").innerHTML = n >= totaal
       ? "De hele lijst: <b>"+totaal+" woorden</b>."
-      : "Tot en met <b>"+esc(laatste.word)+"</b> · "+Number(n)+" van "+Number(totaal)+" woorden. Schuif op als deze erin zitten.";
+      : "Tot en met <b>"+esc(laatste.word)+"</b> · "+n+" van "+totaal+" woorden. Schuif op als deze erin zitten.";
   }
   const dl = deadlineVan(list), dagen = dagenTot(dl);
   $("deadline-input").value = dl ? new Date(dl).toISOString().slice(0,10) : "";
@@ -1029,10 +1063,8 @@ function renderProgress(){
 // ---------- rapport ----------
 function fmtDate(ts){ const d=new Date(ts); return d.toLocaleDateString("nl-NL",{day:"numeric",month:"short"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); }
 function reportData(entry){
-  const l = entry.list, now = Date.now();
-  // voortgang komt via laadVoortgang, maar het rapport mag nooit vastlopen op een rare vorm
-  const p = { items: isObject(entry.progress && entry.progress.items) ? entry.progress.items : {},
-    sessions: Array.isArray(entry.progress && entry.progress.sessions) ? entry.progress.sessions.filter(isObject) : [] };
+  // de voortgang komt uit allProgress, via laadVoortgang: al in de goede vorm
+  const {list:l, progress:p} = entry; const now = Date.now();
   const n = l.items.length; let ready=0, learning=0, fresh=0, dueNow=0, minDue=Infinity;
   const hard = [];
   l.items.forEach((it,i)=>{ const s=p.items[i]; if(!s||s.seen===0){ fresh++; return; } if(s.box>=3) ready++; else learning++; if(s.due<=now) dueNow++; else minDue=Math.min(minDue,s.due);
@@ -1133,7 +1165,7 @@ function renderStreak(){
   const el = $("q-streak"); if(!el) return;
   const n = Number(session.streak)||0;   // uit opslag: nooit rauw in HTML
   if(n < 2){ el.hidden = true; el.classList.remove("is-up"); return; }
-  el.hidden = false; el.innerHTML = UI.Icon("flame") + "<span>" + Number(n) + " op rij</span>";
+  el.hidden = false; el.innerHTML = UI.Icon("flame") + "<span>" + n + " op rij</span>";
   el.classList.remove("is-up"); void el.offsetWidth; el.classList.add("is-up");
 }
 function renderQuestion(){
@@ -1410,6 +1442,23 @@ function finish(stopped){
 }
 
 // ---------- import ----------
+// Een melding als iets van een nieuwe lijst langer is dan de sync toestaat
+// (VORM.grens), anders "". Niet stil afkappen: dan raakt Pia tekst kwijt.
+function teLangeTekst(nl){
+  const g = VORM.grens, te = (v, max) => typeof v === "string" && v.length > max;
+  const velden = [["title", "De naam"], ["subject", "Het vak"], ["from", "Van"], ["to", "Naar"]];
+  for(const [veld, naam] of velden) if(te(nl[veld], g.tekst)) return naam + " is te lang: maximaal " + g.tekst + " tekens.";
+  if(nl.items.length > g.woorden) return "Te veel woorden: maximaal " + g.woorden + " per lijst.";
+  for(const it of nl.items){
+    const begin = "'" + String(it.word).slice(0, 20) + (String(it.word).length > 20 ? "..." : "") + "'";
+    if(te(it.word, g.woord) || te(it.def, g.woord)) return "Het woord " + begin + " of de vertaling ervan is te lang: maximaal " + g.woord + " tekens.";
+    if(te(it.cls, g.tekst) || te(it.section, g.tekst)) return "De woordsoort of het deel bij " + begin + " is te lang: maximaal " + g.tekst + " tekens.";
+  }
+  if(isObject(nl.sections)) for(const k of Object.keys(nl.sections)){
+    if(te(nl.sections[k], g.tekst)) return "De kop van deel " + k + " is te lang: maximaal " + g.tekst + " tekens.";
+  }
+  return "";
+}
 function importList(){
   const mode = (document.querySelector('input[name="imp-mode"]:checked')||{}).value || "translate";
   const title = $("imp-title").value.trim() || "Nieuwe lijst";
@@ -1432,13 +1481,16 @@ function importList(){
   const nl = { id:"custom-"+Date.now(), title, subtitle: items.length+" woorden", subject, items };
   if(mode==="translate"){ nl.mode="translate"; nl.from=$("imp-from").value.trim()||"Frans"; nl.to=$("imp-to").value.trim()||"Nederlands"; nl.directions=["wd"]; }
   if(Object.keys(sections).length) nl.sections = sections;
+  const teLang = teLangeTekst(nl);
+  if(teLang){ msg.textContent = teLang; return; }
   custom.push(nl); save(LKEY, custom);
   lists = allLists(); selectList(nl.id); $("imp-title").value=""; $("imp-text").value=""; msg.hidden=true;
   renderHome(); show("scr-home");
 }
 function deleteList(){
   if(!confirm("Lijst '"+list.title+"' en de voortgang ervan verwijderen?")) return;
-  save(LKEY, load(LKEY, []).filter(l=>l.id!==list.id)); save(PKEY(list.id), null); save(SKEY(list.id), null);
+  // rauwe opslag: alleen de lijst met dit id gaat eruit, de rest blijft zoals hij is
+  save(LKEY, load(LKEY, []).filter(l=>!isObject(l) || l.id!==list.id)); save(PKEY(list.id), null); save(SKEY(list.id), null);
   lists = allLists(); selectList(lists[0].id); renderLessons(); show("scr-lessons");
 }
 
@@ -1567,8 +1619,8 @@ function photoRenderItems() {
   var r = photoResult, isTr = r.mode === "translate";
   $("photo-items").innerHTML = r.items.map(function(it, i) {
     return '<div class="photo-row" data-idx="'+i+'">' +
-      '<input type="text" class="photo-word" value="'+esc(it.word)+'" placeholder="Woord">' +
-      '<input type="text" class="photo-def" value="'+esc(it.def||"")+'" placeholder="'+(isTr?"Vertaling":"Definitie")+'">' +
+      '<input type="text" class="photo-word" value="'+esc(it.word)+'" placeholder="Woord" maxlength="'+VORM.grens.woord+'">' +
+      '<input type="text" class="photo-def" value="'+esc(it.def||"")+'" placeholder="'+(isTr?"Vertaling":"Definitie")+'" maxlength="'+VORM.grens.woord+'">' +
       '<button type="button" class="link photo-del" title="Verwijder">' + UI.Icon("close") + '</button>' +
       '</div>';
   }).join("");
@@ -1612,6 +1664,8 @@ async function photoSave() {
     items.forEach(function(it) { if (it.section) secMap[it.section] = it.section; });
     if (Object.keys(secMap).length) nl.sections = secMap;
   }
+  var teLang = teLangeTekst(nl);
+  if (teLang) { $("photo-error").textContent = teLang; $("photo-error").hidden = false; return; }
   var custom = load(LKEY, []);
   custom.push(nl); save(LKEY, custom);
   lists = allLists(); selectList(nl.id);

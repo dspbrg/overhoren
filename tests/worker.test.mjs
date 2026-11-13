@@ -8,6 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 import { REPO } from "./lib/omgeving.mjs";
 
 const SRC = process.env.WORKER_SRC || join(REPO, "worker", "src");
@@ -276,8 +277,10 @@ test("vorm: voortgang met kapotte items of sessions wordt een veilige voortgang"
   const uit = mergeSync({}, body, NU);
   assert.deepEqual(uit.progress.a, { items: {}, sessions: [], updated: 5 });
   assert.deepEqual(uit.progress.b, { items: {}, sessions: [], updated: 6 });
-  assert.deepEqual(Object.keys(uit.progress.c.items), ["0", "5"]);
+  assert.deepEqual(Object.keys(uit.progress.c.items), ["0", "3", "4", "5"]);
   assert.deepEqual(uit.progress.c.items[0], staat());
+  assert.deepEqual(uit.progress.c.items[3], staat({ box: 0 }), "kapotte box wordt 0, de toestand blijft");
+  assert.deepEqual(uit.progress.c.items[4], staat({ due: 0 }), "kapotte due wordt 0, de toestand blijft");
   assert.deepEqual(uit.progress.c.items[5], staat(), "onbekende velden in een woordtoestand vallen weg");
   assert.deepEqual(uit.progress.c.sessions, [ronde(), ronde({ stopped: false })], "stopped is altijd een boolean");
   assert.deepEqual(uit.progress.d, { items: {}, sessions: [], updated: 8 });
@@ -301,27 +304,30 @@ test("vorm: woordtoestand vult ontbrekende tellers aan, kapotte tellers in dirWr
   assert.deepEqual(uit.progress.a.items[1].partWrong, { cls: 0, def: 2, word: 0 });
 });
 
-test("vorm: lijst zonder items-array of met een kapot woord valt weg, de andere lijsten blijven", () => {
+test("vorm: lijst zonder items-array valt weg, een kapot woord of kapotte titel wordt hersteld", () => {
   const uit = mergeSync({}, { lists: [
     lijst({ id: "goed" }),
     lijst({ id: "geen-items", items: undefined }),
     lijst({ id: "items-tekst", items: "kapot" }),
     lijst({ id: "items-object", items: { 0: { word: "a", def: "b" } } }),
     // een woord weglaten zou de nummering van de voortgang verschuiven,
-    // dus een kapot woord laat de hele lijst vallen
+    // dus een kapot woord wordt een leeg woord op dezelfde plek
     lijst({ id: "woord-null", items: [{ word: "a", def: "b" }, null] }),
     lijst({ id: "woord-getal", items: [{ word: 5, def: "b" }] }),
     lijst({ id: "geen-def", items: [{ word: "a" }] }),
     lijst({ id: "geen-titel", title: undefined }),
     lijst({ id: "titel-getal", title: 7 }),
     lijst({ id: "x".repeat(101) }),
-    lijst({ id: "lange-titel", title: "t".repeat(201) }),
-    lijst({ id: "lang-woord", items: [{ word: "w".repeat(1001), def: "b" }] }),
-    lijst({ id: "te-veel", items: Array.from({ length: 5001 }, () => ({ word: "a", def: "b" })) }),
     lijst({ id: "leeg", items: [] }),
   ] }, NU);
-  assert.deepEqual(uit.lists.map(l => l.id), ["goed", "leeg"]);
-  assert.deepEqual(uit.lists[0], lijst({ id: "goed" }));
+  const per = Object.fromEntries(uit.lists.map(l => [l.id, l]));
+  assert.deepEqual(Object.keys(per), ["goed", "woord-null", "woord-getal", "geen-def", "geen-titel", "titel-getal", "leeg"]);
+  assert.deepEqual(per.goed, lijst({ id: "goed" }));
+  assert.deepEqual(per["woord-null"].items, [{ word: "a", def: "b" }, { word: "", def: "" }]);
+  assert.deepEqual(per["woord-getal"].items, [{ word: "", def: "b" }]);
+  assert.deepEqual(per["geen-def"].items, [{ word: "a", def: "" }]);
+  assert.equal(per["geen-titel"].title, "");
+  assert.equal(per["titel-getal"].title, "");
 });
 
 test("vorm: kapotte losse velden van een lijst of woord vallen weg, de lijst blijft", () => {
@@ -379,4 +385,116 @@ test("vorm: kapotte vormen die al in KV staan gaan niet terug naar de app, de go
   assert.equal(res.status, 200);
   assert.deepEqual(opgeslagen(kv).progress.a, { items: {}, sessions: [], updated: 1 });
   assert.deepEqual(opgeslagen(kv).lists.map(l => l.id), ["goed"]);
+});
+
+// ---------- herstellen in plaats van weggooien, en tijden begrenzen ----------
+
+test("vorm: een te lang woord, een te lange titel of te veel woorden worden afgekapt, de lijst blijft", () => {
+  const uit = mergeSync({}, { lists: [
+    lijst({ id: "lange-titel", title: "t".repeat(250) }),
+    lijst({ id: "lang-woord", items: [{ word: "w".repeat(1500), def: "d".repeat(1200), cls: "c".repeat(300), ex: "e".repeat(1100) }] }),
+    lijst({ id: "te-veel", items: Array.from({ length: 5003 }, (_, i) => ({ word: "a" + i, def: "b" })) }),
+    lijst({ id: "kapotte-woorden", items: [{ word: 5, def: "b" }, null, { word: "a" }, "x", { word: "c", def: "d" }] }),
+    lijst({ id: "geen-titel", title: undefined }),
+    lijst({ id: "lange-lijstjes", items: [{ word: "a", def: "b", accept: Array.from({ length: 60 }, (_, i) => "x" + i) }] }),
+  ] }, NU);
+  const per = Object.fromEntries(uit.lists.map(l => [l.id, l]));
+  assert.deepEqual(Object.keys(per), ["lange-titel", "lang-woord", "te-veel", "kapotte-woorden", "geen-titel", "lange-lijstjes"]);
+  assert.equal(per["lange-titel"].title, "t".repeat(200));
+  assert.deepEqual(per["lang-woord"].items[0], { word: "w".repeat(1000), def: "d".repeat(1000), cls: "c".repeat(200), ex: "e".repeat(1000) });
+  assert.equal(per["te-veel"].items.length, 5000);
+  assert.equal(per["te-veel"].items[4999].word, "a4999");
+  // de nummering blijft: elk kapot woord wordt een leeg woord op dezelfde plek
+  assert.deepEqual(per["kapotte-woorden"].items, [
+    { word: "", def: "b" }, { word: "", def: "" }, { word: "a", def: "" }, { word: "", def: "" }, { word: "c", def: "d" }]);
+  assert.equal(per["geen-titel"].title, "");
+  assert.equal(per["lange-lijstjes"].items[0].accept.length, 50);
+});
+
+test("vorm: alleen een lijst zonder geldig id of zonder items-array valt weg", () => {
+  const uit = mergeSync({}, { lists: [
+    lijst({ id: "goed" }), lijst({ id: "x".repeat(101) }), lijst({ id: null }), lijst({ id: "__proto__" }),
+    lijst({ id: "geen-items", items: undefined }), lijst({ id: "items-object", items: { 0: { word: "a", def: "b" } } }),
+  ] }, NU);
+  assert.deepEqual(uit.lists.map(l => l.id), ["goed"]);
+});
+
+test("vorm: een kapot getal in een woordtoestand wordt 0, de rest van de toestand blijft", () => {
+  const uit = mergeSync({}, { progress: { a: { items: {
+    0: staat({ due: null }), 1: staat({ seen: "veel", last: Infinity }), 2: staat({ correct: NaN }),
+  }, sessions: [], updated: 1 } } }, NU);
+  assert.deepEqual(uit.progress.a.items[0], staat({ due: 0 }));
+  assert.deepEqual(uit.progress.a.items[1], staat({ seen: 0, last: 0 }));
+  assert.deepEqual(uit.progress.a.items[2], staat({ correct: 0 }));
+});
+
+test("vorm: box is een heel getal van 0 tot en met MAX_BOX, tellers zijn niet negatief", async () => {
+  const { MAX_BOX } = await import(pathToFileURL(join(SRC, "merge.js")).href);
+  const engine = createRequire(import.meta.url)(join(REPO, "engine.js"));
+  assert.equal(MAX_BOX, engine.MAX_BOX, "MAX_BOX in merge.js wijkt af van engine.js");
+  const uit = mergeSync({}, { progress: { a: { items: {
+    0: staat({ box: -4 }), 1: staat({ box: 2.5 }), 2: staat({ box: 99 }),
+    3: staat({ seen: -1, correct: -2, wrong: -3, lapses: -4, streak: -5, due: -6, last: -7,
+      dirWrong: { wd: -1, dw: 2, ex: 0 }, partWrong: { cls: -1, def: 0, word: 3 } }),
+  }, sessions: [], updated: 1 } } }, NU);
+  const it = uit.progress.a.items;
+  assert.equal(it[0].box, 0);
+  assert.equal(it[1].box, 2);
+  assert.equal(it[2].box, engine.MAX_BOX);
+  for (const k of ["seen", "correct", "wrong", "lapses", "streak", "due", "last"]) assert.equal(it[3][k], 0, k);
+  assert.deepEqual(it[3].dirWrong, { wd: 0, dw: 2, ex: 0 });
+  assert.deepEqual(it[3].partWrong, { cls: 0, def: 0, word: 3 });
+});
+
+test("tijden: added, progress.updated, cats.laatst en cats.eerst worden begrensd op 0 tot nu plus 5 minuten", () => {
+  const uit = mergeSync({}, {
+    lists: [lijst({ id: "a", added: 1e308 }), lijst({ id: "b", added: -5 })],
+    progress: { p: vg(1e308), q: vg(-1) },
+    cats: { "cats/a.svg": { laatst: 1e308, eerst: 1e308, aantal: -3 }, "cats/b.svg": { laatst: -1, eerst: -2 } },
+  }, NU);
+  assert.equal(uit.lists[0].added, NU + MARGE);
+  assert.equal(uit.lists[1].added, 0);
+  assert.equal(uit.progress.p.updated, NU + MARGE);
+  assert.equal(uit.progress.q.updated, 0);
+  assert.deepEqual(uit.cats["cats/a.svg"], { laatst: NU + MARGE, eerst: NU + MARGE, aantal: 0 });
+  assert.deepEqual(uit.cats["cats/b.svg"], { laatst: 0, eerst: 0 });
+});
+
+test("tijden: een tijd in de toekomst wint niet van data die al op de grens staat", () => {
+  const remote = { lists: [lijst({ id: "a", title: "Echt", added: NU + MARGE })], progress: { p: vg(NU + MARGE) },
+    cats: { k: { laatst: NU + MARGE, aantal: 1 } } };
+  const uit = mergeSync(remote, { lists: [lijst({ id: "a", title: "Aanval", added: 1e308 })],
+    progress: { p: { items: { 0: staat() }, sessions: [], updated: 1e308 } }, cats: { k: { laatst: 1e308, eerst: 5, aantal: 1 } } }, NU);
+  assert.equal(uit.lists[0].title, "Echt");
+  assert.deepEqual(uit.progress.p, vg(NU + MARGE));
+  assert.deepEqual(uit.cats.k, { laatst: NU + MARGE, aantal: 1 });
+});
+
+test("tijden: de aanval met 1e308 overschrijft andermans lijst en voortgang niet voorgoed", async () => {
+  const kv = nepKV();
+  const e = env(kv);
+  const echtNu = Date.now;
+  try {
+    Date.now = () => NU;
+    const aanval = { lists: [lijst({ id: "a", title: "Aanval", added: 1e308 })], progress: { p: { items: {}, sessions: [], updated: 1e308 } },
+      cats: { k: { laatst: 1e308, aantal: 9 } }, updated: 1e308 };
+    assert.equal((await worker.fetch(put(aanval), e)).status, 200);
+    const o = opgeslagen(kv);
+    assert.equal(o.lists[0].added, NU + MARGE);
+    assert.equal(o.progress.p.updated, NU + MARGE);
+    assert.equal(o.cats.k.laatst, NU + MARGE);
+    // tien minuten later wint een gewone wijziging weer
+    const later = NU + 10 * 60 * 1000;
+    Date.now = () => later;
+    const echt = { lists: [lijst({ id: "a", title: "Echt", added: later })], progress: { p: { items: { 0: staat() }, sessions: [], updated: later } },
+      cats: { k: { laatst: later, aantal: 1 } }, updated: later };
+    assert.equal((await worker.fetch(put(echt), e)).status, 200);
+    const n = opgeslagen(kv);
+    assert.equal(n.lists[0].title, "Echt");
+    assert.equal(n.progress.p.updated, later);
+    assert.deepEqual(n.progress.p.items[0], staat());
+    assert.equal(n.cats.k.laatst, later);
+  } finally {
+    Date.now = echtNu;
+  }
 });

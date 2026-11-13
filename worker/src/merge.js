@@ -3,12 +3,16 @@
 //
 // Uitgangspunten:
 // - Alles wat binnenkomt (van de client en uit KV) gaat eerst door een
-//   controle. Een kapot onderdeel valt weg, de rest blijft staan.
+//   controle. Wat te herstellen is, wordt hersteld; alleen wat niet te
+//   herstellen is, valt weg. De rest blijft staan.
 // - Resultaten worden als nieuw object opgebouwd. Geen Object.assign of
 //   for...in op invoer, en sleutels als __proto__ komen er niet in.
 
 // speling voor klokken die iets voorlopen
 export const TOEKOMST_MARGE_MS = 5 * 60 * 1000;
+
+// Hoogste box. Gelijk aan MAX_BOX in engine.js (een test bewaakt dat).
+export const MAX_BOX = 6;
 
 const VERBODEN_SLEUTELS = new Set(["__proto__", "constructor", "prototype"]);
 
@@ -28,28 +32,31 @@ function veiligeSleutel(k) {
   return typeof k === "string" && k.length > 0 && !VERBODEN_SLEUTELS.has(k);
 }
 
-// Tijdstempel als getal: eindig en niet negatief, anders 0.
-function tijd(v) {
-  return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0;
-}
-
-// Begrens een tijd tussen 0 en nu plus de marge.
-export function begrens(t, nu) {
-  return Math.min(Math.max(t, 0), nu + TOEKOMST_MARGE_MS);
+// Tijdstempel: een eindig getal van 0 tot nu plus de marge. Negatief of
+// kapot wordt 0, verder in de toekomst wordt nu plus de marge. Zo kan een
+// tijd van 1e308 niet voorgoed van alle latere wijzigingen winnen.
+// Dezelfde regel staat in index.html (tijd).
+export function tijd(v, nu) {
+  const t = typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0;
+  return Math.min(t, nu + TOEKOMST_MARGE_MS);
 }
 
 // ---------- vorm ----------
-// Dezelfde regels staan in index.html (applyRemote). Pas ze samen aan.
+// Dezelfde regels staan in index.html (schoneLijst, schoneStaat enzovoort).
+// Pas ze samen aan; een pariteitstest vergelijkt ze.
 //
 // Elk onderdeel wordt als nieuw object opgebouwd met alleen de bekende
-// velden. Wat de verkeerde vorm heeft, valt weg op het kleinste niveau dat
-// veilig is:
-// - een kapotte teller in dirWrong of partWrong wordt 0;
-// - een woordtoestand of ronde met een kapot getal valt weg;
+// velden. Herstellen gaat voor weggooien:
+// - een kapot getal in een woordtoestand wordt 0; box is een heel getal
+//   van 0 tot en met MAX_BOX, tellers zijn niet negatief;
+// - te lange tekst wordt afgekapt, te lange lijstjes ook;
+// - een word of def die geen tekst is wordt "", een kapot woord een leeg
+//   woord op dezelfde plek, zodat de nummering van de voortgang klopt;
+// - een titel die geen tekst is wordt "";
+// - een los optioneel veld van de verkeerde soort valt weg;
 // - items of sessions met de verkeerde vorm worden leeg;
-// - een los optioneel veld van een lijst of woord valt weg;
-// - een woord zonder geldige word/def laat de hele lijst vallen, want een
-//   woord weglaten verschuift de nummering waar de voortgang op leunt.
+// - een ronde of cats-waarde met een kapot getal valt weg.
+// Alleen een lijst zonder geldig id of zonder items-array valt helemaal weg.
 
 export const GRENS = {
   id: 100,         // id van een lijst
@@ -64,7 +71,6 @@ const STAAT_GETALLEN = ["box", "due", "seen", "correct", "wrong", "lapses", "str
 const RICHTINGEN = ["wd", "dw", "ex"];
 const DELEN = ["cls", "def", "word"];
 const RONDE_GETALLEN = ["date", "n", "first", "ms"];
-const CAT_GETALLEN = ["aantal", "eerst", "laatst"];
 const LIJST_TEKSTEN = ["subtitle", "subject", "mode", "from", "to", "deadline"];
 const LIJST_VLAGGEN = ["strict", "interleave"];
 const WOORD_TEKSTEN = ["cls", "section"];
@@ -73,22 +79,39 @@ const INDEX = /^\d{1,5}$/;
 function getal(v) {
   return typeof v === "number" && Number.isFinite(v);
 }
-function tekst(v, max) {
-  return typeof v === "string" && v.length <= max;
+// Tekst, afgekapt op max. Geen tekst: undefined.
+function kap(v, max) {
+  return typeof v === "string" ? v.slice(0, max) : undefined;
 }
-// Array van strings; losse kapotte strings vallen weg. Geen array of te
-// lang: undefined.
+// Tekst, afgekapt op max. Geen tekst: "".
+function kapOfLeeg(v, max) {
+  return typeof v === "string" ? v.slice(0, max) : "";
+}
+// Array van teksten, afgekapt op GRENS.lijstje stuks; elke tekst afgekapt
+// op max, wat geen tekst is valt weg. Geen array: undefined.
 function tekstLijst(v, max) {
-  if (!Array.isArray(v) || v.length > GRENS.lijstje) return undefined;
-  return v.filter(x => tekst(x, max));
+  if (!Array.isArray(v)) return undefined;
+  const out = [];
+  for (const x of v.slice(0, GRENS.lijstje)) if (typeof x === "string") out.push(x.slice(0, max));
+  return out;
 }
-// Object van string naar string; kapotte waarden en sleutels vallen weg.
+// Object van tekst naar tekst; kapotte sleutels en waarden vallen weg,
+// te lange waarden worden afgekapt.
 function tekstMap(v) {
   if (!isObject(v)) return undefined;
   const out = {};
   for (const k of Object.keys(v)) {
-    if (veiligeSleutel(k) && k.length <= GRENS.tekst && tekst(v[k], GRENS.tekst)) out[k] = v[k];
+    if (veiligeSleutel(k) && k.length <= GRENS.tekst && typeof v[k] === "string") out[k] = v[k].slice(0, GRENS.tekst);
   }
+  return out;
+}
+// Teller: een eindig getal van 0 of meer. Kapot of negatief wordt 0.
+function teller(v) {
+  return getal(v) && v > 0 ? v : 0;
+}
+function tellers(v, namen) {
+  const out = {};
+  for (const n of namen) out[n] = teller(isObject(v) ? v[n] : undefined);
   return out;
 }
 // Getallen die ontbreken worden 0. Een aanwezig maar kapot getal: null.
@@ -101,23 +124,22 @@ function getallen(v, namen) {
   }
   return out;
 }
-function tellers(v, namen) {
-  const out = {};
-  for (const n of namen) out[n] = isObject(v) && getal(v[n]) ? v[n] : 0;
-  return out;
-}
 
 // Toestand van een woord: box, due, seen enzovoort, en twee tellerobjecten.
+// Elk kapot of negatief getal wordt 0; box wordt een heel getal tot en met
+// MAX_BOX. Alleen iets dat geen object is valt weg.
 export function controleerStaat(s) {
   if (!isObject(s)) return null;
-  const out = getallen(s, STAAT_GETALLEN);
-  if (!out) return null;
+  const out = {};
+  for (const n of STAAT_GETALLEN) out[n] = teller(s[n]);
+  out.box = Math.min(Math.floor(out.box), MAX_BOX);
   out.dirWrong = tellers(s.dirWrong, RICHTINGEN);
   out.partWrong = tellers(s.partWrong, DELEN);
   return out;
 }
 
-// Een afgeronde ronde: date, n, first, ms en stopped.
+// Een afgeronde ronde: date, n, first, ms en stopped. Een ronde met een
+// kapot getal valt weg; een ronde weglaten verschuift niets.
 export function controleerRonde(r) {
   if (!isObject(r)) return null;
   const out = getallen(r, RONDE_GETALLEN);
@@ -127,7 +149,7 @@ export function controleerRonde(r) {
 }
 
 // Voortgang van een lijst: items (index naar toestand), sessions en updated.
-export function controleerVoortgang(p) {
+export function controleerVoortgang(p, nu = Date.now()) {
   if (!isObject(p)) return null;
   const items = {};
   if (isObject(p.items)) {
@@ -145,75 +167,74 @@ export function controleerVoortgang(p) {
     }
   }
   const out = { items, sessions };
-  if (getal(p.updated)) out.updated = p.updated;
+  if (getal(p.updated)) out.updated = tijd(p.updated, nu);
   return out;
 }
 
-// Een oude cats-waarde: alleen aantal, eerst en laatst, als getal.
-export function controleerCat(c) {
+// Een oude cats-waarde: alleen aantal, eerst en laatst, als getal. eerst en
+// laatst zijn tijden, aantal is een teller.
+export function controleerCat(c, nu = Date.now()) {
   if (!isObject(c)) return null;
   const out = {};
-  for (const n of CAT_GETALLEN) {
+  for (const n of ["aantal", "eerst", "laatst"]) {
     if (c[n] === undefined) continue;
     if (!getal(c[n])) return null;
-    out[n] = c[n];
+    out[n] = n === "aantal" ? teller(c[n]) : tijd(c[n], nu);
   }
   return out;
 }
 
-// Een woord van een eigen lijst. word en def zijn verplicht.
+// Een woord van een eigen lijst. Altijd een woord, ook als het kapot is:
+// word en def worden dan "".
 export function controleerWoord(it) {
-  if (!isObject(it) || !tekst(it.word, GRENS.woord) || !tekst(it.def, GRENS.woord)) return null;
-  const out = { word: it.word, def: it.def };
-  for (const n of WOORD_TEKSTEN) if (tekst(it[n], GRENS.tekst)) out[n] = it[n];
-  if (tekst(it.ex, GRENS.woord)) out.ex = it.ex;
+  const w = isObject(it) ? it : {};
+  const out = { word: kapOfLeeg(w.word, GRENS.woord), def: kapOfLeeg(w.def, GRENS.woord) };
+  for (const n of WOORD_TEKSTEN) {
+    const t = kap(w[n], GRENS.tekst);
+    if (t !== undefined) out[n] = t;
+  }
+  if (typeof w.ex === "string") out.ex = w.ex.slice(0, GRENS.woord);
   else {
-    const ex = tekstLijst(it.ex, GRENS.woord);
+    const ex = tekstLijst(w.ex, GRENS.woord);
     if (ex && ex.length) out.ex = ex;
   }
-  if (Array.isArray(it.keys) && it.keys.length <= GRENS.lijstje) {
+  if (Array.isArray(w.keys)) {
     const keys = [];
-    for (const g of it.keys) {
+    for (const g of w.keys.slice(0, GRENS.lijstje)) {
       const groep = tekstLijst(g, GRENS.woord);
       if (groep && groep.length) keys.push(groep);
     }
     if (keys.length) out.keys = keys;
   }
-  const accept = tekstLijst(it.accept, GRENS.woord);
+  const accept = tekstLijst(w.accept, GRENS.woord);
   if (accept && accept.length) out.accept = accept;
   return out;
 }
 
-// Een eigen lijst. id, title en items zijn verplicht. Velden die een lijst
-// van buiten niet mag hebben (mix, bronnen) komen er niet in.
-export function controleerLijst(l) {
+// Een eigen lijst. Zonder geldig id of zonder items-array: null. Verder
+// wordt alles hersteld of afgekapt. Velden die een lijst van buiten niet
+// mag hebben (mix, bronnen) komen er niet in.
+export function controleerLijst(l, nu = Date.now()) {
   if (!isObject(l)) return null;
   const id = l.id;
   if (typeof id === "number" ? !Number.isFinite(id) : !(veiligeSleutel(id) && id.length <= GRENS.id)) return null;
-  if (!tekst(l.title, GRENS.tekst)) return null;
-  if (!Array.isArray(l.items) || l.items.length > GRENS.woorden) return null;
-  const items = [];
-  for (const it of l.items) {
-    const x = controleerWoord(it);
-    if (!x) return null;
-    items.push(x);
+  if (!Array.isArray(l.items)) return null;
+  const out = { id, title: kapOfLeeg(l.title, GRENS.tekst) };
+  for (const n of LIJST_TEKSTEN) {
+    const t = kap(l[n], GRENS.tekst);
+    if (t !== undefined) out[n] = t;
   }
-  const out = { id, title: l.title };
-  for (const n of LIJST_TEKSTEN) if (tekst(l[n], GRENS.tekst)) out[n] = l[n];
   for (const n of LIJST_VLAGGEN) if (typeof l[n] === "boolean") out[n] = l[n];
-  if (getal(l.added)) out.added = l.added;
-  const dirs = tekstLijst(l.directions, GRENS.tekst);
-  if (dirs) {
-    const goed = dirs.filter(d => RICHTINGEN.includes(d));
-    if (goed.length) out.directions = goed;
-  }
+  if (getal(l.added)) out.added = tijd(l.added, nu);
+  const dirs = (tekstLijst(l.directions, GRENS.tekst) || []).filter(d => RICHTINGEN.includes(d));
+  if (dirs.length) out.directions = dirs;
   const classes = tekstLijst(l.classes, GRENS.tekst);
   if (classes && classes.length) out.classes = classes;
   for (const n of ["sections", "instructions"]) {
     const m = tekstMap(l[n]);
     if (m) out[n] = m;
   }
-  out.items = items;
+  out.items = l.items.slice(0, GRENS.woorden).map(controleerWoord);
   return out;
 }
 
@@ -221,60 +242,62 @@ export function controleerLijst(l) {
 
 // Een object waarvan elke waarde door `controleer` gaat. Geen object: null
 // (veld telt niet mee). Kapotte waarden of verboden sleutels vallen weg.
-function controleerMapMet(d, controleer, maxSleutel) {
+function controleerMapMet(d, controleer, maxSleutel, nu) {
   if (!isObject(d)) return null;
   const out = {};
   for (const k of Object.keys(d)) {
     if (!veiligeSleutel(k) || k.length > maxSleutel) continue;
-    const v = controleer(d[k]);
+    const v = controleer(d[k], nu);
     if (v) out[k] = v;
   }
   return out;
 }
-export const controleerCats = d => controleerMapMet(d, controleerCat, GRENS.sleutel);
-export const controleerProgress = d => controleerMapMet(d, controleerVoortgang, GRENS.id);
+export const controleerCats = (d, nu = Date.now()) => controleerMapMet(d, controleerCat, GRENS.sleutel, nu);
+export const controleerProgress = (d, nu = Date.now()) => controleerMapMet(d, controleerVoortgang, GRENS.id, nu);
 
-// Een lijst van eigen lijsten. Kapotte lijsten vallen weg.
-export function controleerLists(d) {
+// Een lijst van eigen lijsten. Lijsten zonder geldig id of items vallen weg.
+export function controleerLists(d, nu = Date.now()) {
   if (!Array.isArray(d)) return null;
   const out = [];
   for (const l of d) {
-    const x = controleerLijst(l);
+    const x = controleerLijst(l, nu);
     if (x) out.push(x);
   }
   return out;
 }
 
-function mergeCats(a, b) {
+// De tijden zijn al begrensd door de controle; tijd() hieronder vangt
+// alleen een ontbrekende waarde op.
+function mergeCats(a, b, nu) {
   const out = {};
   for (const k of Object.keys(a)) out[k] = a[k];
   for (const k of Object.keys(b)) {
     const oud = out[k];
-    if (!oud || tijd(b[k].laatst) > tijd(oud.laatst)) {
+    if (!oud || tijd(b[k].laatst, nu) > tijd(oud.laatst, nu)) {
       out[k] = b[k];
     } else {
-      const aantal = Math.max(tijd(oud.aantal), tijd(b[k].aantal));
+      const aantal = Math.max(teller(oud.aantal), teller(b[k].aantal));
       out[k] = { ...oud, aantal };
     }
   }
   return out;
 }
 
-function mergeProgress(a, b) {
+function mergeProgress(a, b, nu) {
   const out = {};
   for (const k of Object.keys(a)) out[k] = a[k];
   for (const k of Object.keys(b)) {
-    if (!out[k] || tijd(b[k].updated) > tijd(out[k].updated)) out[k] = b[k];
+    if (!out[k] || tijd(b[k].updated, nu) > tijd(out[k].updated, nu)) out[k] = b[k];
   }
   return out;
 }
 
-function mergeLists(a, b) {
+function mergeLists(a, b, nu) {
   const byId = new Map();
   for (const l of a) byId.set(String(l.id), l);
   for (const l of b) {
     const oud = byId.get(String(l.id));
-    if (!oud || tijd(l.added) > tijd(oud.added)) byId.set(String(l.id), l);
+    if (!oud || tijd(l.added, nu) > tijd(oud.added, nu)) byId.set(String(l.id), l);
   }
   return Array.from(byId.values());
 }
@@ -286,9 +309,9 @@ export function mergeSync(remote, local, nu = Date.now()) {
   const r = isObject(remote) ? remote : {};
   const l = isObject(local) ? local : {};
   return {
-    cats: mergeCats(controleerCats(r.cats) || {}, controleerCats(l.cats) || {}),
-    progress: mergeProgress(controleerProgress(r.progress) || {}, controleerProgress(l.progress) || {}),
-    lists: mergeLists(controleerLists(r.lists) || [], controleerLists(l.lists) || []),
-    updated: Math.max(begrens(tijd(r.updated), nu), begrens(tijd(l.updated), nu)),
+    cats: mergeCats(controleerCats(r.cats, nu) || {}, controleerCats(l.cats, nu) || {}, nu),
+    progress: mergeProgress(controleerProgress(r.progress, nu) || {}, controleerProgress(l.progress, nu) || {}, nu),
+    lists: mergeLists(controleerLists(r.lists, nu) || [], controleerLists(l.lists, nu) || [], nu),
+    updated: Math.max(tijd(r.updated, nu), tijd(l.updated, nu)),
   };
 }
