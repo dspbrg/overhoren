@@ -73,6 +73,7 @@
         <li><b>2026-11-12</b> Zes vaste katten met een eigen karakter, in twee standen (goed en bijna). De kat kijkt altijd naar binnen: links zoals hij is, rechts gespiegeld.</li>
         <li><b>2026-11-12</b> Ruimte en padding: semantische tokens voor nabijheid, elke stap naar buiten groter. Afstand telt vanaf de onderkant van de schaduw, één schaduw van 6px. Alles links uitgelijnd, ook de themakiezer.</li>
         <li><b>2026-11-12</b> Eén kat maakt het leuk, niet verzamelen. Elke ronde komt er vanzelf een andere kat langs, binnen de ronde steeds dezelfde. Niets te verdienen, geen Mijn katten. De kat is nooit verdrietig en vraagt nooit om terug te komen.</li>
+        <li><b>2026-11-13</b> De kat is een maatje, geen beloning. Hij zit de hele ronde rechts op de bovenrand van de vraagkaart, kijkt naar binnen en zegt iets in een spraakbalk. Het oordeel (Goed, Nog niet) staat in de kaart. Aan het eind zegt hij gedag met de naam. Geen beloningskaart, geen beker en geen warm vlak rond het scorecijfer; confetti alleen na een vlekkeloze ronde.</li>
       </ul>
       <span class="eyebrow">Rules</span>
       <ul class="sg-decisions">
@@ -264,7 +265,7 @@
     ["--pad-btn", "Knop, 12 / 28"], ["--pad-btn-big", "Grote knop, 16 / 28"], ["--pad-seg", "Segment, 12 / 20"],
     ["--pad-choice", "Keuze, 12 / 24"], ["--pad-choice-low", "Keuze bij weinig hoogte, 10 / 20"], ["--pad-chip", "Chip, 4 / 16"],
     ["--pad-card", "Kaart, 24"], ["--pad-card-compact", "Lijstkaart en melding, 16 / 24"], ["--pad-field", "Invoerveld, 12 / 16"],
-    ["--pad-stat", "Getal, 12 / 8"], ["--pad-stat-hero", "Scorecijfer, 24"]
+    ["--pad-stat", "Getal, 12 / 8"], ["--pad-stat-hero", "Scorecijfer, 24"], ["--pad-spraak", "Spraakbalk, 12 / 16"]
   ].map(t => '<div class="sg-spec"><span>' + esc(t[1]) + '</span><code>' + esc(t[0]) + '</code></div>').join("");
 
   $("sg-spacing").innerHTML = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7"].map(t =>
@@ -355,7 +356,7 @@
 
     block("Mark and feedback list", "Het oordeel per onderdeel. De titel erboven is .verdict.", [
       ['.verdict.good · .verdict.bad · .verdict.maybe',
-        '<span class="verdict good" style="animation:none">Precies!</span><span class="verdict bad" style="animation:none">Nog niet</span><span class="verdict maybe" style="animation:none">Twijfel</span>'],
+        '<span class="verdict good" style="animation:none">Goed</span><span class="verdict bad" style="animation:none">Nog niet</span><span class="verdict maybe" style="animation:none">Twijfel</span>'],
       ['UI.Mark("ok" | "bad" | "maybe")',
         '<ul class="fb-list" style="width:100%">' +
           '<li>' + UI.Mark("ok") + '<div><div class="k">Woord</div><div>awesome</div></div></li>' +
@@ -374,31 +375,27 @@
     ], { col: true }),
 
     block("hydrateIcons", "Zet een icoon voor elk element met data-icon, zodat de HTML leesbaar blijft.", [
-      ['<button class="link" data-icon="trophy">', '<button class="link" data-icon="trophy" type="button">Rapport</button>']
+      ['<button class="link" data-icon="chart">', '<button class="link" data-icon="chart" type="button">Rapport</button>']
     ]),
 
     // De katten: de beelden en namen komen uit celebrate.js, net als in de app.
-    block("KatRij", "Kat met tekst, direct onder een kaart (canvas K7d). 120 px hoog, het oortje steekt 30 px over de onderrand. In de rij is de kat versiering: alt is leeg, de tekst zegt het. Rechts van de tekst gespiegeld, zodat hij naar binnen kijkt. Geen vrije HTML: text, lead en oordeel (good, maybe, bad) gaan door esc().", [
-      ['UI.KatRij({ beeld: Celebrate.beeld(id, "goed"), oordeel: "good", text })',
-        '<div class="app" style="width:100%"><div class="card"><span class="eyebrow">Woord</span><p class="prompt">awesome</p></div>' +
-        UI.KatRij({ beeld: Celebrate.beeld("strepen", "goed"), oordeel: "good", text: "Precies!" }) + '</div>'],
-      ['UI.KatRij({ beeld: Celebrate.beeld(id, "bijna"), oordeel: "bad", text })',
-        '<div class="app" style="width:100%"><div class="card"><span class="eyebrow">Definitie</span><p class="prompt">very good</p></div>' +
-        UI.KatRij({ beeld: Celebrate.beeld("tuxedo", "bijna"), oordeel: "bad", text: "Nog niet" }) + '</div>'],
-      ['UI.KatRij({ beeld: Celebrate.beeld(id, "bijna"), oordeel: "maybe", text })',
-        '<div class="app" style="width:100%"><div class="card"><span class="eyebrow">Woord</span><p class="prompt">la maison</p></div>' +
-        UI.KatRij({ beeld: Celebrate.beeld("stippen", "bijna"), oordeel: "maybe", text: "Bijna?" }) + '</div>'],
-      ['UI.KatRij({ beeld: Celebrate.beeld(id, "bijna"), lead, text }) · samenvatting',
-        '<div class="app" style="width:100%"><div class="card"><p>Ronde klaar: 4 van 12 in één keer goed.</p></div>' +
-        UI.KatRij({ beeld: Celebrate.beeld("lapjes", "bijna"), lead: "Lastige ronde.", text: "Deze woorden komen vaker terug, zo gaan ze erin." }) + '</div>'],
-      ['UI.KatRij({ beeld, oordeel, text, kant: "rechts" })',
-        '<div class="app" style="width:100%"><div class="card"><p>Kat rechts van de tekst.</p></div>' +
-        UI.KatRij({ beeld: Celebrate.beeld("sokjes", "goed"), kant: "rechts", oordeel: "good", text: "Yes!" }) + '</div>']
+    block("Spraak", "Wat de kat zegt: een rustig vlak (--mark) met afgeschuinde hoekjes, lopende tekst 17px, regelhoogte 1,35. Alleen tekst, alles gaat door esc(). Geen uitroeptekens.", [
+      ['UI.Spraak({ text })', '<div style="width:100%;max-width:320px">' + UI.Spraak({ text: "Ik kijk mee." }) + '</div>']
     ], { col: true }),
 
-    block("KatBeloning", "Na een vlekkeloze ronde: de kat van die ronde in de goed-stand, op een warm vlak, iets gedraaid, met een blije zin en het karakter eronder. Alt met naam, karakter en houding.", [
-      ['UI.KatBeloning({ beeld: Celebrate.beeld(id, "goed"), title: Celebrate.blij(id) })',
-        '<div class="app" style="width:100%">' + UI.KatBeloning({ beeld: Celebrate.beeld("stippen", "goed"), title: Celebrate.blij("stippen") }) + '</div>']
+    block("KatRand", "De kat van de ronde rechts op de bovenrand van een kaart, 104 px hoog, gespiegeld zodat hij naar binnen kijkt, 30 px over de rand. Links een Spraak. Zet hem met de kaart in een .kat-kaart. De rand houdt ruimte voor drie regels en de kat heeft een vaste kolom, zodat de kaart niet verspringt. De kat is versiering (alt leeg), de zin zegt het. Celebrate.zegt(moment) en Celebrate.gedag(soort, naam) geven stand en zin.", [
+      ['UI.KatRand({ beeld, text }) · Celebrate.zegt("wacht")',
+        '<div class="app" style="width:100%"><div class="kat-kaart">' + UI.KatRand({ beeld: Celebrate.beeld("strepen", "bijna"), text: Celebrate.zegt("wacht").tekst }) +
+        '<div class="card"><span class="eyebrow">Woord</span><p class="prompt">awesome</p></div></div></div>'],
+      ['UI.KatRand({ beeld, text }) · Celebrate.zegt("goed")',
+        '<div class="app" style="width:100%"><div class="kat-kaart">' + UI.KatRand({ beeld: Celebrate.beeld("sokjes", "goed"), text: Celebrate.zegt("goed").tekst }) +
+        '<div class="card"><span class="eyebrow">Woord</span><p class="prompt">la maison</p><div><span class="verdict good" style="animation:none">Goed</span></div></div></div></div>'],
+      ['UI.KatRand({ beeld, text }) · Celebrate.zegt("fout")',
+        '<div class="app" style="width:100%"><div class="kat-kaart">' + UI.KatRand({ beeld: Celebrate.beeld("tuxedo", "bijna"), text: Celebrate.zegt("fout").tekst }) +
+        '<div class="card"><span class="eyebrow">Definitie</span><p class="prompt">very good</p><div><span class="verdict bad" style="animation:none">Nog niet</span></div></div></div></div>'],
+      ['UI.KatRand({ beeld, text }) · Celebrate.gedag("lastig", naam)',
+        '<div class="app" style="width:100%"><div class="kat-kaart">' + UI.KatRand({ beeld: Celebrate.beeld("lapjes", "bijna"), text: Celebrate.gedag("lastig", "Pia").tekst }) +
+        '<div class="card"><p>Ronde klaar: 4 van 12 in één keer goed.</p></div></div></div>']
     ], { col: true }),
 
     block("Card", "Alleen CSS: .card. Hetzelfde vlak als LessonCard, met kaarttitel.", [

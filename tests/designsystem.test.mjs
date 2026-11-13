@@ -42,7 +42,7 @@ test("designsystem toont elk component uit window.UI", async () => {
     const codes = [...document.querySelectorAll("#sg-components code")].map(c => c.textContent);
     const iconenWeg = iconen.filter(i => !codes.includes(i));
     const svgIconen = document.querySelectorAll("#sg-components svg.icon").length;
-    const hydrate = document.querySelector('#sg-components button[data-icon="trophy"] svg.icon');
+    const hydrate = document.querySelector('#sg-components button[data-icon="chart"] svg.icon');
     return { namen, ontbreekt, leeg, iconenWeg, svgIconen, iconen: iconen.length, hydrate: !!hydrate,
       ring: document.querySelectorAll("#sg-components .sg-ring-row svg.ring").length,
       tokensLeeg: [...document.querySelectorAll("[data-token]")].filter(e => !/^#[0-9A-F]{6}/.test(e.textContent)).map(e => e.dataset.token) };

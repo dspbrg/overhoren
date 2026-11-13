@@ -46,7 +46,6 @@
     clock:   '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.2V12l3.2 2"/>',
     flame:   '<path d="M12 3.2c3 3.8 5 5.6 5 8.9a5 5 0 0 1-10 0c0-1.6.7-2.8 1.6-3.7.2 1.2.9 1.9 1.6 1.9-.9-2.4.3-5.2 1.8-7.1z"/>',
     play:    '<path d="M8.5 5.4l10 6.6-10 6.6z"/>',
-    trophy:  '<path d="M7 4h10v4.6a5 5 0 0 1-10 0z"/><path d="M7 6H4.2v1.7A3 3 0 0 0 7 10.6M17 6h2.8v1.7A3 3 0 0 1 17 10.6"/><path d="M12 13.6V18M9.5 20h5"/>',
     alert:   '<path d="M12 4.2l8.6 15.3H3.4z"/><path d="M12 10v4"/><circle cx="12" cy="16.8" r=".9" fill="currentColor" stroke="none"/>',
     sparkle: '<path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/>'
   };
@@ -213,6 +212,13 @@
       '</button>';
   }
 
+  // --- Spraak: wat de kat zegt -------------------------------
+  // Een rustige balk met een korte zin. Alleen tekst, geen vrije HTML.
+  function Spraak(o) {
+    o = o || {};
+    return '<p class="' + esc(cls("spraak", o.className)) + '"' + attr("id", o.id) + '>' + esc(o.text) + '</p>';
+  }
+
   // --- Katten -------------------------------------------------
   // Elke kat komt binnen als beeld-object uit Celebrate.beeld(id, stand):
   // { naam, karakter, src, width, height, alt }. Vaste width en height,
@@ -222,40 +228,19 @@
       ' width="' + (Number(b.width) || 0) + '" height="' + (Number(b.height) || 0) + '"' +
       ' alt="' + esc(alt) + '" decoding="async">';
   }
-  // oordeel naast de kat: alleen deze drie kleuren bestaan
-  const KAT_OORDEEL = ["good", "maybe", "bad"];
 
-  // KatRij: kat met tekst ernaast, onder een kaart. Het oortje steekt
-  // over de onderrand van de kaart erboven. De kat is hier versiering
-  // (alt leeg): de tekst zegt wat er te zeggen is.
-  // Geen vrije HTML: alles gaat door esc().
-  //   text      de zin naast de kat
-  //   lead      optioneel, vet ervoor ("Lastige ronde.")
-  //   oordeel   optioneel "good" | "maybe" | "bad": de tekst wordt dan
-  //             een oordeel (.verdict) in die kleur
-  //   textId    optioneel id op de tekstregel
-  //   kant      "links" (standaard) of "rechts". Rechts wordt de kat
-  //             gespiegeld, zodat hij altijd naar de tekst kijkt.
-  function KatRij(o) {
+  // KatRand: de kat van de ronde op de bovenrand van een kaart, rechts,
+  // gespiegeld zodat hij naar binnen kijkt, met links een Spraak. Zet hem
+  // samen met de kaart in een .kat-kaart. De kat is versiering (alt
+  // leeg): de zin zegt wat er te zeggen is. Alles gaat door esc().
+  //   beeld   Celebrate.beeld(id, stand)
+  //   text    de zin in de spraakbalk
+  //   textId  optioneel id op de spraakbalk
+  function KatRand(o) {
     o = o || {};
     if (!o.beeld) return "";
-    const oordeel = KAT_OORDEEL.includes(o.oordeel) ? o.oordeel : null;
-    const regel = '<p' + attr("class", oordeel ? "verdict " + oordeel : null) + attr("id", o.textId) + '>' +
-      (o.lead ? '<b>' + esc(o.lead) + '</b> ' : '') + esc(o.text) + '</p>';
-    return '<div class="' + esc(cls("kat-rij", o.kant === "rechts" && "is-rechts", o.className)) + '"' + attr("id", o.id) + '>' +
-      katImg(o.beeld, "") +
-      '<div class="kat-rij-tekst">' + regel + '</div></div>';
-  }
-
-  // KatBeloning: de kat van de ronde na een vlekkeloze ronde, iets
-  // gedraaid, met een zin en het karakter.
-  function KatBeloning(o) {
-    o = o || {};
-    if (!o.beeld) return "";
-    return '<figure class="' + esc(cls("kat-beloning", o.className)) + '"' + attr("id", o.id) + '>' +
-      katImg(o.beeld, o.beeld.alt) +
-      '<figcaption><b>' + esc(o.title || o.beeld.naam) + '</b>' +
-      '<span class="kat-karakter">' + esc(o.beeld.karakter) + '</span></figcaption></figure>';
+    return '<div class="' + esc(cls("kat-rand", o.className)) + '"' + attr("id", o.id) + '>' +
+      Spraak({ text: o.text, id: o.textId }) + katImg(o.beeld, "") + '</div>';
   }
 
   // --- hydrateIcons -------------------------------------------
@@ -281,5 +266,5 @@
   }
 
   root.UI = { esc, cls, pct, Icon, ICONS, Button, Link, TopBar, Stat, StatsRow, Meter, Ring, Chip,
-              Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, KatRij, KatBeloning, hydrateIcons };
+              Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, hydrateIcons };
 })(typeof window === "object" ? window : globalThis);

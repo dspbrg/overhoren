@@ -106,10 +106,10 @@ export async function loopSchermen(page, basis, bijScherm) {
     await page.waitForFunction(() => !document.getElementById("scr-summary").hidden || document.getElementById("btn-next").hidden);
   }
   await wachtOpScherm(page, "scr-summary");
-  // vlekkeloos: de beloningskaart met de blije kat van de ronde staat er meteen
-  await page.locator("#sum-beloning .kat").waitFor({ state: "visible", timeout: 3000 });
-  await page.waitForFunction(() => { const i = document.querySelector("#sum-beloning .kat"); return i.complete && i.naturalWidth > 0; }, null, { timeout: 5000 });
-  await bijScherm("samenvatting (vlekkeloos, blije kat)");
+  // vlekkeloos: de kat van de ronde zegt gedag op de rand van de kaart
+  await page.locator("#sum-kat .kat").waitFor({ state: "visible", timeout: 3000 });
+  await page.waitForFunction(() => { const i = document.querySelector("#sum-kat .kat"); return i.complete && i.naturalWidth > 0; }, null, { timeout: 5000 });
+  await bijScherm("samenvatting (vlekkeloos, de kat zegt gedag)");
 
   await page.click("#btn-sum-home"); await wachtOpScherm(page, "scr-home");
   await bijScherm("les (home, na een ronde)");

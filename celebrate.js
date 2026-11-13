@@ -8,6 +8,10 @@
 // Ze kijken naar rechts of recht vooruit. Regel: de kat kijkt naar
 // binnen. Links van de inhoud zoals hij is, rechts gespiegeld (ds.css).
 //
+// De kat is een maatje, geen beloning. Hij zit de hele ronde op de
+// rand van de vraagkaart, kijkt mee en zegt iets bij elk antwoord. Aan
+// het eind zegt hij gedag. Wat hij zegt staat hieronder (ZEGT, gedag).
+//
 // Er valt niets te verdienen of te verzamelen. Elke ronde komt er
 // vanzelf een kat langs, binnen de ronde steeds dezelfde, en nooit twee
 // rondes achter elkaar dezelfde. Het enige dat bewaard wordt is welke
@@ -18,8 +22,8 @@
 // Oude data van eerdere versies (overhoor:cats:* en de kattenopslag
 // per oefenaar) blijft ongemoeid staan en wordt niet meer gelezen.
 //
-// Confetti is met de hand getekend op een canvas, geen library.
-// Respecteert prefers-reduced-motion: dan geen confetti.
+// Confetti alleen na een vlekkeloze ronde, met de hand getekend op een
+// canvas, geen library. Respecteert prefers-reduced-motion: dan geen confetti.
 // =============================================================
 (function (root) {
   "use strict";
@@ -88,13 +92,29 @@
     try { localStorage.setItem(VORIGE, JSON.stringify(id)); } catch (e) {}
   }
 
-  const PRAISE = [
-    "Alles goed. Alles.",
-    "Foutloos!",
-    "Niet een fout. Serieus.",
-    "Perfecte ronde.",
-    "Helemaal vlekkeloos."
-  ];
+  // --- wat de kat zegt ----------------------------------------------
+  // Altijd vriendelijk en vooruit kijkend, geen uitroeptekens.
+  // Per moment de tekst en de stand van de kat.
+  const ZEGT = {
+    wacht: { stand: "bijna", tekst: "Ik kijk mee." },
+    goed:  { stand: "goed",  tekst: "Dat zat erin." },
+    fout:  { stand: "bijna", tekst: "Hm, wat zag je in dit woord? Hij komt straks nog een keer." }
+  };
+  // Einde van de ronde: soort is "vlekkeloos", "lastig" of iets anders (gewoon).
+  const GEDAG = {
+    vlekkeloos: { stand: "goed",  tekst: "Alles in één keer goed." },
+    gewoon:     { stand: "goed",  tekst: "Dat was de ronde." },
+    lastig:     { stand: "bijna", tekst: "Dat was een stevige ronde. Die woorden krijg je straks nog een keer." }
+  };
+  function zegt(moment) {
+    const z = ZEGT[moment] || ZEGT.wacht;
+    return { stand: z.stand, tekst: z.tekst };
+  }
+  function gedag(soort, naam) {
+    const g = GEDAG[soort] || GEDAG.gewoon;
+    const n = String(naam == null ? "" : naam).trim();
+    return { stand: g.stand, tekst: g.tekst + (n ? " Dag " + n + "." : " Dag.") };
+  }
 
   function reduced() {
     return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -192,19 +212,12 @@
   }
 
   // --- viering ----------------------------------------------------
-  // Alleen na een vlekkeloze ronde: confetti (niet bij reduced motion)
-  // en een korte lofzin. De kat van de ronde tekent de app zelf.
+  // Alleen na een vlekkeloze ronde: confetti, niet bij reduced motion.
+  // Wat de kat zegt, regelt gedag().
   function celebrate(opts) {
     opts = opts || {};
     if (!reduced()) confetti(opts.duration);
-    return pick(PRAISE);
   }
 
-  // De zin op de beloningskaart: blij, en nooit "nieuwe kat".
-  function blij(id) {
-    const k = zoek(id);
-    return k ? k.naam + " is helemaal blij: alles in één keer goed!" : "";
-  }
-
-  root.Celebrate = { celebrate, confetti, KATTEN, STANDEN, HOUDING, beeld, bestaat, nieuweRonde, onthoud, vorige, blij, PRAISE, VORIGE };
+  root.Celebrate = { celebrate, confetti, KATTEN, STANDEN, HOUDING, beeld, bestaat, nieuweRonde, onthoud, vorige, zegt, gedag, ZEGT, GEDAG, VORIGE };
 })(typeof window === "object" ? window : globalThis);
