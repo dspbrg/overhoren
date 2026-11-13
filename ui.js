@@ -273,6 +273,27 @@
       Spraak({ text: o.text, id: o.textId }) + katImg(o.beeld, "") + '</div>';
   }
 
+  // Welkom: een keer per dag bij het openen, heel scherm. De naam van de
+  // app, de kat van de eerstvolgende ronde springt omhoog en wiebelt, dan
+  // "Hoi <naam>". Daarna vervaagt alles (ds.css, --welkom-duur). Zonder
+  // naam alleen de kat. De kat is versiering (alt leeg).
+  //   beeld  Celebrate.welkomBeeld(id)
+  //   naam   wie er oefent; gaat door esc()
+  //   stil   true bij reduced motion: het stilstaande beeld, geen beweging
+  function Welkom(o) {
+    o = o || {};
+    const b = o.beeld;
+    if (!b) return "";
+    const naam = String(o.naam == null ? "" : o.naam).trim();
+    const src = o.stil ? (b.stil || b.src) : b.src;
+    return '<div class="' + cls("welkom", b.beweegtZelf && !o.stil && "beweegt-zelf") + '" role="status">' +
+      '<p class="welkom-merk">Overhoren <span class="beta-chip">Beta</span></p>' +
+      '<div class="welkom-podium"><img class="welkom-kat" src="' + esc(src) + '"' +
+        ' width="' + (Number(b.width) || 0) + '" height="' + (Number(b.height) || 0) + '" alt=""></div>' +
+      (naam ? '<p class="welkom-groet">Hoi ' + esc(naam) + '</p>' : "") +
+      '</div>';
+  }
+
   // --- hydrateIcons -------------------------------------------
   // Zet een icoon voor elk element met data-icon="naam", zodat de
   // HTML leesbaar blijft en de iconen toch uit een bron komen.
@@ -296,5 +317,5 @@
   }
 
   root.UI = { esc, cls, pct, Icon, ICONS, Button, Link, TopBar, Stat, StatsRow, Meter, Ring, Chip,
-              Beta, BetaUitleg, BETA_UITLEG, bindBeta, Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, hydrateIcons };
+              Beta, BetaUitleg, BETA_UITLEG, bindBeta, Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, Welkom, hydrateIcons };
 })(typeof window === "object" ? window : globalThis);

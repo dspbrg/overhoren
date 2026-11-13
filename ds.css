@@ -265,6 +265,13 @@
     --kat-oor:       30px;    /* zoveel zit de kat over de bovenrand van de kaart */
     --lh-spraak:     1.35;    /* regelhoogte in de spraakbalk */
     --spraak-regels: 3;       /* zoveel regels houdt de rand vrij, zodat de kaart niet verspringt */
+    --kat-welkom-h:  232px;   /* kat in het welkom */
+
+    /* --- welkom: hoe lang het welkom bij het openen staat, alles bij
+       elkaar. index.html leest deze waarde (in ms) en haalt het daarna
+       weg; de tijdlijn in .welkom past erbinnen. --- */
+    --welkom-duur: 1200ms;
+    --t-welkom:    2.5rem;    /* 40px, de naam van de app in het welkom */
 
     /* kleinste tikdoel op een telefoon; knoppen zijn 48 */
     --tap:44px;
@@ -665,6 +672,48 @@
     animation: kat-in var(--m3-spatial-fast) both;
   }
 
+  /* --- welkom: een keer per dag bij het openen ---
+     Heel scherm over de app (die is zolang inert). Tijdlijn, samen
+     --welkom-duur (1200 ms):
+       0     de naam verschijnt, de kat springt omhoog (350 ms)
+       350   de kat wiebelt twee keer (2 x 250 ms)
+       400   "Hoi <naam>" verschijnt (200 ms)
+       900   alles vervaagt (300 ms), daarna haalt index.html het weg
+     Alleen transform en opacity. Bij reduced motion staat alles stil in
+     het eindbeeld (regel onderaan) en gaat het op dezelfde tijd weg.
+     .beweegt-zelf: het beeld is zelf een animatie (zie welkomBeeld in
+     celebrate.js), dan geen sprong en geen wiebel. */
+  .welkom {
+    position: fixed; inset: 0; z-index: 100;
+    display: grid; place-content: center; justify-items: center; gap: var(--gap-group);
+    padding: var(--page-y) var(--page-x); text-align: center; cursor: pointer;
+    background: var(--page); color: var(--ink);
+    animation: welkom-uit var(--m3-effects-slow) calc(var(--welkom-duur) - 300ms) both;
+  }
+  .welkom-merk {
+    display: flex; align-items: center; gap: var(--s3); margin: 0;
+    font-family: var(--display); font-weight: 700; font-size: var(--t-welkom); line-height: 1.1;
+    animation: welkom-in var(--m3-effects) both;
+  }
+  /* het podium draagt een vlakke zeshoekige schaduw onder de voeten */
+  .welkom-podium { position: relative; display: grid; justify-items: center; }
+  .welkom-podium::after {
+    content: ""; position: absolute; inset-block-end: calc(-1 * var(--s1)); z-index: -1;
+    inline-size: 60%; block-size: var(--s3);
+    background: var(--card-shadow-color);
+    clip-path: polygon(12% 0, 88% 0, 100% 50%, 88% 100%, 12% 100%, 0 50%);
+  }
+  .welkom-kat {
+    display: block; block-size: min(var(--kat-welkom-h), 40dvh); inline-size: auto;
+    transform-origin: 50% 100%;
+    animation: welkom-hop var(--m3-spatial-fast) both, welkom-wiebel 250ms ease-in-out 350ms 2 both;
+  }
+  .welkom.beweegt-zelf .welkom-kat { animation: none; }
+  .welkom-groet {
+    margin: 0; font-family: var(--display); font-weight: 600; font-size: var(--t-card); line-height: 1.15;
+    animation: welkom-in var(--m3-effects) 400ms both;
+  }
+
   /* --- topbar en foot --- */
   .topbar { display: flex; justify-content: space-between; align-items: center; gap: var(--gap-inline); font-variant-numeric: tabular-nums; }
   /* tekstlinks onderaan: links uitgelijnd, net als de rest */
@@ -803,6 +852,11 @@
 
   @keyframes pop  { from { transform: scale(.7); opacity: 0 } to { transform: scale(1); opacity: 1 } }
   @keyframes bump { 0% { transform: scale(1) } 40% { transform: scale(1.22) } 100% { transform: scale(1) } }
+  /* welkom: alleen translate, scale, rotate en opacity */
+  @keyframes welkom-in     { from { opacity: 0; translate: 0 var(--s2); } }
+  @keyframes welkom-hop    { from { opacity: 0; translate: 0 calc(var(--kat-welkom-h) / 3); scale: .92; } }
+  @keyframes welkom-wiebel { 0%, 100% { rotate: 0deg; } 30% { rotate: -4deg; } 70% { rotate: 4deg; } }
+  @keyframes welkom-uit    { to { opacity: 0; } }
   /* entree van een kat: alleen translate, scale en opacity (transform is van het spiegelen) */
   @keyframes kat-in { from { opacity: 0; translate: 0 var(--s3); scale: .92; } }
   @keyframes ring {
