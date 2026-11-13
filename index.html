@@ -958,7 +958,7 @@ function bewaakPauze(){
   if(pauzeRest() > 0) pauzeTimer = setInterval(teken, 1000);
 }
 
-function show(id){ document.querySelectorAll(".screen").forEach(s=>s.hidden = s.id!==id); window.scrollTo(0,0); }
+function show(id){ document.querySelectorAll(".screen").forEach(s=>s.hidden = s.id!==id); window.scrollTo(0,0); if(id==="scr-lessons") verversNaUpdate(); }
 
 function renderLessons(){
   $("learner-label").textContent = learner;
@@ -1839,10 +1839,53 @@ function bind(){
 
 // De app draait volledig lokaal, dus met de bestanden in de cache werkt hij
 // ook zonder internet. Faalt de registratie, dan blijft alles gewoon werken.
+//
+// Na een update neemt de nieuwe service worker de pagina over
+// (controllerchange). Draaide de pagina al onder een oude en is ze van een
+// andere versie dan de nieuwe service worker, dan een keer opnieuw laden:
+//   - niet bij de allereerste installatie (er was nog geen controller)
+//   - niet midden in een ronde: alleen op het lessenscherm, anders zodra
+//     het lessenscherm weer verschijnt, of de volgende keer openen
+//   - hooguit een keer per versie van de pagina (SW_HERLADEN in
+//     sessionStorage), zodat het nooit een lus wordt; zonder opslag niet
+const SW_HERLADEN = "overhoor:sw:herladen";
+let swVerversen = false;
+function verversNaUpdate(){
+  if(!swVerversen || $("scr-lessons").hidden) return;
+  swVerversen = false;
+  try{
+    if(sessionStorage.getItem(SW_HERLADEN) === UI.VERSIE) return;
+    sessionStorage.setItem(SW_HERLADEN, UI.VERSIE);
+  }catch(e){ return; }
+  location.reload();
+}
+// De versie van een service worker (VERSIE in sw.js), of null als hij
+// niet binnen een seconde antwoordt.
+function swVersie(sw){
+  return new Promise(klaar => {
+    if(!sw) return klaar(null);
+    const kanaal = new MessageChannel();
+    const klok = setTimeout(() => klaar(null), 1000);
+    kanaal.port1.onmessage = e => { clearTimeout(klok); klaar(typeof e.data === "string" ? e.data : null); };
+    sw.postMessage("versie", [kanaal.port2]);
+  });
+}
 function registreerSW(){
   if(!("serviceWorker" in navigator)) return;
   if(location.protocol !== "https:" && location.hostname !== "localhost") return;
-  navigator.serviceWorker.register("sw.js").catch(()=>{});
+  const sw = navigator.serviceWorker;
+  let hadController = !!sw.controller;
+  sw.addEventListener("controllerchange", () => {
+    const eerste = !hadController;
+    hadController = true;
+    if(eerste) return;
+    swVersie(sw.controller).then(v => {
+      if(v === UI.VERSIE) return;   // de pagina is al van deze versie
+      swVerversen = true;
+      verversNaUpdate();
+    });
+  });
+  sw.register("sw.js").catch(()=>{});
 }
 
 // Beta naast de naam, met de uitleg onder de kop (UI.Beta, UI.bindBeta)

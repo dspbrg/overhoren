@@ -547,6 +547,11 @@
     background: var(--mark); color: var(--ink);
     font-size: var(--t-meta); line-height: var(--lh-spraak);
   }
+  /* de versie van de app, een kleine regel onder de uitleg */
+  .beta-versie {
+    display: block; margin-block-start: var(--s1);
+    font-size: var(--t-label-sm); color: var(--muted); font-variant-numeric: tabular-nums;
+  }
 
   /* --- meter: elke voortgangsbalk in de app. Licht schuin. --- */
   .meter { background: var(--track); clip-path: var(--cut-meter); overflow: hidden; display: flex; height: 8px; }
