@@ -1,4 +1,4 @@
-// Eis 4: styleguide.html laadt zonder fouten en toont elk component uit
+// Eis 4: designsystem.html laadt zonder fouten en toont elk component uit
 // window.UI. Daarbij ook: geen overloop en contrast, net als de app.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -15,13 +15,13 @@ async function open(thema, breedte) {
   const extern = await schermNetwerkAf(context);
   const page = await context.newPage();
   const fouten = volgFouten(page);
-  await page.goto(server.url + "/styleguide.html");
+  await page.goto(server.url + "/designsystem.html");
   await page.locator("#sg-components .card").first().waitFor();
   await page.evaluate(rondAnimatiesAf);
   return { context, page, fouten, extern };
 }
 
-test("styleguide toont elk component uit window.UI", async () => {
+test("designsystem toont elk component uit window.UI", async () => {
   const { context, page, fouten } = await open("light", 1280);
   const r = await page.evaluate(() => {
     // componenten zijn de functies met een hoofdletter; esc, cls, pct en
@@ -48,9 +48,9 @@ test("styleguide toont elk component uit window.UI", async () => {
       tokensLeeg: [...document.querySelectorAll("[data-token]")].filter(e => !/^#[0-9A-F]{6}/.test(e.textContent)).map(e => e.dataset.token) };
   });
   assert.ok(r.namen.length >= 14, "te weinig componenten gevonden in window.UI: " + r.namen);
-  assert.deepEqual(r.ontbreekt, [], "componenten zonder voorbeeld in de styleguide");
+  assert.deepEqual(r.ontbreekt, [], "componenten zonder voorbeeld in het design system");
   assert.deepEqual(r.leeg, [], "componenten waarvan het voorbeeld niets tekent");
-  assert.deepEqual(r.iconenWeg, [], "iconen die niet in de styleguide staan");
+  assert.deepEqual(r.iconenWeg, [], "iconen die niet in het design system staan");
   assert.ok(r.svgIconen >= r.iconen, "minder iconen getekend dan er bestaan");
   assert.ok(r.hydrate, "hydrateIcons-voorbeeld heeft geen icoon gekregen");
   assert.equal(r.ring, 4, "verwacht vier Ring-voorbeelden");
@@ -59,7 +59,7 @@ test("styleguide toont elk component uit window.UI", async () => {
   await context.close();
 });
 
-test("styleguide: themaknop schakelt licht en donker", async () => {
+test("designsystem: themaknop schakelt licht en donker", async () => {
   const { context, page, fouten } = await open("light", 1280);
   const kleur = () => page.evaluate(() => getComputedStyle(document.body).color + "|" + document.querySelector('[data-token="--ink"]').textContent);
   const licht = await kleur();
@@ -75,7 +75,7 @@ test("styleguide: themaknop schakelt licht en donker", async () => {
 
 for (const thema of THEMAS) {
   for (const breedte of BREEDTES) {
-    test(`styleguide, ${thema}, ${breedte}px: geen fouten, geen overloop, contrast`, async t => {
+    test(`designsystem, ${thema}, ${breedte}px: geen fouten, geen overloop, contrast`, async t => {
       const { context, page, fouten, extern } = await open(thema, breedte);
       const problemen = [];
       const o = await page.evaluate(overloopMeting);

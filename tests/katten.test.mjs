@@ -70,11 +70,11 @@ test("catalogus: zes katten met naam, karakter en twee standen; afmetingen klopp
 });
 
 test("oude katten en het verzamelen zijn weg; service worker en allowlist kennen de nieuwe beelden", () => {
-  for (const f of ["index.html", "celebrate.js", "ui.js", "sw.js", "styleguide.html"]) {
+  for (const f of ["index.html", "celebrate.js", "ui.js", "sw.js", "designsystem.html"]) {
     assert.doesNotMatch(lees(f), /cats\.js|CAT_CATALOG|kansOpBijzonder|bijnaVlekkeloos|zeldzaam|"cats\//, f + " verwijst nog naar de oude katten");
   }
   // verdienen, startkat, opslag per oefenaar, Mijn katten, silhouet, sync van katten
-  for (const f of ["index.html", "celebrate.js", "ui.js", "ds.css", "styleguide.html"]) {
+  for (const f of ["index.html", "celebrate.js", "ui.js", "ds.css", "designsystem.html"]) {
     assert.doesNotMatch(lees(f), /KatTegel|kat-tegel|kat-silhouet|kat-raster|kat-masker|overhoor:katten|voegSamen|\bschoon\(|\bverdien\(|onVerdien|scr-cats|btn-cats|cats-grid|renderCats|Nieuwe kat/,
       f + " bevat nog iets van het verzamelen");
   }

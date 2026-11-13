@@ -6,3 +6,5 @@
 !.env.example
 # losse zip-bestanden (bv. aangeleverde beelden)
 *.zip
+# lokale agent-werkmappen
+.claude/

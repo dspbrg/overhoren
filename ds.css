@@ -19,7 +19,7 @@
    via light-dark(). Er is dus geen tweede blok dat je kunt vergeten
    bij te werken. Schakelen kan met data-theme="light" of "dark".
 
-   Een overzicht van alles staat in styleguide.html.
+   Een overzicht van alles staat in designsystem.html (online op /designsystem).
    ============================================================= */
 
 @layer tokens, base, components, screens, responsive;
