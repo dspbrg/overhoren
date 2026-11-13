@@ -1,0 +1,109 @@
+{
+  "fps": 6,
+  "breedte": 400,
+  "hoogte": 480,
+  "katten": {
+    "strepen": {
+      "rust": "strepen-rust.webp",
+      "goed": {
+        "anim": "strepen-goed.webp",
+        "eind": "strepen-goed-eind.webp",
+        "beelden": 8,
+        "duurMs": 1769,
+        "kijkt": "rechts"
+      },
+      "bijna": {
+        "anim": "strepen-bijna.webp",
+        "eind": "strepen-bijna-eind.webp",
+        "beelden": 4,
+        "duurMs": 1101,
+        "kijkt": "voor"
+      }
+    },
+    "tuxedo": {
+      "rust": "tuxedo-rust.webp",
+      "goed": {
+        "anim": "tuxedo-goed.webp",
+        "eind": "tuxedo-goed-eind.webp",
+        "beelden": 7,
+        "duurMs": 1602,
+        "kijkt": "voor"
+      },
+      "bijna": {
+        "anim": "tuxedo-bijna.webp",
+        "eind": "tuxedo-bijna-eind.webp",
+        "beelden": 7,
+        "duurMs": 1602,
+        "kijkt": "voor"
+      }
+    },
+    "lapjes": {
+      "rust": "lapjes-rust.webp",
+      "goed": {
+        "anim": "lapjes-goed.webp",
+        "eind": "lapjes-goed-eind.webp",
+        "beelden": 5,
+        "duurMs": 1268,
+        "kijkt": "voor"
+      },
+      "bijna": {
+        "anim": "lapjes-bijna.webp",
+        "eind": "lapjes-bijna-eind.webp",
+        "beelden": 6,
+        "duurMs": 1435,
+        "kijkt": "rechts"
+      }
+    },
+    "sokjes": {
+      "rust": "sokjes-rust.webp",
+      "goed": {
+        "anim": "sokjes-goed.webp",
+        "eind": "sokjes-goed-eind.webp",
+        "beelden": 8,
+        "duurMs": 1769,
+        "kijkt": "voor"
+      },
+      "bijna": {
+        "anim": "sokjes-bijna.webp",
+        "eind": "sokjes-bijna-eind.webp",
+        "beelden": 8,
+        "duurMs": 1769,
+        "kijkt": "rechts"
+      }
+    },
+    "stippen": {
+      "rust": "stippen-rust.webp",
+      "goed": {
+        "anim": "stippen-goed.webp",
+        "eind": "stippen-goed-eind.webp",
+        "beelden": 5,
+        "duurMs": 1268,
+        "kijkt": "voor"
+      },
+      "bijna": {
+        "anim": "stippen-bijna.webp",
+        "eind": "stippen-bijna-eind.webp",
+        "beelden": 7,
+        "duurMs": 1602,
+        "kijkt": "voor"
+      }
+    },
+    "rodestreep": {
+      "rust": "rodestreep-rust.webp",
+      "goed": {
+        "anim": "rodestreep-goed.webp",
+        "eind": "rodestreep-goed-eind.webp",
+        "beelden": 7,
+        "duurMs": 1602,
+        "kijkt": "voor"
+      },
+      "bijna": {
+        "anim": "rodestreep-bijna.webp",
+        "eind": "rodestreep-bijna-eind.webp",
+        "beelden": 5,
+        "duurMs": 1268,
+        "kijkt": "voor"
+      }
+    }
+  }
+}

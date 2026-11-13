@@ -59,10 +59,32 @@ function zoekChromium() {
   return null;
 }
 
+function zoekWebkit() {
+  if (process.env.PW_WEBKIT) return process.env.PW_WEBKIT;
+  const basis = process.env.PLAYWRIGHT_BROWSERS_PATH || join(homedir(), "Library", "Caches", "ms-playwright");
+  if (!existsSync(basis)) return null;
+  const mappen = readdirSync(basis).filter(d => /^webkit-\d+$/.test(d)).sort((a, b) => Number(b.split("-")[1]) - Number(a.split("-")[1]));
+  for (const m of mappen) if (existsSync(join(basis, m, "pw_run.sh"))) return join(basis, m, "pw_run.sh");
+  return null;
+}
+
 export async function startBrowser() {
   const pw = zoekPlaywright();
   if (!pw) throw new Error("Playwright niet gevonden. Zie tests/README.md (PLAYWRIGHT_MODULE).");
   let browser;
+  // PW_BROWSER=webkit draait dezelfde tests in WebKit (de motor van Safari),
+  // als die in de Playwright-cache staat. Standaard Chromium.
+  // Ontbreekt de WebKit van deze Playwright-versie, dan de nieuwste die in de
+  // cache staat (zoals bij Chromium hieronder), of PW_WEBKIT.
+  if (process.env.PW_BROWSER === "webkit") {
+    try { return zonderWelkom(await pw.webkit.launch()); }
+    catch (e) {
+      if (!/Executable doesn't exist/.test(e.message)) throw e;
+      const pad = zoekWebkit();
+      if (!pad) throw new Error("Geen WebKit gevonden in de Playwright-cache (PW_WEBKIT).");
+      return zonderWelkom(await pw.webkit.launch({ executablePath: pad }));
+    }
+  }
   try {
     browser = await pw.chromium.launch();
   } catch (e) {

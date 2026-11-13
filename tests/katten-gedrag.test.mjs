@@ -29,7 +29,8 @@ function laad({ opslag = {} } = {}) {
   const store = Object.assign({}, opslag);
   const ctx = vm.createContext({
     localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } },
-    __r: null
+    __r: null,
+    fetch: async pad => { const buf = readFileSync(join(REPO, pad)); return { ok: true, json: async () => JSON.parse(buf.toString("utf8")), blob: async () => ({ pad }) }; }
   });
   ctx.window = ctx;
   ctx.matchMedia = () => ({ matches: true });
@@ -57,8 +58,9 @@ test("geen opslag per oefenaar: een kat kiezen schrijft alleen de ene sleutel en
   assert.equal(laad({ opslag: { "overhoor:katten:pia": oud["overhoor:katten:pia"] } }).C.vorige(), null);
 });
 
-test("toon: geen enkele kattekst in de code is verdrietig, zegt 'kom terug' of roept", () => {
+test("toon: geen enkele kattekst in de code is verdrietig, zegt 'kom terug' of roept", async () => {
   const { C } = laad();
+  await C.laadCatalogus();
   const teksten = [...Object.values(C.ZEGT), ...Object.values(C.GEDAG)].map(z => z.tekst);
   teksten.push(...Object.values(C.HOUDING), ...C.KATTEN.flatMap(k => [k.naam, k.karakter]));
   for (const soort of ["vlekkeloos", "gewoon", "lastig", "gestopt"]) teksten.push(C.gedag(soort, "Pia").tekst);
@@ -99,7 +101,11 @@ async function open({ thema = "light", reduced = false, zaai = {}, sw = false } 
 }
 // de kat van de laatst begonnen ronde
 const vorige = page => page.evaluate(() => JSON.parse(localStorage.getItem("overhoor:kat:vorige")));
-const katVan = src => /^katten\/(\w+)-(goed|bijna)\.webp$/.exec(src || "")?.[1];
+const MAP = "katten/clips/";
+// de kat op de rand en welk beeld hij toont (de speler zet data-kat en data-beeld)
+const katOp = async (page, sel) => ({ kat: await page.locator(sel).getAttribute("data-kat"), beeld: await page.locator(sel).getAttribute("data-beeld") });
+// stand goed of bijna: de clip of al het eindbeeld
+const inStand = (b, stand) => b.beeld === stand || b.beeld === stand + "-eind";
 const alleSleutels = page => page.evaluate(() => Object.fromEntries(Object.keys(localStorage).map(k => [k, localStorage.getItem(k)])));
 
 // het goede antwoord en een sleutel per woord, zodat een herhaling herkend wordt
@@ -193,7 +199,8 @@ test("vlekkeloos achter elkaar: elke ronde confetti en de kat van die ronde zegt
     assert.ok(await page.locator("canvas.fx-canvas").count() > 0, "geen confetti in ronde " + ronde);
     assert.equal((await page.locator("#sum-title").textContent()).trim(), "Ronde klaar");
     assert.equal((await page.locator("#sum-kat .spraak").textContent()).trim(), VLEKKELOOS("Pia"));
-    assert.equal(await page.locator("#sum-kat .kat").getAttribute("src"), `katten/${kat}-goed.webp`, "niet de kat van deze ronde in goed-stand");
+    const b = await katOp(page, "#sum-kat .kat");
+    assert.ok(b.kat === kat && inStand(b, "goed"), "niet de kat van deze ronde in goed-stand: " + JSON.stringify(b));
     assert.equal(await page.locator(".kat-beloning, #scr-summary svg.icon").count(), 0, "beloningskaart of beker");
     await page.waitForFunction(() => !document.querySelector("canvas.fx-canvas"), null, { timeout: 6000 });
     await naarLessen(page);
@@ -212,7 +219,8 @@ test("gewone ronde: een fout bij de eerste poging, de kat zegt gewoon gedag, gee
   await speelRonde(page, { fout: 1 });
   assert.equal((await page.locator("#sum-title").textContent()).trim(), "Ronde klaar");
   assert.equal((await page.locator("#sum-kat .spraak").textContent()).trim(), GEWOON("Pia"));
-  assert.equal(await page.locator("#sum-kat .kat").getAttribute("src"), `katten/${await vorige(page)}-goed.webp`);
+  const b = await katOp(page, "#sum-kat .kat");
+  assert.ok(b.kat === await vorige(page) && inStand(b, "goed"), JSON.stringify(b));
   assert.equal(await page.locator("canvas.fx-canvas").count(), 0, "confetti na een ronde met een fout");
   await geenPerOefenaar(page);
   assert.deepEqual(fouten, []);
@@ -244,7 +252,7 @@ test("oefenaar wisselen: geen katten per oefenaar, de volgende ronde heeft gewoo
   const v = await vraag(page); await geef(page, v.a, v.cls);
   if (await page.locator("#fb-assess").isVisible()) await page.click("#btn-assess-yes");
   await page.locator("#q-kat .kat").waitFor();
-  const tom = katVan(await page.locator("#q-kat .kat").getAttribute("src"));
+  const tom = (await katOp(page, "#q-kat .kat")).kat;
   assert.ok(ALLE.includes(tom));
   assert.notEqual(tom, pia, "na het wisselen dezelfde kat als de ronde ervoor");
   assert.equal(await vorige(page), tom);
@@ -273,7 +281,8 @@ for (const g of [
     assert.equal(n, Number(g.grootte), "ronde heeft niet de gekozen lengte");
     const zin = (await page.locator("#sum-kat .spraak").textContent()).trim();
     assert.equal(zin, g.kat ? LASTIG("Pia") : GEWOON("Pia"), `${g.fout} van ${n} fout: verkeerde zin`);
-    assert.equal(await page.locator("#sum-kat .kat").getAttribute("src"), `katten/${await vorige(page)}-${g.kat ? "bijna" : "goed"}.webp`, "niet de kat van deze ronde in de goede stand");
+    const b = await katOp(page, "#sum-kat .kat");
+    assert.ok(b.kat === await vorige(page) && inStand(b, g.kat ? "bijna" : "goed"), "niet de kat van deze ronde in de goede stand: " + JSON.stringify(b));
     assert.equal(await page.locator("#sum-kat .kat").getAttribute("alt"), "");
     assert.equal(await page.locator("canvas.fx-canvas").count(), 0, "confetti in een ronde met fouten");
     await geenPerOefenaar(page);
@@ -322,14 +331,14 @@ test("oude voortgang van woorden, lijsten en oefenaars blijft na de update staan
   await context.close();
 });
 
-test("offline: alle twaalf kattenbeelden staan in de cache van de service worker en laden zonder netwerk", async () => {
+test("offline: alle dertig kattenbeelden en katten.json staan in de cache van de service worker en laden zonder netwerk", async () => {
   const { context, page, fouten } = await open({ sw: true });
-  const urls = ALLE.flatMap(id => [`katten/${id}-goed.webp`, `katten/${id}-bijna.webp`]);
+  const urls = ALLE.flatMap(id => ["rust", "goed", "goed-eind", "bijna", "bijna-eind"].map(s => `${MAP}${id}-${s}.webp`));
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await page.waitForFunction(async urls => {
     for (const u of urls) if (!(await caches.match(u))) return false;
     return true;
-  }, urls, { timeout: 10000, polling: 200 });
+  }, [...urls, MAP + "katten.json"], { timeout: 10000, polling: 200 });
   if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) await page.reload();
   assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller), "service worker neemt de pagina niet over");
 
@@ -342,10 +351,14 @@ test("offline: alle twaalf kattenbeelden staan in de cache van de service worker
   for (const x of r) { assert.ok(x.w > 0, x.u + " laadt niet offline"); assert.equal(x.h, 480, x.u); }
   const types = await page.evaluate(async urls => Promise.all(urls.map(async u => { const res = await fetch(u); return res.status + " " + res.headers.get("content-type"); })), urls);
   for (const t of types) assert.equal(t, "200 image/webp");
+  assert.equal(await page.evaluate(async u => (await (await fetch(u)).json()).fps, MAP + "katten.json"), 6, "katten.json niet offline");
   // en in de app: een ronde offline, de kat op de rand van de vraag en van de samenvatting
   await speelRonde(page);
   await page.waitForFunction(() => { const i = document.querySelector("#sum-kat .kat"); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 5000 });
-  assert.equal(await page.locator("#sum-kat .kat").getAttribute("src"), `katten/${await vorige(page)}-goed.webp`);
+  const b = await katOp(page, "#sum-kat .kat");
+  assert.ok(b.kat === await vorige(page) && inStand(b, "goed"), JSON.stringify(b));
+  // de clip speelde ook offline, en eindigt op het eindbeeld
+  await page.waitForFunction(() => document.querySelector("#sum-kat .kat").dataset.beeld === "goed-eind", null, { timeout: 4000 });
   assert.deepEqual(fouten, []);
   await context.close();
 });
@@ -371,7 +384,7 @@ for (const thema of THEMAS) for (const reduced of [false, true]) {
       await keur(page, naam, problemen, fouten);
     };
 
-    // twijfelgeval: oordeel "Bijna?" in de kaart, de kat kijkt nog mee in bijna-stand
+    // twijfelgeval: oordeel "Bijna?" in de kaart, de kat kijkt nog mee in rust
     await kiesLes(page);
     const kat1 = await vorige(page);
     let twijfel = false;
@@ -381,7 +394,7 @@ for (const thema of THEMAS) for (const reduced of [false, true]) {
         await geef(page, v.a.slice(0, -1) + (v.a.endsWith("x") ? "y" : "x"), v.cls);
         if (await page.locator("#fb-assess").isVisible()) {
           twijfel = true;
-          assert.equal(await page.locator("#q-kat .kat").getAttribute("src"), `katten/${kat1}-bijna.webp`);
+          assert.deepEqual(await katOp(page, "#q-kat .kat"), { kat: kat1, beeld: "rust" });
           assert.equal((await page.locator("#scr-quiz .q-card #fb-verdict.verdict.maybe").textContent()).trim(), "Bijna?");
           assert.equal((await page.locator("#q-kat .spraak").textContent()).trim(), "Ik kijk mee.");
           await moment("twijfel");

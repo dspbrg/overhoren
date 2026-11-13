@@ -23,8 +23,10 @@
 !/icons/
 
 # Binnen die mappen toch niet
-# geen submappen in katten/, fonts/ en icons/
+# geen submappen in katten/, fonts/ en icons/, behalve katten/clips/
 /katten/*/
+!/katten/clips/
+/katten/clips/*/
 /fonts/*/
 /icons/*/
 # alles wat met een punt begint (.DS_Store, .gitkeep, ...)
