@@ -410,7 +410,7 @@
         '<div class="card"><p>Ronde klaar: 4 van 12 in één keer goed.</p></div></div></div>']
     ], { col: true }),
 
-    block("Welkom", "Een keer per kalenderdag bij het openen van de app, heel scherm over de app (die is zolang inert). De kat van de eerstvolgende ronde (Celebrate.volgende) springt omhoog en wiebelt twee keer, dan Hoi met de naam; zonder naam alleen de kat. Daarna vervaagt alles. Samen --welkom-duur, 1,2 s. Tik of toets haalt het eerder weg. Niet binnen dezelfde sessie, niet bij een ronde die openstaat, en alleen als het beeld binnen 300 ms klaar is. Reduced motion: stilstaand eindbeeld, zelfde tijd. Het beeld per kat komt uit Celebrate.welkomBeeld(id); daar hangt later een geanimeerde kat in. Hier in een vak, zonder vervagen.", [
+    block("Welkom", "Bij elke keer openen van de app, een keer per sessie (niet bij herladen of terugkeren naar hetzelfde tabblad), heel scherm over de app (die is zolang inert). De kat van de eerstvolgende ronde (Celebrate.volgende) springt omhoog en wiebelt twee keer, dan Hoi met de naam; zonder naam alleen de kat. Daarna vervaagt alles. Samen --welkom-duur, 1,2 s. Tik of toets haalt het eerder weg. Niet bij een ronde die openstaat, en alleen als het beeld binnen 300 ms klaar is. Reduced motion: stilstaand eindbeeld, zelfde tijd. Het beeld per kat komt uit Celebrate.welkomBeeld(id); daar hangt later een geanimeerde kat in. Hier in een vak, zonder vervagen.", [
       ['UI.Welkom({ beeld: Celebrate.welkomBeeld(id), naam })',
         '<div class="sg-welkom" id="sg-welkom">' + UI.Welkom({ beeld: Celebrate.welkomBeeld("sokjes"), naam: "Pia" }) + '</div>' +
         UI.Button({ id: "sg-welkom-opnieuw", label: "Opnieuw afspelen", icon: "play" })]

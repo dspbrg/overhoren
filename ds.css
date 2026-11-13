@@ -672,7 +672,7 @@
     animation: kat-in var(--m3-spatial-fast) both;
   }
 
-  /* --- welkom: een keer per dag bij het openen ---
+  /* --- welkom: bij het openen, een keer per sessie ---
      Heel scherm over de app (die is zolang inert). Tijdlijn, samen
      --welkom-duur (1200 ms):
        0     de naam verschijnt, de kat springt omhoog (350 ms)

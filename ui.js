@@ -273,7 +273,7 @@
       Spraak({ text: o.text, id: o.textId }) + katImg(o.beeld, "") + '</div>';
   }
 
-  // Welkom: een keer per dag bij het openen, heel scherm. De naam van de
+  // Welkom: bij het openen, een keer per sessie, heel scherm. De naam van de
   // app, de kat van de eerstvolgende ronde springt omhoog en wiebelt, dan
   // "Hoi <naam>". Daarna vervaagt alles (ds.css, --welkom-duur). Zonder
   // naam alleen de kat. De kat is versiering (alt leeg).

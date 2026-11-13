@@ -74,23 +74,21 @@ export async function startBrowser() {
   return zonderWelkom(browser);
 }
 
-// Het welkom (een keer per dag bij het openen) ligt even over de app en
-// maakt hem inert. De meeste tests openen de app en willen meteen klikken,
-// dus elke nieuwe context krijgt de dag van het welkom al op vandaag.
+// Het welkom (bij het openen, een keer per sessie) ligt even over de app
+// en maakt hem inert. De meeste tests openen de app en willen meteen
+// klikken, dus elk tabblad krijgt de sessievlag van het welkom al.
 // newContext({ welkom: true }) laat dat weg; tests/welkom.test.mjs test
 // het welkom zelf.
-export const WELKOM_DAG = "overhoor:welkom:dag";
+export const WELKOM_SESSIE = "overhoor:welkom:sessie";
+export const WELKOM_DAG = "overhoor:welkom:dag";   // oude dagregel, wordt niet meer geschreven
 function zonderWelkom(browser) {
   const echt = browser.newContext.bind(browser);
   browser.newContext = async (opties = {}) => {
     const { welkom = false, ...rest } = opties;
     const context = await echt(rest);
     if (!welkom) await context.addInitScript(sleutel => {
-      try {
-        const d = new Date();
-        localStorage.setItem(sleutel, d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"));
-      } catch (_) { /* geen opslag: dan is er ook geen welkom */ }
-    }, WELKOM_DAG);
+      try { sessionStorage.setItem(sleutel, "1"); } catch (_) { /* geen opslag: dan is er ook geen welkom */ }
+    }, WELKOM_SESSIE);
     return context;
   };
   return browser;

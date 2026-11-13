@@ -2,11 +2,11 @@
 // scherm, de naam van de app, de kat van de eerstvolgende ronde springt
 // omhoog en wiebelt twee keer, dan "Hoi <naam>", daarna vervaagt alles.
 // Samen 1,2 s. Tik of toets haalt het eerder weg, de app eronder is zolang
-// inert. Hooguit een keer per kalenderdag per apparaat, niet binnen
-// dezelfde sessie en niet als er een ronde openstaat. Alleen als het beeld
+// inert. Bij elke keer openen (nieuw tabblad, nieuwe sessie), maar niet
+// opnieuw binnen dezelfde sessie en niet als er een ronde openstaat. Alleen als het beeld
 // binnen 300 ms klaar is. Reduced motion: een stilstaand eindbeeld.
 //
-// Alle andere tests zetten de dag van het welkom al op vandaag (zie
+// Alle andere tests zetten de sessievlag van het welkom al (zie
 // tests/lib/omgeving.mjs); hier opent elke context met { welkom: true }.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -151,12 +151,11 @@ async function openPagina(context, { klok = false } = {}) {
   await wachtOpScherm(page, "scr-lessons");
   return { page, fouten };
 }
-const vandaag = page => page.evaluate(() => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); });
 const welkomEl = page => page.locator("body > .welkom");
 // wacht lang genoeg om zeker te weten dat er geen welkom komt (300 ms beeld plus marge)
 const geenWelkom = async page => { await page.waitForTimeout(700); return page.evaluate(() => ({ ...window.__welkom, nu: !!document.querySelector(".welkom") })); };
 
-test("welkom: de eerste keer vandaag, heel scherm, app inert, Hoi Pia, na 1,2 s weg en de dag onthouden", async () => {
+test("welkom: bij het openen, heel scherm, app inert, Hoi Pia, na 1,2 s weg; geen dagsleutel", async () => {
   const { context } = await nieuweContext();
   const { page, fouten } = await openPagina(context);
   await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
@@ -171,7 +170,7 @@ test("welkom: de eerste keer vandaag, heel scherm, app inert, Hoi Pia, na 1,2 s 
   assert.ok(r.heel, "het welkom bedekt niet het hele scherm");
   assert.equal(r.kat, "", "de kat is versiering, alt hoort leeg");
   assert.equal(r.merk, "Overhoren Beta");
-  assert.equal(await page.evaluate(k => localStorage.getItem(k), WELKOM_DAG), await vandaag(page));
+  assert.equal(await page.evaluate(k => localStorage.getItem(k), WELKOM_DAG), null, "de dagsleutel wordt nog geschreven");
   await welkomEl(page).waitFor({ state: "detached", timeout: 2500 });
   const w = await page.evaluate(() => window.__welkom);
   const duur = w.weg - w.gezien;
@@ -183,31 +182,33 @@ test("welkom: de eerste keer vandaag, heel scherm, app inert, Hoi Pia, na 1,2 s 
   await context.close();
 });
 
-test("welkom: hooguit een keer per dag; nieuw tabblad dezelfde dag niet, de volgende dag weer wel", async () => {
-  const { context } = await nieuweContext();
+test("welkom: elke keer openen; een nieuw tabblad dezelfde dag wel, ook met een oude dagsleutel", async () => {
+  const { context } = await nieuweContext({ zaai: { [WELKOM_DAG]: "2099-01-01" } });
   const een = await openPagina(context);
   await welkomEl(een.page).waitFor({ state: "attached", timeout: 1500 });
+  // een tweede tabblad is een nieuwe sessie: weer een welkom
   const twee = await openPagina(context);
-  const r = await geenWelkom(twee.page);
-  assert.equal(r.gezien, 0, "welkom kwam twee keer op dezelfde dag");
-  // een dag later (de bewaarde dag is gisteren of ouder)
-  await twee.page.evaluate(k => localStorage.setItem(k, "2000-01-01"), WELKOM_DAG);
+  await welkomEl(twee.page).waitFor({ state: "attached", timeout: 1500 });
+  // nog een, nadat het vorige welkom al weg is
+  await welkomEl(twee.page).waitFor({ state: "detached", timeout: 2500 });
   const drie = await openPagina(context);
   await welkomEl(drie.page).waitFor({ state: "attached", timeout: 1500 });
-  assert.equal(await drie.page.evaluate(k => localStorage.getItem(k), WELKOM_DAG), await vandaag(drie.page));
+  // een oude dagsleutel blijft ongemoeid en telt niet mee
+  assert.equal(await drie.page.evaluate(k => localStorage.getItem(k), WELKOM_DAG), "2099-01-01");
   assert.deepEqual([...een.fouten, ...twee.fouten, ...drie.fouten], []);
   await context.close();
 });
 
-test("welkom: niet als je binnen de sessie terugkomt, ook niet na middernacht", async () => {
+test("welkom: niet opnieuw in hetzelfde tabblad (herladen, terug naar het tabblad)", async () => {
   const { context } = await nieuweContext();
   const { page, fouten } = await openPagina(context);
   await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
   await welkomEl(page).waitFor({ state: "detached", timeout: 2500 });
-  // de dag verstrijkt terwijl de app openstaat, en ze herlaadt
-  await page.evaluate(k => localStorage.setItem(k, "2000-01-01"), WELKOM_DAG);
   await page.reload(); await wachtOpScherm(page, "scr-lessons");
-  assert.equal((await geenWelkom(page)).gezien, 0, "welkom bij terugkomen in dezelfde sessie");
+  assert.equal((await geenWelkom(page)).gezien, 0, "welkom na herladen in hetzelfde tabblad");
+  // terug naar het tabblad: de pagina blijft staan, er komt niets bij
+  await page.evaluate(() => { document.dispatchEvent(new Event("visibilitychange")); window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })); });
+  assert.equal((await geenWelkom(page)).gezien, 0, "welkom bij terugkeren naar het tabblad");
   assert.deepEqual(fouten, []);
   await context.close();
 });
@@ -219,7 +220,6 @@ test("welkom: niet bij een ronde die openstaat om te hervatten; die houdt zijn e
   const { page, fouten } = await openPagina(context);
   const r = await geenWelkom(page);
   assert.equal(r.gezien, 0, "welkom terwijl er een ronde openstaat");
-  assert.equal(await page.evaluate(k => localStorage.getItem(k), WELKOM_DAG), null, "de dag is onthouden zonder welkom");
   // hervatten werkt en houdt de kat
   await page.locator(".lesson").first().click(); await wachtOpScherm(page, "scr-home");
   await page.click("#btn-resume"); await wachtOpScherm(page, "scr-quiz");
@@ -314,7 +314,6 @@ test("welkom: komt het beeld niet binnen 300 ms, dan stil overslaan", async () =
   assert.equal(r.gezien, 0, "welkom ondanks een traag beeld");
   await page.waitForTimeout(600);
   assert.equal(await page.locator(".welkom").count(), 0, "welkom kwam alsnog, te laat");
-  assert.equal(await page.evaluate(k => localStorage.getItem(k), WELKOM_DAG), null, "de dag is onthouden zonder welkom");
   assert.equal(await page.evaluate(() => document.querySelector("body > .app").inert), false);
   assert.deepEqual(fouten, []);
   await context.close();

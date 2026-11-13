@@ -1856,12 +1856,16 @@ function zetBeta(){
 
 // ---------- welkom ----------
 // Bij het openen een kort welkom met de kat van de eerstvolgende ronde
-// (UI.Welkom, ds.css .welkom). Hooguit een keer per kalenderdag per
-// apparaat (WELKOM_DAG, de datum van vandaag). Niet als je binnen de
-// sessie terugkomt (herladen, terug uit de achtergrond), en niet als er
-// een ronde openstaat die je kunt hervatten: die heeft al een eigen kat.
+// (UI.Welkom, ds.css .welkom). Bij elke keer openen, een keer per sessie:
+// niet opnieuw bij herladen of terugkeren naar hetzelfde tabblad. Niet als
+// er een ronde openstaat die je kunt hervatten: die heeft al een eigen kat.
 // Het beeld moet binnen 300 ms klaar zijn (uit de cache, ook offline);
 // anders slaat het welkom stil over. Tik of toets haalt het eerder weg.
+//
+// Hoe vaak: WELKOM_PER_DAG. Op false (nu, keuze van Daan) elke sessie.
+// Op true komt het hooguit een keer per kalenderdag per apparaat; dan
+// onthoudt WELKOM_DAG de datum van vandaag.
+const WELKOM_PER_DAG = false;
 const WELKOM_DAG = "overhoor:welkom:dag", WELKOM_SESSIE = "overhoor:welkom:sessie", WELKOM_WACHT = 300;
 function dagVan(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function heeftOpenRonde(){
@@ -1881,8 +1885,8 @@ function welkom(){
   try{
     terug = sessionStorage.getItem(WELKOM_SESSIE);
     sessionStorage.setItem(WELKOM_SESSIE, "1");
-    if(localStorage.getItem(WELKOM_DAG) === dagVan(new Date())) return;
-  }catch(e){ return; }   // zonder opslag kunnen we "een keer per dag" niet waarmaken
+    if(WELKOM_PER_DAG && localStorage.getItem(WELKOM_DAG) === dagVan(new Date())) return;
+  }catch(e){ return; }   // zonder opslag kunnen we "een keer per sessie" niet waarmaken
   if(terug || heeftOpenRonde()) return;
   const beeld = Celebrate.welkomBeeld(Celebrate.volgende());
   if(!beeld) return;
@@ -1898,7 +1902,7 @@ function toonWelkom(beeld, stil){
   const app = document.querySelector("body > .app");
   // al verder getikt, of er staat er al een
   if(!app || document.querySelector(".welkom") || $("scr-lessons").hidden) return;
-  try{ localStorage.setItem(WELKOM_DAG, dagVan(new Date())); }catch(e){}
+  if(WELKOM_PER_DAG) try{ localStorage.setItem(WELKOM_DAG, dagVan(new Date())); }catch(e){}
   document.body.insertAdjacentHTML("beforeend", UI.Welkom({ beeld, naam: learner, stil }));
   const el = document.body.lastElementChild;
   app.inert = true;
