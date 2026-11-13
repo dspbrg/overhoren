@@ -99,7 +99,8 @@ test("service worker en allowlist: alle clips en katten.json gaan mee en online,
 // ---------- de speler zonder browser ----------
 // celebrate.js in een eigen context met een nep-klok, nep-URL's en een
 // fetch die de bestanden uit de repo leest.
-function laad({ reduced = false, kapot = [] } = {}) {
+function laad({ reduced = false, kapot = [], houd = [] } = {}) {
+  const vast = [];   // opgehouden ophalingen: { pad, los }
   let nu = 0, volg = 1;
   const timers = new Map();
   const urls = { gemaakt: [], weg: [] };
@@ -115,6 +116,7 @@ function laad({ reduced = false, kapot = [] } = {}) {
     fetch: async pad => {
       opgehaald.push(pad);
       if (kapot.some(k => pad.includes(k))) throw new TypeError("offline");
+      if (houd.some(k => pad.includes(k))) await new Promise(los => vast.push({ pad, los }));
       const buf = readFileSync(join(REPO, pad));
       return { ok: true, json: async () => JSON.parse(buf.toString("utf8")), blob: async () => ({ pad, size: buf.length }) };
     }
@@ -132,7 +134,8 @@ function laad({ reduced = false, kapot = [] } = {}) {
     }
     nu = eind;
   }
-  return { C: ctx.Celebrate, urls, opgehaald, tik, timers };
+  const laatLos = deel => { for (const v of vast.filter(x => x.pad.includes(deel))) v.los(); };
+  return { C: ctx.Celebrate, urls, opgehaald, tik, timers, laatLos };
 }
 // een nep-<img> die bijhoudt welk beeld er stond
 function nepImg() {
@@ -307,6 +310,62 @@ test("offline: een clip die niet laadt breekt niets, dan meteen het eindbeeld", 
   await zonder.speler(img2, { plaats: "rechts" }).speel("strepen", "goed");
   assert.equal(img2.src, "");
   assert.equal(zonder.beeld("strepen", "goed"), null);
+});
+
+test("speler: een clip die te traag laadt wordt na 600 ms het eindbeeld, en start daarna niet alsnog", async () => {
+  const { C, tik, urls, laatLos } = laad({ houd: ["-goed.webp"] });
+  await C.laadCatalogus();
+  const img = nepImg(), sp = C.speler(img, { plaats: "rechts" });
+  let klaar = null;
+  C.laadKat("strepen");
+  sp.speel("strepen", "goed").then(v => { klaar = v; });
+  assert.equal(img.src, "", "tijdens het laden staat er nog niets");
+  tik(599);
+  assert.equal(img.src, "");
+  tik(1);
+  assert.equal(img.src, MAP + KAT.katten.strepen.goed.eind, "na 600 ms niet het eindbeeld");
+  await nogEven();
+  assert.equal(klaar, true);
+  laatLos("-goed.webp"); await nogEven(); await nogEven();
+  tik(5000);
+  assert.equal(urls.gemaakt.length, 0, "de late clip start alsnog");
+  assert.equal(img.getAttribute("data-beeld"), "goed-eind");
+});
+
+test("speler: een nieuwe ronde (andere kat) terwijl de clip van de vorige nog laadt, de late clip lekt niets en verschijnt nooit", async () => {
+  const { C, tik, urls, laatLos } = laad({ houd: ["strepen-goed.webp"] });
+  await C.laadCatalogus();
+  const img = nepImg(), sp = C.speler(img, { plaats: "rechts" });
+  let eerste = null;
+  C.laadKat("strepen");
+  sp.speel("strepen", "goed").then(v => { eerste = v; });
+  // de nieuwe ronde: een andere kat, de speler van de kaart speelt die
+  await C.laadKat("tuxedo");
+  sp.speel("tuxedo", "goed");
+  assert.match(img.src, /^blob:test\/\d+\/katten\/clips\/tuxedo-goed\.webp$/);
+  laatLos("strepen-goed.webp"); await nogEven(); await nogEven();
+  assert.ok(img.log.every(s => !s.includes("strepen")), "de kat van de vorige ronde verschijnt toch: " + img.log.join(" "));
+  tik(5000);
+  assert.equal(img.src, MAP + KAT.katten.tuxedo.goed.eind);
+  assert.equal(img.getAttribute("data-kat"), "tuxedo");
+  await nogEven();
+  assert.equal(eerste, false);
+  assert.deepEqual([...urls.weg].sort(), [...urls.gemaakt].sort(), "een object-URL is niet opgeruimd");
+});
+
+test("katten.json: lukt het niet, dan geen kat en geen fout; de volgende keer wordt opnieuw geprobeerd", async () => {
+  let stuk = true;
+  const ctx = vm.createContext({ localStorage: { getItem: () => null, setItem: () => {} }, setTimeout, clearTimeout, URL: { createObjectURL: () => "blob:x", revokeObjectURL() {} },
+    fetch: async pad => { if (stuk) return { ok: false, status: 503 }; return { ok: true, json: async () => KAT, blob: async () => ({ pad }) }; } });
+  ctx.window = ctx; ctx.matchMedia = () => ({ matches: false });
+  vm.runInContext(lees("celebrate.js"), ctx);
+  const C = ctx.Celebrate;
+  assert.equal(await C.laadCatalogus(), null, "een 503 geeft toch een catalogus");
+  assert.equal(C.beeld("tuxedo", "goed"), null);
+  assert.equal((await C.laadKat("tuxedo")).volledig, false);
+  stuk = false;
+  assert.ok(await C.laadCatalogus(), "na herstel wordt katten.json niet opnieuw geprobeerd");
+  assert.ok(C.beeld("tuxedo", "goed"));
 });
 
 // ---------- in de browser ----------
