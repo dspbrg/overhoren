@@ -129,6 +129,9 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
     <div class="topbar"><button class="link" data-icon="close" id="btn-quit">Stoppen</button><span id="q-count"></span><span class="streak" id="q-streak" hidden></span><span class="muted" id="q-timer">0:00</span></div>
     <div class="meter sm"><i id="q-bar" class="b"></i></div>
     <div class="notice" id="pause-hint" hidden>Al 15 minuten bezig. Even pauze is slimmer dan doorgaan: stop na dit woord, de rest komt straks vanzelf terug.</div>
+    <div class="kat-kaart">
+    <!-- de kat van de ronde op de rand van de kaart; UI.KatRand vult en vervangt dit element -->
+    <div class="kat-rand" id="q-kat" hidden></div>
     <div class="card q-card">
       <span class="eyebrow" id="q-kind">Woord</span>
       <p class="prompt" id="q-prompt"></p>
@@ -139,6 +142,7 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       <button class="btn primary big" id="btn-next" hidden>Volgende</button>
       <button class="link" data-icon="clock" id="btn-later">Weet ik even niet, doe later</button>
       <div id="feedback" hidden>
+        <p class="verdict" id="fb-verdict"></p>
         <p id="fb-official" hidden></p>
         <ul class="fb-list">
           <li><span class="mark" id="fb-word-mark"></span><div><div class="k" id="fb-word-k">Woord</div><div id="fb-word"></div><div class="yours" id="fb-word-yours"></div></div></li>
@@ -154,8 +158,7 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       </div>
       <p class="hint" id="q-keys-hint"></p>
     </div>
-    <!-- de kat met het oordeel; UI.KatRij vult en vervangt dit element -->
-    <div class="kat-rij" id="q-kat" hidden></div>
+    </div>
   </div>
 </section>
 
@@ -163,11 +166,12 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
 <section id="scr-summary" class="screen" hidden>
   <div class="app">
     <header class="brand"><h1 id="sum-title">Ronde klaar</h1></header>
-    <!-- de kat van de ronde na een vlekkeloze ronde; UI.KatBeloning -->
-    <figure class="kat-beloning" id="sum-beloning" hidden></figure>
+    <div class="kat-kaart">
+    <!-- de kat van de ronde zegt gedag; UI.KatRand -->
+    <div class="kat-rand" id="sum-kat" hidden></div>
     <div class="card">
       <div class="summary-grid">
-        <div class="stat"><b id="sum-first">0</b><span>in één keer goed</span><p id="sum-perfect" hidden></p></div>
+        <div class="stat"><b id="sum-first">0</b><span>in één keer goed</span></div>
         <div class="stat"><b id="sum-n">0</b><span>woorden</span></div>
         <div class="stat"><b id="sum-time">0:00</b><span>tijd</span></div>
       </div>
@@ -175,8 +179,7 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       <div><span class="eyebrow">Volgende ronde</span><p id="sum-next"></p></div>
       <div class="row"><button class="btn primary" id="btn-sum-home">Nog een ronde</button><button class="btn" id="btn-sum-lessons">Alle lessen</button></div>
     </div>
-    <!-- kat bij een lastige ronde; UI.KatRij -->
-    <div class="kat-rij" id="sum-kat" hidden></div>
+    </div>
   </div>
 </section>
 
@@ -338,7 +341,7 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
     </div>
 
     <div class="card" id="photo-done" hidden>
-      <div class="empty"><span class="glyph">&#10003;</span><p><b>Lijst opgeslagen!</b></p><p class="muted" id="photo-done-text"></p></div>
+      <div class="empty"><span class="glyph">&#10003;</span><p><b>Lijst opgeslagen.</b></p><p class="muted" id="photo-done-text"></p></div>
       <button class="btn primary big" id="btn-photo-go">Naar de lijst</button>
     </div>
 
@@ -898,12 +901,24 @@ function fmtRel(ms){
 }
 
 // ---------- schermen ----------
-// De kat van de ronde in een KatRij op de plek van element id.
-// o: { text, lead, oordeel, textId }, zie UI.KatRij. Alles wordt ontsnapt.
-function toonKat(id, stand, o, kat){
-  const b = Celebrate.beeld(kat || (session && session.kat), stand);
-  if(!b){ $(id).hidden = true; return; }
-  $(id).outerHTML = UI.KatRij(Object.assign({}, o, { id, beeld: b }));
+// De kat van de ronde op de rand van de kaart, op de plek van element id.
+// z: { stand, tekst } uit Celebrate.zegt() of Celebrate.gedag(). Staat
+// de kat er al, dan wisselen alleen beeld en zin: geen nieuwe entree en
+// niets dat verspringt. Alles gaat door esc() of textContent.
+function toonKat(id, z, kat){
+  const b = Celebrate.beeld(kat || (session && session.kat), z.stand);
+  const el = $(id);
+  if(!b){ el.hidden = true; return; }
+  // de andere stand alvast laden, zodat het wisselen straks meteen gaat
+  const ander = Celebrate.beeld(b.id, b.stand === "goed" ? "bijna" : "goed");
+  if(ander) new Image().src = ander.src;
+  const img = el.querySelector(".kat"), zin = el.querySelector(".spraak");
+  if(img && zin && !el.hidden){
+    img.src = b.src; img.width = b.width; img.height = b.height;
+    zin.textContent = z.tekst;
+    return;
+  }
+  el.outerHTML = UI.KatRand({ id, beeld: b, text: z.tekst });
 }
 
 // Tijdens een afgedwongen pauze kan er geen nieuwe ronde starten. De
@@ -1004,8 +1019,7 @@ function renderHome(){
     ? "Niets aan de beurt. Deze ronde oefent de "+pick.indices.length+" zwakste woorden extra."
     : "Deze ronde: "+pick.indices.length+" woorden ("+Math.min(pick.dueCount, pick.indices.length)+" herhalen, "+(pick.indices.length-Math.min(pick.dueCount,pick.indices.length))+" nieuw).";
   // Wat een vlekkeloze ronde oplevert. De kat is er altijd, die is geen prijs.
-  $("size-hint").innerHTML = esc(basis) + ' <span class="size-kans">' + UI.Icon("trophy") +
-    ' Alles in één keer goed: confetti.</span>';
+  $("size-hint").innerHTML = esc(basis) + ' <span class="size-kans">Alles in één keer goed: confetti.</span>';
   // grens: alleen zinvol bij een lijst die te lang is om in een keer te doen
   const totaal = list.items.length;
   const toonGrens = !list.mix && totaal > 20;
@@ -1202,7 +1216,8 @@ function renderQuestion(){
   $("q-classes").innerHTML = UI.Choices(cs);
   $("q-classes").querySelectorAll(".choice").forEach(b=>b.addEventListener("click", ()=>pickClass(b.dataset.cls)));
   $("q-hint").hidden = true; $("q-hint").className = "hint"; $("btn-check").textContent = "Controleer";
-  $("feedback").hidden = true; $("q-kat").hidden = true; $("btn-check").hidden = false;
+  $("feedback").hidden = true; $("btn-check").hidden = false;
+  toonKat("q-kat", Celebrate.zegt("wacht"));
   $("btn-later").hidden = !canSkip();
   $("fb-assess").hidden = true; $("btn-override").hidden = true; $("btn-next").hidden = true;
   $("feedback").classList.remove("only-verdict"); $("fb-official").hidden = true;
@@ -1268,7 +1283,7 @@ function check(){
     ui.verdictDef = null;
     $("fb-assess").hidden = false; $("btn-next").hidden = true;
     setVerdict("maybe", "Bijna?");
-    setTimeout(()=>$("btn-assess-yes").focus(), 50);
+    setTimeout(()=>focusBijKat($("btn-assess-yes")), 50);
   } else {
     ui.verdictDef = status==="correct";
     if(wd && !ui.verdictDef && text) $("btn-override").hidden = false;
@@ -1285,20 +1300,40 @@ function sameAsOfficial(a, b){
   const clean = x => E.norm(String(x||"")).replace(ART, "").trim();
   return clean(a) !== "" && clean(a) === clean(b);
 }
+// Focus na het antwoord, met de kat en zijn reactie in beeld. Wie op een
+// telefoon naar Controleer is gescrold, ziet de kat anders niet meer.
+// We scrollen zo weinig mogelijk: genoeg om de knop te tonen, maar nooit
+// zo ver dat de kat boven uit beeld valt, en terug omhoog als hij er al
+// uit was. Past de knop er op een kleine telefoon dan niet meer onder,
+// dan wint de kat; Enter en Tab werken gewoon.
+function focusBijKat(el){
+  if(!el || el.hidden) return;
+  el.focus({ preventScroll: true });
+  const kat = $("q-kat");
+  if(!kat || kat.hidden){ el.scrollIntoView({ block: "nearest" }); return; }
+  const marge = 24;   // ruimte onder de knop, inclusief zijn schaduw
+  const r = el.getBoundingClientRect(), k = kat.getBoundingClientRect();
+  const minstens = r.bottom + marge - window.innerHeight;   // zoveel omlaag om de knop te tonen
+  const hooguit = k.top;                                     // verder omlaag en de kat valt weg
+  const stap = Math.min(Math.max(0, minstens), hooguit);
+  if(stap) window.scrollBy({ top: stap, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
 function mark(id, kind){ const el=$(id); el.className="mark "+kind; el.innerHTML = UI.Icon(UI.MARK_ICON[kind]||"help"); }
-// Het oordeel staat naast de kat, onder de vraagkaart: goed in de
-// goed-stand, fout en twijfel in de bijna-stand. De details blijven in
-// de kaart (#feedback), dus nergens staat iets dubbel.
+// Het oordeel staat in de kaart, bovenaan de feedback. De kat op de rand
+// zegt er alleen iets bij: goed in de goed-stand, fout in de bijna-stand.
+// Bij twijfel kijkt hij nog mee, het oordeel volgt na de keuze.
 function setVerdict(kind, txt){
   const k = kind==="correct" ? "good" : kind==="maybe" ? "maybe" : "bad";
-  toonKat("q-kat", kind==="correct" ? "goed" : "bijna", { oordeel: k, text: txt, textId: "fb-verdict" });
+  $("fb-verdict").className = "verdict " + k;
+  $("fb-verdict").textContent = txt;
+  if(kind!=="maybe") toonKat("q-kat", Celebrate.zegt(kind==="correct" ? "goed" : "fout"));
 }
 
 let finalized = false;
 function finalize(){
   const entry = current(); const item = list.items[entry.i];
   const ok = ui.clsOk && ui.verdictDef===true;
-  setVerdict(ok?"correct":"bad", ok ? pickPraise() : (ui.clsOk ? "Nog niet helemaal" : (ui.verdictDef ? "Woordsoort was fout" : "Nog niet")));
+  setVerdict(ok?"correct":"bad", ok ? "Goed" : "Nog niet");
   $("fb-assess").hidden = true; $("btn-next").hidden = false;
   const card = $("q-prompt").closest(".card");
   if(card){ card.classList.remove("is-good"); if(ok){ void card.offsetWidth; card.classList.add("is-good"); } }
@@ -1306,14 +1341,14 @@ function finalize(){
   // goedgekeurd tonen we het officiele antwoord, want dat heeft ze dan niet ingetypt.
   $("feedback").classList.toggle("only-verdict", ok);
   const anders = ok && ui.official && !sameAsOfficial(ui.typed, ui.official);
-  // goed en niets toe te voegen: het oordeel naast de kat zegt genoeg
-  $("feedback").hidden = ok && !anders;
+  // bij goed staat alleen het oordeel er, plus het officiele antwoord als dat anders is
+  $("feedback").hidden = false;
   $("fb-official").hidden = !anders;
   if(anders) $("fb-official").innerHTML = 'Ook goed. Officieel is het: <b>'+esc(ui.official)+'</b>';
   if(finalized) return; // override na een eerder oordeel: alleen het oordeel bijwerken
   finalized = true;
   applyResult(entry, item, ok);
-  setTimeout(()=>$("btn-next").focus(), 50);
+  setTimeout(()=>focusBijKat($("btn-next")), 50);
 }
 // Een woord dat op "over een week" komt te staan, komt niet meer langs voor
 // een toets van morgen. Valt de volgende herhaling na de toets, dan halen we
@@ -1372,8 +1407,6 @@ function override(){
     $("fb-official").innerHTML = 'Onthouden. <b>'+esc(String(ui.typed).trim())+'</b> telt voortaan ook goed.';
   }
 }
-const PRAISE = ["Goed zo!", "Yes!", "Top!", "Precies!", "Helemaal goed!", "Lekker bezig!"];
-function pickPraise(){ return PRAISE[Math.floor(Math.random()*PRAISE.length)]; }
 
 // Overslaan is geen fout. Er wordt niets geregistreerd, de Leitner-box
 // blijft staan en het woord komt verderop in deze ronde gewoon terug.
@@ -1416,23 +1449,16 @@ function finish(stopped){
   saveProgress(); save(SKEY(list.id), null); finalized=false;
   // Vlekkeloos: alles in een keer goed, en niet halverwege gestopt.
   const perfect = !stopped && ids.length > 0 && first === ids.length && !session.skipped;
-  $("sum-title").textContent = stopped ? "Ronde gestopt" : (perfect ? "Vlekkeloos" : "Ronde klaar");
+  $("sum-title").textContent = stopped ? "Ronde gestopt" : "Ronde klaar";
   $("sum-n").textContent = ids.length; $("sum-time").textContent = fmtTime(ms);
-  $("sum-first").innerHTML = perfect ? UI.Icon("trophy") + "<span>" + first + "</span>" : String(first);
-  $("sum-perfect").hidden = !perfect;
-  // Vlekkeloos: confetti, en de kat van deze ronde blij op de beloningskaart.
-  const kat = session.kat;
-  if(perfect){
-    $("sum-perfect").innerHTML = UI.Icon("sparkle") + "<span>" + esc(Celebrate.celebrate({ woorden: ids.length })) + "</span>";
-    const b = Celebrate.beeld(kat, "goed");
-    if(b) $("sum-beloning").outerHTML = UI.KatBeloning({ id: "sum-beloning", beeld: b, title: Celebrate.blij(kat) });
-    else $("sum-beloning").hidden = true;
-  } else $("sum-beloning").hidden = true;
-  // Meer dan de helft fout bij de eerste poging: de kat in de bijna-stand,
-  // met een zin die vooruit kijkt. Nooit verdrietig, nooit "kom terug".
+  $("sum-first").textContent = String(first);
+  // Meer dan de helft fout bij de eerste poging: een stevige ronde.
   const lastig = !perfect && ids.length > 0 && (ids.length - first) > ids.length / 2;
-  if(lastig) toonKat("sum-kat", "bijna", { lead: "Lastige ronde.", text: "Deze woorden komen vaker terug, zo gaan ze erin." }, kat);
-  else $("sum-kat").hidden = true;
+  // De kat van deze ronde zegt gedag, met de naam. Nooit verdrietig, en
+  // hij vraagt nooit om terug te komen. Confetti alleen bij vlekkeloos (niet bij
+  // reduced motion, dat regelt celebrate).
+  toonKat("sum-kat", Celebrate.gedag(perfect ? "vlekkeloos" : lastig ? "lastig" : "gewoon", learner), session.kat);
+  if(perfect) Celebrate.celebrate({ woorden: ids.length });
   $("sum-hard-wrap").hidden = !hard.length; $("sum-hard").textContent = hard.join(", ");
   const now = Date.now();
   let fresh=0, dueNow=0, minDue=Infinity;
