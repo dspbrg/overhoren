@@ -1848,6 +1848,11 @@ function bind(){
 //     het lessenscherm weer verschijnt, of de volgende keer openen
 //   - hooguit een keer per versie van de pagina (SW_HERLADEN in
 //     sessionStorage), zodat het nooit een lus wordt; zonder opslag niet
+// Ongestempeld (GitHub Pages) zijn de pagina en elke service worker
+// dezelfde versie, dus daar wordt nooit herladen. Dat is bewust: de
+// service worker haalt daar online alles vers, de volgende keer openen is
+// dus al nieuw, en een hash van sw.js zou alleen een herlaadbeurt geven
+// zonder iets op te lossen.
 const SW_HERLADEN = "overhoor:sw:herladen";
 let swVerversen = false;
 function verversNaUpdate(){

@@ -34,9 +34,13 @@ const MIME = {
 
 // De server. stand.app is de versie van index.html, ui.js en ds.css;
 // stand.sw die van sw.js. Die twee kunnen even uit de pas lopen.
+// stand.gestempeld = false is GitHub Pages: ?v= en VERSIE blijven zoals ze
+// in de repo staan, ook als de inhoud verandert. stand.swBron = "oud"
+// serveert de sw.js van main van voor deze fix (tests/fixtures).
+const SW_OUD = readFileSync(join(REPO, "tests", "fixtures", "sw-oud-main.js"), "utf8");
 function startVersieServer() {
-  const stand = { app: "A", sw: "A" };
-  const server = createServer((req, res) => {
+  const stand = { app: "A", sw: "A", gestempeld: true, swBron: "nieuw" };
+  const server = createServer(async (req, res) => {
     const pad = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
     let bestand = normalize(join(REPO, pad));
     if (!bestand.startsWith(REPO)) { res.writeHead(403); return res.end(); }
@@ -46,7 +50,11 @@ function startVersieServer() {
     const naam = bestand.slice(REPO.length);
     const v = stand.app;
     if (naam === "/index.html") {
-      body = String(body).replace(/\?v=[A-Za-z0-9]+/g, "?v=" + STEMPEL[v])
+      // stand.trageHtml: zo veel ms wachten met de pagina (een traag netwerk)
+      if (stand.trageHtml) await new Promise(r => setTimeout(r, stand.trageHtml));
+      body = String(body);
+      if (stand.gestempeld) body = body.replace(/\?v=[A-Za-z0-9]+/g, "?v=" + STEMPEL[v]);
+      body = body.replace("</head>", '<meta name="testversie" content="' + v + '">\n</head>')
         // de nieuwe code gebruikt iets wat alleen in de ui.js van dezelfde versie staat
         .replace("  zetBeta();\n", "  zetBeta();\n  document.documentElement.dataset.testversie = UI.testVersie" + v + "();\n");
     } else if (naam === "/ui.js") {
@@ -54,7 +62,8 @@ function startVersieServer() {
     } else if (naam === "/ds.css") {
       body = String(body) + "\n:root { --testversie: \"" + v + "\"; }\n";
     } else if (naam === "/sw.js") {
-      body = String(body).replace(/^const VERSIE = ".*";/m, "const VERSIE = \"" + STEMPEL[stand.sw] + "\";");
+      body = stand.swBron === "oud" ? SW_OUD : String(body);
+      if (stand.gestempeld) body = body.replace(/^const VERSIE = ".*";/m, "const VERSIE = \"" + STEMPEL[stand.sw] + "\";");
     }
     res.writeHead(200, { "Content-Type": MIME[extname(bestand)] || "application/octet-stream", "Cache-Control": "no-store" });
     res.end(body);
@@ -69,6 +78,8 @@ function startVersieServer() {
 let browser, server;
 before(async () => { browser = await startBrowser(); server = await startVersieServer(); });
 after(async () => { await browser?.close(); await server?.stop(); });
+// Zet de server in een stand; wat niet genoemd wordt, wordt de standaard.
+const zet = stand => Object.assign(server.stand, { app: "A", sw: "A", gestempeld: true, swBron: "nieuw", trageHtml: 0 }, stand);
 
 async function nieuweContext() {
   const context = await browser.newContext({ viewport: { width: 360, height: 780 }, serviceWorkers: "allow", locale: "nl-NL" });
@@ -118,14 +129,14 @@ const swVersieIn = page => page.evaluate(() => new Promise(klaar => {
 // Welke versie staat er in beeld, volgens elk onderdeel apart.
 const inBeeld = page => page.evaluate(() => {
   const script = document.querySelector('script[src^="ui.js"]');
-  const html = script ? new URL(script.src).searchParams.get("v") : null;
+  const stempel = script ? new URL(script.src).searchParams.get("v") : null;
+  const html = document.querySelector('meta[name="testversie"]')?.content || null;
   const js = document.documentElement.dataset.testversie || null;
   const css = getComputedStyle(document.documentElement).getPropertyValue("--testversie").trim().replace(/"/g, "") || null;
   const lessen = document.querySelectorAll("#lessons .lesson").length;
   const beta = !!document.querySelector("#app-titel .beta");
-  return { html, js, css, lessen, beta };
+  return { stempel, html, js, css, lessen, beta };
 });
-const versieVan = stempel => Object.keys(STEMPEL).find(k => STEMPEL[k] === stempel);
 
 // Een hele, consistente versie: html, js en css van dezelfde, lijsten en Beta in beeld.
 async function heel(page, fouten, moment) {
@@ -134,7 +145,7 @@ async function heel(page, fouten, moment) {
   await page.waitForTimeout(150);
   const b = await inBeeld(page);
   assert.deepEqual(fouten, [], moment + ": fouten " + fouten.join("; "));
-  const v = versieVan(b.html);
+  const v = b.html;
   assert.ok(v && b.js === v && b.css === v, moment + ": oud en nieuw door elkaar " + JSON.stringify(b));
   assert.ok(b.lessen > 0, moment + ": geen lijsten in beeld");
   assert.ok(b.beta, moment + ": geen Beta in beeld");
@@ -162,7 +173,7 @@ for (const geval of [
   { naam: "alles tegelijk", achter: false }
 ]) {
   test(`update van A naar B, ${geval.naam}: nooit een fout of een mix, daarna B, en offline de bewaarde B`, async () => {
-    server.stand.app = "A"; server.stand.sw = "A";
+    zet({ app: "A", sw: "A" });
     const { context, page, fouten } = await nieuweContext();
     await installeer(page);
     assert.equal(await heel(page, fouten, "A na installatie"), "A");
@@ -198,7 +209,7 @@ for (const geval of [
 test("eerste installatie: de service worker neemt over zonder te herladen, ook als hij een andere versie is", async () => {
   // de pagina is al B, sw.js nog A (een CDN die achterloopt): bij een
   // eerste installatie toch niet herladen
-  server.stand.app = "B"; server.stand.sw = "A";
+  zet({ app: "B", sw: "A" });
   const { context, page, fouten, laden } = await nieuweContext();
   await installeer(page);
   await page.waitForTimeout(800);
@@ -212,7 +223,7 @@ test("eerste installatie: de service worker neemt over zonder te herladen, ook a
 const zoekUpdate = page => page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); await r.update(); });
 
 test("update terwijl de app openstaat op het lessenscherm: een keer herladen, dan B", async () => {
-  server.stand.app = "A"; server.stand.sw = "A";
+  zet({ app: "A", sw: "A" });
   const { context, page, fouten, laden } = await nieuweContext();
   await installeer(page);
   assert.equal(await heel(page, fouten, "A"), "A");
@@ -228,7 +239,7 @@ test("update terwijl de app openstaat op het lessenscherm: een keer herladen, da
 });
 
 test("geen lus: een tweede update vanaf dezelfde versie herlaadt niet nog eens", async () => {
-  server.stand.app = "A"; server.stand.sw = "A";
+  zet({ app: "A", sw: "A" });
   const { context, page, fouten, laden } = await nieuweContext();
   await installeer(page);
   const voor = laden.length;
@@ -254,7 +265,7 @@ test("geen lus: een tweede update vanaf dezelfde versie herlaadt niet nog eens",
 });
 
 test("update midden in een ronde: niet herladen tot het lessenscherm, dan een keer", async () => {
-  server.stand.app = "A"; server.stand.sw = "A";
+  zet({ app: "A", sw: "A" });
   const { context, page, fouten, laden } = await nieuweContext();
   await installeer(page);
   await page.locator("#lessons .lesson").first().click();
@@ -282,7 +293,7 @@ test("update midden in een ronde: niet herladen tot het lessenscherm, dan een ke
 });
 
 test("versie in beeld: de uitleg achter Beta noemt de versie van de app", async () => {
-  server.stand.app = "B"; server.stand.sw = "B";
+  zet({ app: "B", sw: "B" });
   const { context, page, fouten } = await nieuweContext();
   await page.goto(server.url + "/");
   await wachtOpScherm(page, "scr-lessons");
@@ -292,5 +303,124 @@ test("versie in beeld: de uitleg achter Beta noemt de versie van de app", async 
   assert.equal((await regel.textContent()).trim(), "Versie " + STEMPEL.B);
   assert.ok(await regel.isVisible(), "versieregel niet zichtbaar");
   assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+// ---------- ongestempeld: GitHub Pages ----------
+// Pages serveert de repo zoals hij is: ?v= en VERSIE blijven de waarde uit
+// de repo, ook als de inhoud verandert. Dan moet de service worker online
+// alles vers halen, en offline de laatst geziene versie geven.
+const PLAATSHOUDER = /^const VERSIE = "(.*)";/m.exec(readFileSync(join(REPO, "sw.js"), "utf8"))[1];
+
+// Wacht tot de nieuwe sw.js (die op "versie" antwoordt) de pagina beheert
+// en alleen zijn eigen cache er nog staat.
+async function wachtOpNieuweSw(page) {
+  const eind = Date.now() + 10000;
+  while (await swVersieIn(page) !== PLAATSHOUDER) {
+    if (Date.now() > eind) throw new Error("de nieuwe service worker neemt niet over");
+    await page.waitForTimeout(100);
+  }
+  await wachtTot(page, async () => { const n = await caches.keys(); return n.length === 1 && n[0].startsWith("overhoren-2-"); });
+}
+
+async function offlineIs(page, context, fouten, verwacht) {
+  await context.setOffline(true);
+  for (const pad of ["/", "/index.html"]) {
+    const res = await page.goto(server.url + pad).catch(e => e);
+    assert.ok(!(res instanceof Error) && res.ok(), `offline ${pad}: ${res?.message || res?.status()}`);
+    assert.equal(await heel(page, fouten, "offline " + pad), verwacht, "offline niet de laatst geziene versie");
+  }
+  await context.setOffline(false);
+}
+
+test("ongestempeld (GitHub Pages): na een wijziging op de server meteen de nieuwste, nooit een mix, offline de laatst geziene", async () => {
+  zet({ app: "A", gestempeld: false });
+  const { context, page, fouten } = await nieuweContext();
+  await installeer(page);
+  assert.equal(await heel(page, fouten, "A"), "A");
+  assert.equal(await swVersieIn(page), PLAATSHOUDER, "de testserver stempelt toch");
+
+  for (const v of ["B", "C"]) {
+    server.stand.app = v;
+    for (const pad of ["/", "/index.html", "/"]) {
+      await page.goto(server.url + pad);
+      assert.equal(await heel(page, fouten, `${v} via ${pad}`), v, `online niet meteen de nieuwste (${v}) via ${pad}`);
+    }
+  }
+  await offlineIs(page, context, fouten, "C");
+  await context.close();
+});
+
+test("ongestempeld: van de oude sw.js van main naar de nieuwe, midden in een ronde niet herladen, daarna vers", async () => {
+  zet({ app: "A", gestempeld: false, swBron: "oud" });
+  const { context, page, fouten, laden } = await nieuweContext();
+  await installeer(page);
+  assert.equal(await heel(page, fouten, "A onder de oude sw.js"), "A");
+  await page.locator("#lessons .lesson").first().click();
+  await wachtOpScherm(page, "scr-home");
+  await page.click("#btn-start");
+  await wachtOpScherm(page, "scr-quiz");
+  const voor = laden.length;
+
+  // de nieuwe sw.js en een nieuwe app staan op Pages
+  zet({ app: "B", gestempeld: false, swBron: "nieuw" });
+  await zoekUpdate(page);
+  await wachtOpNieuweSw(page);
+  await page.waitForTimeout(1000);
+  assert.equal(laden.length - voor, 0, "herladen midden in de ronde");
+  assert.ok(await page.locator("#scr-quiz").isVisible(), "de ronde is weg");
+  await page.click("#btn-quit");
+  await wachtOpScherm(page, "scr-summary");
+  await page.click("#btn-sum-lessons");
+  await page.waitForTimeout(1000);
+  assert.equal(laden.length - voor, 0, "herladen op Pages: daar is de pagina online al vers");
+  assert.equal(await heel(page, fouten, "na de ronde, nog de open pagina"), "A");
+
+  // de volgende keer openen: vers, en daarna elke wijziging meteen
+  await open(page);
+  assert.equal(await heel(page, fouten, "volgende keer openen"), "B");
+  server.stand.app = "C";
+  await open(page);
+  assert.equal(await heel(page, fouten, "na nog een wijziging"), "C");
+  await offlineIs(page, context, fouten, "C");
+  await context.close();
+});
+
+test("ongestempeld: van de oude sw.js naar de nieuwe door gewoon te openen, zonder mix, daarna vers", async () => {
+  zet({ app: "A", gestempeld: false, swBron: "oud" });
+  const { context, page, fouten } = await nieuweContext();
+  await installeer(page);
+  assert.equal(await heel(page, fouten, "A onder de oude sw.js"), "A");
+
+  zet({ app: "B", gestempeld: false, swBron: "nieuw" });
+  // de oude sw.js geeft nog een keer zijn bewaarde versie, heel
+  await open(page);
+  await heel(page, fouten, "eerste keer openen na de wijziging");
+  // de browser zoekt bij het openen vanzelf naar een nieuwe sw.js
+  await wachtOpNieuweSw(page);
+  for (const v of ["B", "C"]) {
+    server.stand.app = v;
+    await open(page);
+    assert.equal(await heel(page, fouten, "onder de nieuwe sw.js: " + v), v);
+  }
+  await offlineIs(page, context, fouten, "C");
+  await context.close();
+});
+
+test("ongestempeld: is de pagina te traag, dan de bewaarde pagina met zijn eigen bewaarde bestanden, geen mix", async () => {
+  zet({ app: "A", gestempeld: false });
+  const { context, page, fouten } = await nieuweContext();
+  await installeer(page);
+  await open(page);
+  assert.equal(await heel(page, fouten, "A"), "A");
+
+  // B staat klaar, maar de pagina komt pas na 4 s (de service worker wacht 3 s)
+  zet({ app: "B", gestempeld: false, trageHtml: 4000 });
+  await open(page);
+  assert.equal(await heel(page, fouten, "trage pagina"), "A", "niet de bewaarde pagina bij een traag netwerk");
+
+  zet({ app: "B", gestempeld: false });
+  await open(page);
+  assert.equal(await heel(page, fouten, "weer snel"), "B");
   await context.close();
 });

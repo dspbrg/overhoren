@@ -6,7 +6,12 @@
 //
 // Regel nummer een: nooit oud en nieuw door elkaar. Een nieuwe index.html
 // met een oude ui.js of ds.css breekt de app (gezien op een iPhone: geen
-// lijsten, geen naam, geen Beta). Daarom:
+// lijsten, geen naam, geen Beta).
+//
+// Er zijn twee standen, afhankelijk van of de deploy VERSIE stempelt
+// (zie ONGESTEMPELD hieronder).
+//
+// Gestempeld (Cloudflare, elke deploy een eigen VERSIE):
 //   - elke versie heeft een eigen cache (CACHE) en deze service worker
 //     zoekt alleen in die cache, nooit in die van een andere versie
 //   - de schil komt alleen bij installatie in de cache, in een keer, en
@@ -24,14 +29,19 @@
 //   - "./" wordt nooit buiten de installatie geschreven, dus een oude
 //     versie kan geen nieuwe pagina in zijn cache zetten (dat was de fout)
 //   - bij een nieuwe versie (andere CACHE) de oude weggooien
-// index.html herlaadt na een update hooguit een keer (zie registreerSW).
+//   - index.html herlaadt na een update hooguit een keer (registreerSW)
 //
-// De versie wordt bij elke deploy vervangen, zodat een nieuwe versie
-// gegarandeerd doorkomt in plaats van blijven hangen. Het build command
-// van Cloudflare (of scripts/deploy.sh) vult VERSIE en de ?v=-stempels.
-// GitHub Pages stempelt niet: daar zijn VERSIE en ?v= altijd gelijk, dus
-// de bestanden met ?v= komen daar uit de cache van de installatie, en
-// iets nieuws komt pas binnen als sw.js zelf verandert.
+// Ongestempeld (GitHub Pages, lokaal): VERSIE en ?v= veranderen nooit,
+// dus aan de stempel is niet te zien of er iets nieuws is. Dan alles
+// network-first:
+//   - online komt alles vers van het net (cache: "no-cache", zodat ook de
+//     http-cache van de browser niets ouds geeft), dus alles uit dezelfde
+//     versie; elk goed antwoord gaat in de eigen cache
+//   - offline, of een navigatie die te traag is (NAV_WACHT), uit de cache
+//   - kwam de pagina uit de cache, dan ook zijn bestanden uit de cache
+//     (uitDeCache), anders een verse ui.js bij een bewaarde pagina
+//   - index.html herlaadt hier nooit na een update: de pagina is online al
+//     vers, en er is geen versie om mee te vergelijken
 //
 // Doorverwijzingen: Cloudflare stuurt /index.html met een 307 door naar /.
 // Een response die via zo'n doorverwijzing binnenkwam (redirected) mag
@@ -43,6 +53,13 @@
 //   - een redirected response gaat nooit de cache in
 // =============================================================
 const VERSIE = "20261112104108";
+// Ongestempeld: de waarde die in de repo staat, of "dev". De deploy naar
+// Cloudflare stempelt VERSIE en ?v= met de korte commit-sha; GitHub Pages
+// serveert de repo zoals hij is en stempelt niet. De waarde staat hier in
+// twee stukken, zodat een stempel die de oude waarde overal vervangt hem
+// niet meeneemt. Verandert de waarde in de repo, dan hier ook.
+const NIET_GESTEMPELD = ["2026111210" + "4108", "dev"];
+const ONGESTEMPELD = NIET_GESTEMPELD.includes(VERSIE);
 // "2-": de indeling van de cache veranderde (alles zonder ?v=, alleen de
 // eigen cache). Zo begint ook GitHub Pages, waar VERSIE niet verandert,
 // een keer met een schone cache.
@@ -97,9 +114,10 @@ function uitCache(sleutel) {
 const NAV_WACHT = 3000;
 
 // Het netwerk, maar niet langer dan ms, tot en met de inhoud als lees
-// waar is. Te traag geeft een fout. Geeft { res, tekst }.
+// waar is. Te traag geeft een fout. Geeft { res, tekst }. "no-cache":
+// de browser vraagt de server altijd of zijn kopie nog klopt.
 function netMetTijd(sleutel, ms, lees) {
-  const net = fetch(sleutel).then(res =>
+  const net = fetch(sleutel, { cache: "no-cache" }).then(res =>
     lees && res.ok ? res.clone().text().then(tekst => ({ res, tekst })) : { res, tekst: "" });
   const klok = new Promise((_, mis) => setTimeout(() => mis(new Error("te traag")), ms));
   return Promise.race([net, klok]);
@@ -124,11 +142,17 @@ self.addEventListener("message", e => {
   if (e.data === "versie" && e.ports && e.ports[0]) e.ports[0].postMessage(VERSIE);
 });
 
+// Ongestempeld: de pagina's (clients) die uit de cache kwamen. Hun
+// bestanden komen dan ook uit de cache, zodat ze bij elkaar passen.
+// Gaat verloren als de service worker stopt; dan weer gewoon van het net.
+const uitDeCache = new Set();
+
 self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;   // sync gaat gewoon naar het net
+  if (ONGESTEMPELD) return ongestempeld(e, req, url);
 
   // Navigaties: online het netwerk (kort), anders de bewaarde pagina.
   // Voor de app altijd "./", ook bij /index.html, en nooit in de cache
@@ -169,3 +193,35 @@ self.addEventListener("fetch", e => {
     uitCache(req).then(hit => hit || fetch(req).then(res => { bewaar(url.origin + url.pathname, res); return res; }))
   );
 });
+
+// Ongestempeld: alles network-first (zie de uitleg bovenaan).
+function ongestempeld(e, req, url) {
+  if (req.mode === "navigate") {
+    const app = isApp(url);
+    const sleutel = app ? "./" : url.origin + url.pathname;
+    const bewaard = () => uitCache(sleutel).then(hit => {
+      if (hit && e.resultingClientId) uitDeCache.add(e.resultingClientId);
+      return hit;
+    });
+    e.respondWith(
+      netMetTijd(app ? "./" : req.url, NAV_WACHT, false)
+        .then(({ res }) => {
+          if (!res.ok) return bewaard().then(hit => hit || res);
+          bewaar(sleutel, res);
+          return schoon(res);
+        })
+        .catch(() => bewaard().then(hit => hit || Response.error()))
+    );
+    return;
+  }
+  const sleutel = url.origin + url.pathname;
+  if (uitDeCache.has(e.clientId)) {
+    e.respondWith(uitCache(sleutel).then(hit => hit || fetch(req)));
+    return;
+  }
+  e.respondWith(
+    fetch(req, { cache: "no-cache" })
+      .then(res => { bewaar(sleutel, res); return res; })
+      .catch(() => uitCache(sleutel).then(hit => hit || Response.error()))
+  );
+}
