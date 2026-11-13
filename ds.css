@@ -265,6 +265,13 @@
     --kat-oor:       30px;    /* zoveel zit de kat over de bovenrand van de kaart */
     --lh-spraak:     1.35;    /* regelhoogte in de spraakbalk */
     --spraak-regels: 3;       /* zoveel regels houdt de rand vrij, zodat de kaart niet verspringt */
+    --kat-welkom-h:  232px;   /* kat in het welkom */
+
+    /* --- welkom: hoe lang het welkom bij het openen staat, alles bij
+       elkaar. index.html leest deze waarde (in ms) en haalt het daarna
+       weg; de tijdlijn in .welkom past erbinnen. --- */
+    --welkom-duur: 1200ms;
+    --t-welkom:    2.5rem;    /* 40px, de naam van de app in het welkom */
 
     /* kleinste tikdoel op een telefoon; knoppen zijn 48 */
     --tap:44px;
@@ -503,6 +510,36 @@
   .chip.noun { color: var(--noun); }
   .chip.adverb { color: var(--adv); }
 
+  /* --- beta: chipje naast de naam van de app ---
+     Een knop zonder eigen vlak; het chipje erin is het vlak, klein en
+     schuin zoals de andere chips. ::after maakt het tikdoel minstens
+     --tap groot zonder dat de kop hoger wordt. De focusrand zit op de
+     knop zelf, dus de clip-path van het chipje knipt hem niet weg. */
+  h1:has(> .beta) { display: flex; align-items: center; gap: var(--s2); }
+  .beta {
+    position: relative; flex: none;
+    background: none; border: 0; padding: 0; margin: 0;
+    font: inherit; color: inherit; cursor: pointer;
+  }
+  .beta::after {
+    content: ""; position: absolute; inset-block-start: 50%; inset-inline-start: 50%; translate: -50% -50%;
+    inline-size: max(100%, var(--tap)); block-size: max(100%, var(--tap));
+  }
+  .beta-chip {
+    display: block; clip-path: var(--cut-chip); padding: var(--pad-chip);
+    background: var(--control-surf); color: var(--accent-strong);
+    font-family: var(--body); font-size: var(--t-label-sm); font-weight: 600; line-height: 1.4;
+    letter-spacing: .1em; text-transform: uppercase;
+    transition: background var(--m3-effects), color var(--m3-effects);
+  }
+  .beta[aria-expanded="true"] .beta-chip { background: var(--accent); color: var(--accent-ink); }
+  /* de uitleg eronder: een rustig vlak, zoals de spraakbalk */
+  .beta-uitleg {
+    margin: 0; padding: var(--pad-spraak); clip-path: var(--cut-small);
+    background: var(--mark); color: var(--ink);
+    font-size: var(--t-meta); line-height: var(--lh-spraak);
+  }
+
   /* --- meter: elke voortgangsbalk in de app. Licht schuin. --- */
   .meter { background: var(--track); clip-path: var(--cut-meter); overflow: hidden; display: flex; height: 8px; }
   .meter i { display: block; height: 100%; }
@@ -633,6 +670,48 @@
     margin-block-end: calc(-1 * var(--kat-oor));
     transform: scaleX(-1);
     animation: kat-in var(--m3-spatial-fast) both;
+  }
+
+  /* --- welkom: bij het openen, een keer per sessie ---
+     Heel scherm over de app (die is zolang inert). Tijdlijn, samen
+     --welkom-duur (1200 ms):
+       0     de naam verschijnt, de kat springt omhoog (350 ms)
+       350   de kat wiebelt twee keer (2 x 250 ms)
+       400   "Hoi <naam>" verschijnt (200 ms)
+       900   alles vervaagt (300 ms), daarna haalt index.html het weg
+     Alleen transform en opacity. Bij reduced motion staat alles stil in
+     het eindbeeld (regel onderaan) en gaat het op dezelfde tijd weg.
+     .beweegt-zelf: het beeld is zelf een animatie (zie welkomBeeld in
+     celebrate.js), dan geen sprong en geen wiebel. */
+  .welkom {
+    position: fixed; inset: 0; z-index: 100;
+    display: grid; place-content: center; justify-items: center; gap: var(--gap-group);
+    padding: var(--page-y) var(--page-x); text-align: center; cursor: pointer;
+    background: var(--page); color: var(--ink);
+    animation: welkom-uit var(--m3-effects-slow) calc(var(--welkom-duur) - 300ms) both;
+  }
+  .welkom-merk {
+    display: flex; align-items: center; gap: var(--s3); margin: 0;
+    font-family: var(--display); font-weight: 700; font-size: var(--t-welkom); line-height: 1.1;
+    animation: welkom-in var(--m3-effects) both;
+  }
+  /* het podium draagt een vlakke zeshoekige schaduw onder de voeten */
+  .welkom-podium { position: relative; display: grid; justify-items: center; }
+  .welkom-podium::after {
+    content: ""; position: absolute; inset-block-end: calc(-1 * var(--s1)); z-index: -1;
+    inline-size: 60%; block-size: var(--s3);
+    background: var(--card-shadow-color);
+    clip-path: polygon(12% 0, 88% 0, 100% 50%, 88% 100%, 12% 100%, 0 50%);
+  }
+  .welkom-kat {
+    display: block; block-size: min(var(--kat-welkom-h), 40dvh); inline-size: auto;
+    transform-origin: 50% 100%;
+    animation: welkom-hop var(--m3-spatial-fast) both, welkom-wiebel 250ms ease-in-out 350ms 2 both;
+  }
+  .welkom.beweegt-zelf .welkom-kat { animation: none; }
+  .welkom-groet {
+    margin: 0; font-family: var(--display); font-weight: 600; font-size: var(--t-card); line-height: 1.15;
+    animation: welkom-in var(--m3-effects) 400ms both;
   }
 
   /* --- topbar en foot --- */
@@ -773,6 +852,11 @@
 
   @keyframes pop  { from { transform: scale(.7); opacity: 0 } to { transform: scale(1); opacity: 1 } }
   @keyframes bump { 0% { transform: scale(1) } 40% { transform: scale(1.22) } 100% { transform: scale(1) } }
+  /* welkom: alleen translate, scale, rotate en opacity */
+  @keyframes welkom-in     { from { opacity: 0; translate: 0 var(--s2); } }
+  @keyframes welkom-hop    { from { opacity: 0; translate: 0 calc(var(--kat-welkom-h) / 3); scale: .92; } }
+  @keyframes welkom-wiebel { 0%, 100% { rotate: 0deg; } 30% { rotate: -4deg; } 70% { rotate: 4deg; } }
+  @keyframes welkom-uit    { to { opacity: 0; } }
   /* entree van een kat: alleen translate, scale en opacity (transform is van het spiegelen) */
   @keyframes kat-in { from { opacity: 0; translate: 0 var(--s3); scale: .92; } }
   @keyframes ring {
@@ -903,6 +987,7 @@
     .btn:hover:not(:disabled):not(.primary):not(.ok),
     .choice:hover:not(:disabled):not(.on):not(.right):not(.wrong),
     .seg button:hover:not(.on) { --surf: var(--control-hover); }
+    .beta:hover[aria-expanded="false"] .beta-chip { background: var(--control-hover); }
     .btn.primary:hover:not(:disabled), .seg button.on:hover { --surf: color-mix(in srgb, var(--accent) 88%, white); }
     .link:hover { text-decoration-thickness: 3px; }
   }
@@ -960,7 +1045,9 @@
     .choice.right { border-style: double; border-width: 5px; }
     .choice.wrong { border-style: dashed; }
     .q-card.is-good { animation: none; }
-    .card, .notice, .stat, .empty, .chip, .due-chip, .deadline-chip, .meter, .streak, .verdict, .spraak { clip-path: none; }
+    .card, .notice, .stat, .empty, .chip, .due-chip, .deadline-chip, .meter, .streak, .verdict, .spraak,
+    .beta-chip, .beta-uitleg { clip-path: none; }
+    .beta-chip { border: 1px solid ButtonText; }
     .ring-arc { stroke: Highlight; }
     input[type=range]::-webkit-slider-runnable-track { background: ButtonText; }
     input[type=range]::-moz-range-track { background: ButtonText; }

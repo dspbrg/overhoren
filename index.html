@@ -38,7 +38,8 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
 <section id="scr-lessons" class="screen">
   <div class="app">
     <div class="start-kop">
-      <header class="brand"><h1>Overhoren</h1><p class="tag">Woordjes leren met slimme herhaling</p></header>
+      <header class="brand"><h1 id="app-titel">Overhoren</h1><p class="tag">Woordjes leren met slimme herhaling</p></header>
+      <!-- hier komt de uitleg bij Beta (zie zetBeta) -->
       <div class="learner-row">
         <span id="learner-view">Wie oefent: <b id="learner-label"></b> <button class="link" id="btn-learner">wissel</button></span>
         <span class="row" id="learner-form" hidden><input type="text" id="learner-name" placeholder="Naam" autocomplete="off"><button class="btn" id="btn-learner-save">Opslaan</button></span>
@@ -1844,14 +1845,94 @@ function registreerSW(){
   navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
 
+// Beta naast de naam, met de uitleg onder de kop (UI.Beta, UI.bindBeta)
+function zetBeta(){
+  const titel = $("app-titel");
+  if(!titel || titel.querySelector(".beta")) return;
+  titel.insertAdjacentHTML("beforeend", UI.Beta({ uitlegId: "beta-uitleg" }));
+  titel.closest(".brand").insertAdjacentHTML("afterend", UI.BetaUitleg({ id: "beta-uitleg" }));
+  UI.bindBeta(titel.querySelector(".beta"));
+}
+
+// ---------- welkom ----------
+// Bij het openen een kort welkom met de kat van de eerstvolgende ronde
+// (UI.Welkom, ds.css .welkom). Bij elke keer openen, een keer per sessie:
+// niet opnieuw bij herladen of terugkeren naar hetzelfde tabblad. Niet als
+// er een ronde openstaat die je kunt hervatten: die heeft al een eigen kat.
+// Het beeld moet binnen 300 ms klaar zijn (uit de cache, ook offline);
+// anders slaat het welkom stil over. Tik of toets haalt het eerder weg.
+//
+// Hoe vaak: WELKOM_PER_DAG. Op false (nu, keuze van Daan) elke sessie.
+// Op true komt het hooguit een keer per kalenderdag per apparaat; dan
+// onthoudt WELKOM_DAG de datum van vandaag.
+const WELKOM_PER_DAG = false;
+const WELKOM_DAG = "overhoor:welkom:dag", WELKOM_SESSIE = "overhoor:welkom:sessie", WELKOM_WACHT = 300;
+function dagVan(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function heeftOpenRonde(){
+  const voor = "overhoor:session:"+slug(learner)+":";
+  try{
+    for(let i=0; i<localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k || !k.startsWith(voor)) continue;
+      const s = load(k, null);
+      if(isObject(s) && Array.isArray(s.queue) && s.pos < s.queue.length) return true;
+    }
+  }catch(e){}
+  return false;
+}
+function welkom(){
+  let terug;
+  try{
+    terug = sessionStorage.getItem(WELKOM_SESSIE);
+    sessionStorage.setItem(WELKOM_SESSIE, "1");
+    if(WELKOM_PER_DAG && localStorage.getItem(WELKOM_DAG) === dagVan(new Date())) return;
+  }catch(e){ return; }   // zonder opslag kunnen we "een keer per sessie" niet waarmaken
+  if(terug || heeftOpenRonde()) return;
+  const beeld = Celebrate.welkomBeeld(Celebrate.volgende());
+  if(!beeld) return;
+  const stil = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const img = new Image();
+  img.src = stil ? (beeld.stil || beeld.src) : beeld.src;
+  new Promise((klaar, mis) => {
+    setTimeout(mis, WELKOM_WACHT);
+    (img.decode ? img.decode() : Promise.reject()).then(klaar, mis);
+  }).then(() => toonWelkom(beeld, stil), () => { /* te traag of kapot: stil overslaan */ });
+}
+function toonWelkom(beeld, stil){
+  const app = document.querySelector("body > .app");
+  // al verder getikt, of er staat er al een
+  if(!app || document.querySelector(".welkom") || $("scr-lessons").hidden) return;
+  if(WELKOM_PER_DAG) try{ localStorage.setItem(WELKOM_DAG, dagVan(new Date())); }catch(e){}
+  document.body.insertAdjacentHTML("beforeend", UI.Welkom({ beeld, naam: learner, stil }));
+  const el = document.body.lastElementChild;
+  app.inert = true;
+  // de duur staat in ds.css, in ms
+  const duur = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--welkom-duur")) || 1200;
+  let klok = null;
+  function weg(e){
+    // de tik of toets die het welkom wegdoet, doet verder niets in de app
+    if(e){ e.preventDefault(); e.stopPropagation(); }
+    clearTimeout(klok);
+    el.removeEventListener("click", weg);
+    document.removeEventListener("keydown", weg, true);
+    el.remove();
+    app.inert = false;
+  }
+  klok = setTimeout(() => weg(), duur);
+  el.addEventListener("click", weg);
+  document.addEventListener("keydown", weg, true);
+}
+
 function init(){
   registreerSW();
+  zetBeta();
   UI.hydrateIcons(document);
   lists = allLists();
   if(!lists.length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
   setLearner(learner);
   selectList(load(CKEY, lists[0].id));
   bind(); renderLessons(); show("scr-lessons");
+  welkom();
   initDb();
 }
 init();

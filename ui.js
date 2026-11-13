@@ -142,6 +142,36 @@
     return kind ? '<span class="chip ' + esc(kind) + '">' + esc(kind) + '</span>' : "";
   }
 
+  // --- Beta: het chipje naast de naam van de app --------------
+  // Een knop die een korte uitleg eronder opent en sluit. Het vlak is
+  // klein, het tikdoel 44 px (ds.css). Zet BetaUitleg ergens onder de
+  // kop en koppel ze met bindBeta(knop). uitlegId is het id van die regel.
+  const BETA_UITLEG = "We leren nog. Dingen kunnen veranderen.";
+  function Beta(o) {
+    o = o || {};
+    return '<button type="button" class="beta"' + attr("id", o.id) +
+      ' aria-expanded="' + (o.open ? "true" : "false") + '"' + attr("aria-controls", o.uitlegId) + '>' +
+      '<span class="beta-chip">Beta</span></button>';
+  }
+  function BetaUitleg(o) {
+    o = o || {};
+    return '<p class="beta-uitleg"' + attr("id", o.id) + (o.open ? "" : " hidden") + '>' + esc(BETA_UITLEG) + '</p>';
+  }
+  // Tikken, Enter of Spatie wisselt (dat doet een <button> vanzelf),
+  // Escape sluit en zet de focus terug op de knop.
+  function bindBeta(knop) {
+    if (!knop || knop.dataset.betaDone) return;
+    const uitleg = document.getElementById(knop.getAttribute("aria-controls"));
+    if (!uitleg) return;
+    const zet = open => { uitleg.hidden = !open; knop.setAttribute("aria-expanded", open ? "true" : "false"); };
+    knop.addEventListener("click", () => zet(uitleg.hidden));
+    document.addEventListener("keydown", e => {
+      if (e.key !== "Escape" || uitleg.hidden) return;
+      zet(false); knop.focus();
+    });
+    knop.dataset.betaDone = "1";
+  }
+
   // --- Choice: woordsoortknop met toetshint -------------------
   function Choice(o) {
     o = o || {};
@@ -243,6 +273,27 @@
       Spraak({ text: o.text, id: o.textId }) + katImg(o.beeld, "") + '</div>';
   }
 
+  // Welkom: bij het openen, een keer per sessie, heel scherm. De naam van de
+  // app, de kat van de eerstvolgende ronde springt omhoog en wiebelt, dan
+  // "Hoi <naam>". Daarna vervaagt alles (ds.css, --welkom-duur). Zonder
+  // naam alleen de kat. De kat is versiering (alt leeg).
+  //   beeld  Celebrate.welkomBeeld(id)
+  //   naam   wie er oefent; gaat door esc()
+  //   stil   true bij reduced motion: het stilstaande beeld, geen beweging
+  function Welkom(o) {
+    o = o || {};
+    const b = o.beeld;
+    if (!b) return "";
+    const naam = String(o.naam == null ? "" : o.naam).trim();
+    const src = o.stil ? (b.stil || b.src) : b.src;
+    return '<div class="' + cls("welkom", b.beweegtZelf && !o.stil && "beweegt-zelf") + '" role="status">' +
+      '<p class="welkom-merk">Overhoren <span class="beta-chip">Beta</span></p>' +
+      '<div class="welkom-podium"><img class="welkom-kat" src="' + esc(src) + '"' +
+        ' width="' + (Number(b.width) || 0) + '" height="' + (Number(b.height) || 0) + '" alt=""></div>' +
+      (naam ? '<p class="welkom-groet">Hoi ' + esc(naam) + '</p>' : "") +
+      '</div>';
+  }
+
   // --- hydrateIcons -------------------------------------------
   // Zet een icoon voor elk element met data-icon="naam", zodat de
   // HTML leesbaar blijft en de iconen toch uit een bron komen.
@@ -266,5 +317,5 @@
   }
 
   root.UI = { esc, cls, pct, Icon, ICONS, Button, Link, TopBar, Stat, StatsRow, Meter, Ring, Chip,
-              Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, hydrateIcons };
+              Beta, BetaUitleg, BETA_UITLEG, bindBeta, Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, Welkom, hydrateIcons };
 })(typeof window === "object" ? window : globalThis);

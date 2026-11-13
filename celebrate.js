@@ -61,6 +61,31 @@
     };
   }
 
+  // --- het beeld van het welkom -------------------------------------
+  // De enige plek waar het welkom zijn beeld per kat kiest. Nu de blije
+  // stand ("goed") als stilstaand beeld; de sprong en het wiebelen doet
+  // ds.css (.welkom-kat).
+  //
+  // Een geanimeerde kat per kat inhangen:
+  //   1. Zet het bestand in katten/, bijvoorbeeld katten/<id>-welkom.webp
+  //      (geanimeerde WebP, speelt een keer af) of katten/<id>-welkom.mp4.
+  //   2. Zet het in SCHIL in sw.js, anders werkt het welkom offline niet en
+  //      slaat het stil over. katten/ staat al in .assetsignore.
+  //   3. Geef hier src, width en height van dat bestand terug, met
+  //      beweegtZelf: true. Dan laat ds.css de sprong en het wiebelen weg en
+  //      speelt alleen het bestand. Voor een geanimeerde WebP is dat alles:
+  //      het blijft een <img>. Laat stil naar het stilstaande beeld wijzen:
+  //      dat krijgt wie minder beweging wil (UI.Welkom met stil: true).
+  //   4. Video kan nog niet: geef dan soort: "video", voeg in UI.Welkom een
+  //      <video muted playsinline autoplay> toe met stil als poster, en laat
+  //      welkom() in index.html op "canplaythrough" wachten in plaats van op
+  //      img.decode(). Totale duur blijft --welkom-duur in ds.css.
+  function welkomBeeld(id) {
+    const b = beeld(id, "goed");
+    if (!b) return null;
+    return { id: b.id, soort: "img", src: b.src, stil: b.src, width: b.width, height: b.height, beweegtZelf: false };
+  }
+
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 
   // --- de kat van een ronde -----------------------------------------
@@ -76,12 +101,23 @@
     } catch (e) { /* geen opslag of kapotte data */ }
     return null;
   }
-  // Kiest de kat voor een nieuwe ronde: willekeurig, maar nooit de vorige.
-  // Geeft het id terug en onthoudt het als de vorige.
-  function nieuweRonde() {
+  // De kat van de eerstvolgende ronde, alvast gekozen maar nog niet
+  // onthouden (het welkom laat hem zien). Alleen in het geheugen: na
+  // herladen wordt er opnieuw gekozen. Willekeurig, maar nooit de vorige.
+  // Twee keer vragen geeft dezelfde kat.
+  let gepland = null;
+  function volgende() {
     const v = vorige();
-    const keus = KATTEN.filter(k => k.id !== v);
-    const id = pick(keus).id;
+    if (bestaat(gepland) && gepland !== v) return gepland;
+    gepland = pick(KATTEN.filter(k => k.id !== v)).id;
+    return gepland;
+  }
+  // Kiest de kat voor een nieuwe ronde: de geplande als die er is, anders
+  // een nieuwe. Nooit de vorige. Geeft het id terug en onthoudt het als
+  // de vorige.
+  function nieuweRonde() {
+    const id = volgende();
+    gepland = null;
     onthoud(id);
     return id;
   }
@@ -221,5 +257,5 @@
     if (!reduced()) confetti(opts.duration);
   }
 
-  root.Celebrate = { celebrate, confetti, KATTEN, STANDEN, HOUDING, beeld, bestaat, nieuweRonde, onthoud, vorige, zegt, gedag, ZEGT, GEDAG, VORIGE };
+  root.Celebrate = { celebrate, confetti, KATTEN, STANDEN, HOUDING, beeld, welkomBeeld, bestaat, nieuweRonde, volgende, onthoud, vorige, zegt, gedag, ZEGT, GEDAG, VORIGE };
 })(typeof window === "object" ? window : globalThis);

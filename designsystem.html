@@ -28,6 +28,9 @@
   .sg-ring-row .ring { width: 72px; height: 72px; }
   .sg-decisions { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: var(--s2); }
   .sg-theme { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+  /* het welkom is in de app heel scherm; hier in een vak, en het vervaagt niet */
+  .sg-welkom { position: relative; inline-size: 100%; block-size: 480px; overflow: hidden; clip-path: var(--cut-card); }
+  .sg-welkom .welkom { position: absolute; animation: none; }
 }
 </style>
 </head>
@@ -378,6 +381,15 @@
       ['<button class="link" data-icon="chart">', '<button class="link" data-icon="chart" type="button">Rapport</button>']
     ]),
 
+    block("Beta", "Klein chipje naast de naam van de app, in de stijl van de chips: --control-surf, --accent-strong, 11px 600 in hoofdletters. Het is een knop met aria-expanded; tikken, Enter of Spatie opent de uitleg eronder, nog een keer of Escape sluit hem. Het vlak is klein, het tikdoel 44 px. Open krijgt het chipje het accent. UI.bindBeta(knop) regelt het gedrag.", [
+      ['UI.Beta({ uitlegId }) in de h1 · UI.BetaUitleg({ id })',
+        '<div class="start-kop" style="width:100%"><header class="brand"><h1>Overhoren' + UI.Beta({ uitlegId: "sg-beta-uitleg" }) + '</h1></header>' +
+        UI.BetaUitleg({ id: "sg-beta-uitleg" }) + '</div>'],
+      ['UI.Beta({ uitlegId, open: true }) · UI.BetaUitleg({ id, open: true })',
+        '<div class="start-kop" style="width:100%"><header class="brand"><h1>Overhoren' + UI.Beta({ uitlegId: "sg-beta-uitleg-open", open: true }) + '</h1></header>' +
+        UI.BetaUitleg({ id: "sg-beta-uitleg-open", open: true }) + '</div>']
+    ], { col: true }),
+
     // De katten: de beelden en namen komen uit celebrate.js, net als in de app.
     block("Spraak", "Wat de kat zegt: een rustig vlak (--mark) met afgeschuinde hoekjes, lopende tekst 17px, regelhoogte 1,35. Alleen tekst, alles gaat door esc(). Geen uitroeptekens.", [
       ['UI.Spraak({ text })', '<div style="width:100%;max-width:320px">' + UI.Spraak({ text: "Ik kijk mee." }) + '</div>']
@@ -398,12 +410,22 @@
         '<div class="card"><p>Ronde klaar: 4 van 12 in één keer goed.</p></div></div></div>']
     ], { col: true }),
 
+    block("Welkom", "Bij elke keer openen van de app, een keer per sessie (niet bij herladen of terugkeren naar hetzelfde tabblad), heel scherm over de app (die is zolang inert). De kat van de eerstvolgende ronde (Celebrate.volgende) springt omhoog en wiebelt twee keer, dan Hoi met de naam; zonder naam alleen de kat. Daarna vervaagt alles. Samen --welkom-duur, 1,2 s. Tik of toets haalt het eerder weg. Niet bij een ronde die openstaat, en alleen als het beeld binnen 300 ms klaar is. Reduced motion: stilstaand eindbeeld, zelfde tijd. Het beeld per kat komt uit Celebrate.welkomBeeld(id); daar hangt later een geanimeerde kat in. Hier in een vak, zonder vervagen.", [
+      ['UI.Welkom({ beeld: Celebrate.welkomBeeld(id), naam })',
+        '<div class="sg-welkom" id="sg-welkom">' + UI.Welkom({ beeld: Celebrate.welkomBeeld("sokjes"), naam: "Pia" }) + '</div>' +
+        UI.Button({ id: "sg-welkom-opnieuw", label: "Opnieuw afspelen", icon: "play" })]
+    ], { col: true }),
+
     block("Card", "Alleen CSS: .card. Hetzelfde vlak als LessonCard, met kaarttitel.", [
       ['.card > h2', '<div class="card" style="width:100%"><h2>Hoe werkt het?</h2><p>Lopende tekst in een kaart.</p></div>']
     ], { col: true })
   ];
   $("sg-components").innerHTML = html.join("");
   UI.hydrateIcons(document);
+  document.querySelectorAll("#sg-components .beta").forEach(UI.bindBeta);
+  $("sg-welkom-opnieuw").addEventListener("click", () => {
+    $("sg-welkom").innerHTML = UI.Welkom({ beeld: Celebrate.welkomBeeld("sokjes"), naam: "Pia" });
+  });
   paintValues();
   // systeemthema kan wisselen terwijl de pagina open staat
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paintValues);

@@ -62,14 +62,36 @@ function zoekChromium() {
 export async function startBrowser() {
   const pw = zoekPlaywright();
   if (!pw) throw new Error("Playwright niet gevonden. Zie tests/README.md (PLAYWRIGHT_MODULE).");
+  let browser;
   try {
-    return await pw.chromium.launch();
+    browser = await pw.chromium.launch();
   } catch (e) {
     if (!/Executable doesn't exist/.test(e.message)) throw e;
     const pad = zoekChromium();
     if (!pad) throw new Error("Geen Chromium gevonden in de Playwright-cache. Zie tests/README.md (PW_CHROMIUM).");
-    return await pw.chromium.launch({ executablePath: pad });
+    browser = await pw.chromium.launch({ executablePath: pad });
   }
+  return zonderWelkom(browser);
+}
+
+// Het welkom (bij het openen, een keer per sessie) ligt even over de app
+// en maakt hem inert. De meeste tests openen de app en willen meteen
+// klikken, dus elk tabblad krijgt de sessievlag van het welkom al.
+// newContext({ welkom: true }) laat dat weg; tests/welkom.test.mjs test
+// het welkom zelf.
+export const WELKOM_SESSIE = "overhoor:welkom:sessie";
+export const WELKOM_DAG = "overhoor:welkom:dag";   // oude dagregel, wordt niet meer geschreven
+function zonderWelkom(browser) {
+  const echt = browser.newContext.bind(browser);
+  browser.newContext = async (opties = {}) => {
+    const { welkom = false, ...rest } = opties;
+    const context = await echt(rest);
+    if (!welkom) await context.addInitScript(sleutel => {
+      try { sessionStorage.setItem(sleutel, "1"); } catch (_) { /* geen opslag: dan is er ook geen welkom */ }
+    }, WELKOM_SESSIE);
+    return context;
+  };
+  return browser;
 }
 
 // ---------- lokale server ----------
