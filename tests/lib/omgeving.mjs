@@ -103,14 +103,26 @@ export async function startBrowser() {
 // het welkom zelf.
 export const WELKOM_SESSIE = "overhoor:welkom:sessie";
 export const WELKOM_DAG = "overhoor:welkom:dag";   // oude dagregel, wordt niet meer geschreven
+//
+// De app heeft geen standaardnaam meer: zonder opgeslagen oefenaar vraagt
+// hij eerst een naam. De meeste tests willen meteen een les openen, dus elk
+// tabblad krijgt "Pia" als oefenaar als er nog geen staat. Een test die
+// zelf een oefenaar zaait, wint (die staat er dan al of komt erna).
+// newContext({ naam: false }) laat dat weg; tests/naam.test.mjs test de
+// vraag om een naam.
+export const TESTNAAM = "Pia";
 function zonderWelkom(browser) {
   const echt = browser.newContext.bind(browser);
   browser.newContext = async (opties = {}) => {
-    const { welkom = false, ...rest } = opties;
+    const { welkom = false, naam = true, ...rest } = opties;
     const context = await echt(rest);
     if (!welkom) await context.addInitScript(sleutel => {
       try { sessionStorage.setItem(sleutel, "1"); } catch (_) { /* geen opslag: dan is er ook geen welkom */ }
     }, WELKOM_SESSIE);
+    if (naam) await context.addInitScript(n => {
+      try { if (localStorage.getItem("overhoor:learner") === null) localStorage.setItem("overhoor:learner", JSON.stringify(n)); }
+      catch (_) { /* geen opslag */ }
+    }, TESTNAAM);
     return context;
   };
   return browser;

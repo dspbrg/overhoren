@@ -880,6 +880,8 @@
   .learner-row { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); flex-wrap: wrap; }
   .learner-row .row { align-items: center; }
   .learner-row input { max-width: 200px; }
+  /* de vraag om een naam staat op een eigen regel onder het veld */
+  .learner-row .hint { flex-basis: 100%; }
 
   /* quiz */
   .q-card { gap: var(--gap-group); }

@@ -42,7 +42,8 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       <!-- hier komt de uitleg bij Beta (zie zetBeta) -->
       <div class="learner-row">
         <span id="learner-view">Wie oefent: <b id="learner-label"></b> <button class="link" id="btn-learner">wissel</button></span>
-        <span class="row" id="learner-form" hidden><input type="text" id="learner-name" placeholder="Naam" autocomplete="off"><button class="btn" id="btn-learner-save">Opslaan</button></span>
+        <span class="row" id="learner-form" hidden><label for="learner-name">Wie oefent?</label><input type="text" id="learner-name" placeholder="Naam" autocomplete="off" aria-describedby="learner-hint"><button class="btn" id="btn-learner-save">Opslaan</button></span>
+        <span class="hint" id="learner-hint" hidden>Typ eerst je naam.</span>
         <span class="sync" id="sync-state"></span>
       </div>
     </div>
@@ -494,7 +495,9 @@ function withAlts(item, i){
     ? Object.assign({}, item, { def: item.def + " / " + extra.join(" / ") })
     : Object.assign({}, item, { accept: (item.accept||[]).concat(extra) });
 }
-let learner = load(LEARNER_KEY, "Pia");
+// Geen standaardnaam: zonder opgeslagen oefenaar is learner leeg en vraagt
+// de app eerst een naam. Dan geen ronde, geen sync en niets onder een naam.
+let learner = (v => typeof v === "string" ? v.trim() : "")(load(LEARNER_KEY, ""));
 
 // ---------- state ----------
 let lists = [], list = null, progress = null, session = null, sizeChoice = 15, timer = null;
@@ -570,7 +573,7 @@ function selectList(id){
   }
   // eenmalige migratie van voortgang zonder oefenaar (eerste versie van de app)
   const legacy = load("overhoor:progress:"+list.id, null);
-  if(legacy && !load(PKEY(list.id), null)){ save(PKEY(list.id), legacy); save("overhoor:progress:"+list.id, null); }
+  if(learner && legacy && !load(PKEY(list.id), null)){ save(PKEY(list.id), legacy); save("overhoor:progress:"+list.id, null); }
   progress = laadVoortgang(list.id) || legeVoortgang();
   loadAlts();
   save(CKEY, list.id);
@@ -587,14 +590,16 @@ function saveProgress(){
   save(PKEY(list.id), progress); pushProgress();
 }
 function setLearner(name){
-  learner = String(name||"").trim() || "Pia";
+  const naam = String(name||"").trim();
+  if(!naam) return;   // een lege naam slaan we niet op
+  learner = naam;
   save(LEARNER_KEY, learner);
   const names = load(LEARNERS_KEY, []); if(!names.includes(learner)){ names.push(learner); save(LEARNERS_KEY, names); }
 }
 
 // ---------- cloud-sync via Worker KV ----------
 let syncTimer = null;
-function canSync(){ return WORKER_URL && APP_SECRET; }
+function canSync(){ return WORKER_URL && APP_SECRET && learner; }
 function setSyncState(txt, on){ const el=$("sync-state"); el.textContent = txt; el.classList.toggle("on", !!on); }
 
 async function initDb(){
@@ -969,6 +974,13 @@ function bewaakPauze(){
   if(pauzeRest() > 0) pauzeTimer = setInterval(teken, 1000);
 }
 
+// Het naamveld bij "Wie oefent" open en met focus. hint: ook de korte
+// vraag eronder, als iemand iets probeerde zonder naam.
+function vraagNaam(hint){
+  $("learner-view").hidden = true; $("learner-form").hidden = false;
+  if(hint) $("learner-hint").hidden = false;
+  $("learner-name").focus();
+}
 function show(id){ document.querySelectorAll(".screen").forEach(s=>s.hidden = s.id!==id); window.scrollTo(0,0); }
 
 function renderLessons(){
@@ -1013,7 +1025,7 @@ function renderLessons(){
       + '<div class="vak-lijsten">' + g.lijsten.map(kaart).join("") + (mix ? kaart(mix) : "") + '</div>'
       + '</section>';
   }).join("");
-  $("lessons").querySelectorAll(".lesson").forEach(b=>b.addEventListener("click", ()=>{ selectList(b.dataset.id); renderHome(); show("scr-home"); }));
+  $("lessons").querySelectorAll(".lesson").forEach(b=>b.addEventListener("click", ()=>{ if(!learner){ vraagNaam(true); return; } selectList(b.dataset.id); renderHome(); show("scr-home"); }));
 }
 function renderHome(){
   $("home-learner").textContent = "Wie oefent: "+learner;
@@ -1143,6 +1155,7 @@ async function copyReport(){
 
 // ---------- ronde ----------
 function startSession(){
+  if(!learner){ vraagNaam(true); return; }
   const pick = E.selectSession(list, progress, sizeChoice, Date.now(), {allowed: allowedIndices(), interleave: !!list.interleave});
   session = { listId:list.id, queue: pick.indices.map(i=>({i, dir:null})), pos:0, total: pick.indices.length,
     attempts:{}, firstTry:{}, done:0, streak:0, skipped:0, startedAt: Date.now(), elapsedBefore:0,
@@ -1155,6 +1168,7 @@ function startSession(){
   show("scr-quiz"); renderQuestion(); startTimer();
 }
 function resumeSession(){
+  if(!learner){ vraagNaam(true); return; }
   session = load(SKEY(list.id), null);
   if(session) session.laatsteActie = Date.now();   // wachttijd telt niet mee
   if(!session){ renderHome(); return; }
@@ -1797,7 +1811,13 @@ function bind(){
   $("btn-report-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
   $("btn-report-copy").addEventListener("click", copyReport);
   $("btn-learner").addEventListener("click", ()=>{ $("learner-form").hidden=false; $("learner-view").hidden=true; $("learner-name").value=learner; $("learner-name").focus(); });
-  const saveLearner = ()=>{ setLearner($("learner-name").value); $("learner-form").hidden=true; $("learner-view").hidden=false; selectList(list.id); renderLessons(); initDb(); };
+  const saveLearner = ()=>{
+    const naam = $("learner-name").value.trim();
+    if(!naam && !learner){ vraagNaam(true); return; }   // zonder naam blijft het veld open
+    if(naam) setLearner(naam);                           // leeg bij wisselen: de naam blijft
+    $("learner-form").hidden=true; $("learner-view").hidden=false; $("learner-hint").hidden=true;
+    selectList(list.id); renderLessons(); initDb();
+  };
   $("btn-learner-save").addEventListener("click", saveLearner);
   $("learner-name").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); saveLearner(); } });
   $("btn-info-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
@@ -1847,7 +1867,7 @@ function bind(){
   $("photo-lang").addEventListener("keydown", function(e) { if(e.key==="Enter"){ e.preventDefault(); photoGoWithLang(); } });
   $("btn-photo-retry").addEventListener("click", photoReset);
   $("btn-photo-save").addEventListener("click", photoSave);
-  $("btn-photo-go").addEventListener("click", ()=>{ renderHome(); show("scr-home"); });
+  $("btn-photo-go").addEventListener("click", ()=>{ if(!learner){ show("scr-lessons"); vraagNaam(true); return; } renderHome(); show("scr-home"); });
 }
 
 // De app draait volledig lokaal, dus met de bestanden in de cache werkt hij
@@ -1935,6 +1955,7 @@ function toonWelkom(beeld, stil){
     document.removeEventListener("keydown", sluit, true);
     el.remove();
     app.inert = false;
+    if(!learner) $("learner-name").focus();   // de focus ging weg door inert
   }
   // minstens de duur, en de clip op zijn eindbeeld; dan vervagen en weg
   const tijd = new Promise(r => { klok = setTimeout(r, Math.max(0, duur - vervaag)); });
@@ -1954,9 +1975,10 @@ function init(){
   UI.hydrateIcons(document);
   lists = allLists();
   if(!lists.length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
-  setLearner(learner);
+  if(learner) setLearner(learner);
   selectList(load(CKEY, lists[0].id));
   bind(); renderLessons(); show("scr-lessons");
+  if(!learner) vraagNaam(false);
   welkom();
   initDb();
 }
