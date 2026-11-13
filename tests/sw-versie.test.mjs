@@ -424,3 +424,26 @@ test("ongestempeld: is de pagina te traag, dan de bewaarde pagina met zijn eigen
   assert.equal(await heel(page, fouten, "weer snel"), "B");
   await context.close();
 });
+
+test("sw A, server al B: de eerste keer openen is meteen B, en de cache van A houdt zijn eigen A-pagina", async () => {
+  // Navigatie is niet stale-while-revalidate (geen oude pagina eerst) en
+  // een oude versie schrijft nooit een nieuwe pagina in zijn cache.
+  zet({ app: "A", sw: "A" });
+  const { context, page, fouten } = await nieuweContext();
+  await installeer(page);
+  server.stand.app = "B";   // sw.js blijft A
+  for (let i = 1; i <= 3; i++) {
+    await open(page);
+    assert.equal(await heel(page, fouten, `open ${i}`), "B", `open ${i}: niet meteen de verse pagina`);
+    await page.waitForTimeout(400);   // ruimte voor een achtergrondschrijfactie
+    const bewaard = await page.evaluate(async () => {
+      const c = await caches.open("overhoren-2-a111111");
+      const res = await c.match("./");
+      return res ? await res.text() : null;
+    });
+    assert.ok(bewaard, "de cache van A heeft geen ./");
+    assert.ok(bewaard.includes("?v=" + STEMPEL.A) && !bewaard.includes("?v=" + STEMPEL.B),
+      `open ${i}: de cache van A bevat een pagina van een andere versie`);
+  }
+  await context.close();
+});
