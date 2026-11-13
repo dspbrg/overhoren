@@ -10,7 +10,7 @@
 
 # De app
 !/index.html
-!/styleguide.html
+!/designsystem.html
 !/manifest.json
 !/sw.js
 !/ds.css

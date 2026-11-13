@@ -24,7 +24,7 @@ test("elk font uit ds.css bestaat en staat in de service worker", () => {
 });
 
 test("geen verwijzing naar Google in de app-bestanden", () => {
-  for (const f of ["index.html", "styleguide.html", "ds.css", "sw.js", "ui.js", "celebrate.js", "manifest.json"]) {
+  for (const f of ["index.html", "designsystem.html", "ds.css", "sw.js", "ui.js", "celebrate.js", "manifest.json"]) {
     assert.doesNotMatch(lees(f), /fonts\.googleapis|fonts\.gstatic/, f + " verwijst naar Google Fonts");
   }
 });
@@ -125,11 +125,11 @@ for (const thema of ["light", "dark"]) {
   });
 }
 
-test("styleguide doet geen verzoeken naar Google", async () => {
+test("designsystem doet geen verzoeken naar Google", async () => {
   const context = await browser.newContext({ serviceWorkers: "block" });
   const extern = await schermNetwerkAf(context);
   const page = await context.newPage();
-  await page.goto(server.url + "/styleguide.html");
+  await page.goto(server.url + "/designsystem.html");
   await page.evaluate(() => document.fonts.ready);
   assert.deepEqual(extern, [], "externe verzoeken: " + extern.join(", "));
   await context.close();
