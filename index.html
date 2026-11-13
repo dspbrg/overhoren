@@ -42,7 +42,12 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       <!-- hier komt de uitleg bij Beta (zie zetBeta) -->
       <div class="learner-row">
         <span id="learner-view">Wie oefent: <b id="learner-label"></b> <button class="link" id="btn-learner">wissel</button></span>
-        <span class="row" id="learner-form" hidden><input type="text" id="learner-name" placeholder="Naam" autocomplete="off"><button class="btn" id="btn-learner-save">Opslaan</button></span>
+        <span class="row" id="learner-form" hidden><label for="learner-name">Wie oefent?</label><input type="text" id="learner-name" placeholder="Naam" autocomplete="off" maxlength="20" aria-describedby="learner-hint"><button class="btn" id="btn-learner-save">Opslaan</button></span>
+        <span class="hint" id="learner-hint" role="status" hidden>Typ eerst je naam.</span>
+        <div class="naam-vraag" id="naam-vraag" hidden>
+          <p>Ben jij <span id="naam-vraag-naam"></span>?</p>
+          <div class="row"><button class="btn" id="btn-naam-ja">Ja</button><button class="btn" id="btn-naam-nee">Nee, ik ben iemand anders</button></div>
+        </div>
         <span class="sync" id="sync-state"></span>
       </div>
     </div>
@@ -470,7 +475,7 @@ function pauzeRest(){ const t = tijdVandaag(); return Math.max(0, (t.pauzeTot||0
 function load(key, fallback){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; } }
 function save(key, val){ try{ if(val==null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
 const LKEY = "overhoor:lists", CKEY = "overhoor:current", LEARNER_KEY = "overhoor:learner", LEARNERS_KEY = "overhoor:learners";
-const slug = s => String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "leerling";
+const slug = s => String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 // s: slug van een andere oefenaar dan de huidige (optioneel)
 const PKEY = (id, s) => "overhoor:progress:"+(s || slug(learner))+":"+id, SKEY = id => "overhoor:session:"+slug(learner)+":"+id;
 const AKEY = id => "overhoor:alts:"+slug(learner)+":"+id;
@@ -494,7 +499,18 @@ function withAlts(item, i){
     ? Object.assign({}, item, { def: item.def + " / " + extra.join(" / ") })
     : Object.assign({}, item, { accept: (item.accept||[]).concat(extra) });
 }
-let learner = load(LEARNER_KEY, "Pia");
+// Geen standaardnaam: zonder opgeslagen oefenaar is learner leeg en vraagt
+// de app eerst een naam. Dan geen ronde, geen sync en niets onder een naam.
+// Een naam zonder gewone letters of cijfers (??? of Мария) heeft een lege
+// slug en telt als geen naam. Letters met accenten (Pía, Zoë) gaan wel mee.
+let learner = (v => typeof v === "string" && slug(v) ? v.trim() : "")(load(LEARNER_KEY, ""));
+const heeftNaam = () => !!slug(learner);
+const NAAM_MAX = 20;   // ook maxlength op #learner-name
+// Tot deze versie sloeg de app op elk toestel de standaard "Pia" op. Op een
+// toestel met "Pia" en zonder deze vlag vragen we een keer of dat klopt.
+// Tot die tijd geen sync; oefenen mag wel.
+const BEVESTIGD_KEY = "overhoor:naam-bevestigd", OUDE_STANDAARD = "Pia";
+const moetBevestigen = () => learner === OUDE_STANDAARD && load(BEVESTIGD_KEY, false) !== true;
 
 // ---------- state ----------
 let lists = [], list = null, progress = null, session = null, sizeChoice = 15, timer = null;
@@ -570,7 +586,7 @@ function selectList(id){
   }
   // eenmalige migratie van voortgang zonder oefenaar (eerste versie van de app)
   const legacy = load("overhoor:progress:"+list.id, null);
-  if(legacy && !load(PKEY(list.id), null)){ save(PKEY(list.id), legacy); save("overhoor:progress:"+list.id, null); }
+  if(heeftNaam() && legacy && !load(PKEY(list.id), null)){ save(PKEY(list.id), legacy); save("overhoor:progress:"+list.id, null); }
   progress = laadVoortgang(list.id) || legeVoortgang();
   loadAlts();
   save(CKEY, list.id);
@@ -587,14 +603,16 @@ function saveProgress(){
   save(PKEY(list.id), progress); pushProgress();
 }
 function setLearner(name){
-  learner = String(name||"").trim() || "Pia";
+  const naam = String(name||"").trim();
+  if(!slug(naam)) return;   // een naam zonder letters of cijfers slaan we niet op
+  learner = naam;
   save(LEARNER_KEY, learner);
   const names = load(LEARNERS_KEY, []); if(!names.includes(learner)){ names.push(learner); save(LEARNERS_KEY, names); }
 }
 
 // ---------- cloud-sync via Worker KV ----------
 let syncTimer = null;
-function canSync(){ return WORKER_URL && APP_SECRET; }
+function canSync(){ return WORKER_URL && APP_SECRET && heeftNaam() && !moetBevestigen(); }
 function setSyncState(txt, on){ const el=$("sync-state"); el.textContent = txt; el.classList.toggle("on", !!on); }
 
 async function initDb(){
@@ -969,6 +987,22 @@ function bewaakPauze(){
   if(pauzeRest() > 0) pauzeTimer = setInterval(teken, 1000);
 }
 
+// Het naamveld bij "Wie oefent" open en met focus. hint: ook de korte
+// vraag eronder, als iemand iets probeerde zonder naam.
+// tekst: een andere melding dan "Typ eerst je naam.". Het naamveld staat op
+// het startscherm, dus daar gaan we eerst heen.
+function vraagNaam(hint, tekst){
+  if($("scr-lessons").hidden) show("scr-lessons");
+  $("naam-vraag").hidden = true;
+  $("learner-view").hidden = true; $("learner-form").hidden = false;
+  if(hint){ $("learner-hint").textContent = tekst || "Typ eerst je naam."; $("learner-hint").hidden = false; }
+  $("learner-name").focus();
+}
+// "Ben jij Pia?" in plaats van de regel "Wie oefent".
+function toonNaamVraag(){
+  $("naam-vraag-naam").textContent = learner; $("btn-naam-ja").textContent = "Ja, ik ben " + learner;
+  $("learner-view").hidden = true; $("learner-form").hidden = true; $("naam-vraag").hidden = false;
+}
 function show(id){ document.querySelectorAll(".screen").forEach(s=>s.hidden = s.id!==id); window.scrollTo(0,0); if(id==="scr-lessons") verversNaUpdate(); }
 
 function renderLessons(){
@@ -1013,7 +1047,7 @@ function renderLessons(){
       + '<div class="vak-lijsten">' + g.lijsten.map(kaart).join("") + (mix ? kaart(mix) : "") + '</div>'
       + '</section>';
   }).join("");
-  $("lessons").querySelectorAll(".lesson").forEach(b=>b.addEventListener("click", ()=>{ selectList(b.dataset.id); renderHome(); show("scr-home"); }));
+  $("lessons").querySelectorAll(".lesson").forEach(b=>b.addEventListener("click", ()=>{ if(!heeftNaam()){ vraagNaam(true); return; } selectList(b.dataset.id); renderHome(); show("scr-home"); }));
 }
 function renderHome(){
   $("home-learner").textContent = "Wie oefent: "+learner;
@@ -1143,6 +1177,7 @@ async function copyReport(){
 
 // ---------- ronde ----------
 function startSession(){
+  if(!heeftNaam()){ vraagNaam(true); return; }
   const pick = E.selectSession(list, progress, sizeChoice, Date.now(), {allowed: allowedIndices(), interleave: !!list.interleave});
   session = { listId:list.id, queue: pick.indices.map(i=>({i, dir:null})), pos:0, total: pick.indices.length,
     attempts:{}, firstTry:{}, done:0, streak:0, skipped:0, startedAt: Date.now(), elapsedBefore:0,
@@ -1155,6 +1190,7 @@ function startSession(){
   show("scr-quiz"); renderQuestion(); startTimer();
 }
 function resumeSession(){
+  if(!heeftNaam()){ vraagNaam(true); return; }
   session = load(SKEY(list.id), null);
   if(session) session.laatsteActie = Date.now();   // wachttijd telt niet mee
   if(!session){ renderHome(); return; }
@@ -1797,11 +1833,21 @@ function bind(){
   $("btn-report-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
   $("btn-report-copy").addEventListener("click", copyReport);
   $("btn-learner").addEventListener("click", ()=>{ $("learner-form").hidden=false; $("learner-view").hidden=true; $("learner-name").value=learner; $("learner-name").focus(); });
-  const saveLearner = ()=>{ setLearner($("learner-name").value); $("learner-form").hidden=true; $("learner-view").hidden=false; selectList(list.id); renderLessons(); initDb(); };
+  const saveLearner = ()=>{
+    const naam = $("learner-name").value.trim();
+    if(naam && !slug(naam)){ vraagNaam(true, "Gebruik letters of cijfers in je naam."); return; }
+    // langer past niet in het welkom en de spraakbalk; maxlength op het veld, en hier voor plakken
+    if(Array.from(naam).length > NAAM_MAX){ vraagNaam(true, "Je naam mag hooguit "+NAAM_MAX+" tekens zijn."); return; }
+    if(!naam && !heeftNaam()){ vraagNaam(true); return; }   // zonder naam blijft het veld open
+    if(naam){ setLearner(naam); save(BEVESTIGD_KEY, true); } // zelf getypt, dus bevestigd; leeg bij wisselen: de naam blijft
+    $("learner-form").hidden=true; $("learner-view").hidden=false; $("learner-hint").hidden=true;
+    selectList(list.id); renderLessons(); initDb();
+  };
   $("btn-learner-save").addEventListener("click", saveLearner);
   $("learner-name").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); saveLearner(); } });
   $("btn-info-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
-  $("btn-import").addEventListener("click", ()=>show("scr-import"));
+  // eerst een naam, dan pas een lijst typen of fotograferen
+  $("btn-import").addEventListener("click", ()=>{ if(!heeftNaam()){ vraagNaam(true); return; } show("scr-import"); });
   $("btn-import-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
   $("btn-import-save").addEventListener("click", importList);
   $("btn-delete-list").addEventListener("click", deleteList);
@@ -1847,7 +1893,18 @@ function bind(){
   $("photo-lang").addEventListener("keydown", function(e) { if(e.key==="Enter"){ e.preventDefault(); photoGoWithLang(); } });
   $("btn-photo-retry").addEventListener("click", photoReset);
   $("btn-photo-save").addEventListener("click", photoSave);
-  $("btn-photo-go").addEventListener("click", ()=>{ renderHome(); show("scr-home"); });
+  $("btn-photo-go").addEventListener("click", ()=>{ if(!heeftNaam()){ vraagNaam(true); return; } renderHome(); show("scr-home"); });
+  $("btn-naam-ja").addEventListener("click", ()=>{
+    save(BEVESTIGD_KEY, true);
+    $("naam-vraag").hidden = true; $("learner-view").hidden = false;
+    $("btn-learner").focus();
+    initDb();
+  });
+  $("btn-naam-nee").addEventListener("click", ()=>{
+    // de voortgang onder deze naam blijft op dit toestel, maar hoort niet bij de nieuwe naam
+    learner = ""; save(LEARNER_KEY, null);
+    $("learner-name").value = ""; vraagNaam(false);
+  });
 }
 
 // De app draait volledig lokaal, dus met de bestanden in de cache werkt hij
@@ -1977,7 +2034,7 @@ function toonWelkom(beeld, stil){
   // al verder getikt, of er staat er al een
   if(!beeld || !app || document.querySelector(".welkom") || $("scr-lessons").hidden) return;
   if(WELKOM_PER_DAG) try{ localStorage.setItem(WELKOM_DAG, dagVan(new Date())); }catch(e){}
-  document.body.insertAdjacentHTML("beforeend", UI.Welkom({ beeld, naam: learner, stil }));
+  document.body.insertAdjacentHTML("beforeend", UI.Welkom({ beeld, naam: moetBevestigen() ? "" : learner, stil }));
   const el = document.body.lastElementChild;
   app.inert = true;
   // de tijden staan in ds.css, in ms
@@ -1997,6 +2054,7 @@ function toonWelkom(beeld, stil){
     document.removeEventListener("keydown", sluit, true);
     el.remove();
     app.inert = false;
+    if(!heeftNaam()) $("learner-name").focus();   // de focus ging weg door inert
   }
   // minstens de duur, en de clip op zijn eindbeeld; dan vervagen en weg
   const tijd = new Promise(r => { klok = setTimeout(r, Math.max(0, duur - vervaag)); });
@@ -2016,9 +2074,11 @@ function init(){
   UI.hydrateIcons(document);
   lists = allLists();
   if(!lists.length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
-  setLearner(learner);
+  if(heeftNaam()) setLearner(learner);
   selectList(load(CKEY, lists[0].id));
   bind(); renderLessons(); show("scr-lessons");
+  if(!heeftNaam()) vraagNaam(false);
+  else if(moetBevestigen()) toonNaamVraag();
   welkom();
   initDb();
 }
