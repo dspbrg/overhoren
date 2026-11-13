@@ -1457,7 +1457,7 @@ function finish(stopped){
   // De kat van deze ronde zegt gedag, met de naam. Nooit verdrietig, en
   // hij vraagt nooit om terug te komen. Confetti alleen bij vlekkeloos (niet bij
   // reduced motion, dat regelt celebrate).
-  toonKat("sum-kat", Celebrate.gedag(perfect ? "vlekkeloos" : lastig ? "lastig" : "gewoon", learner), session.kat);
+  toonKat("sum-kat", Celebrate.gedag(perfect ? "vlekkeloos" : lastig ? "lastig" : stopped ? "gestopt" : "gewoon", learner), session.kat);
   if(perfect) Celebrate.celebrate({ woorden: ids.length });
   $("sum-hard-wrap").hidden = !hard.length; $("sum-hard").textContent = hard.join(", ");
   const now = Date.now();
