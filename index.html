@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Overhoren</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128218;</text></svg>">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -904,22 +904,33 @@ function fmtRel(ms){
 // ---------- schermen ----------
 // De kat van de ronde op de rand van de kaart, op de plek van element id.
 // z: { stand, tekst } uit Celebrate.zegt() of Celebrate.gedag(). Staat
-// de kat er al, dan wisselen alleen beeld en zin: geen nieuwe entree en
-// niets dat verspringt. Alles gaat door esc() of textContent.
+// de kat er al, dan wisselen alleen beeld en zin: het <img> blijft staan,
+// met dezelfde maat, dus niets verspringt. Celebrate.speler speelt per
+// moment rust, of de clip en daarna het eindbeeld; een nieuw moment breekt
+// een lopende clip af. Alles gaat door esc() of textContent.
+// De beelden staan in katten.json. Is die er nog niet, dan eerst die;
+// een later moment voor hetzelfde element wint.
+const katSpelers = {}, katBeurt = {};
 function toonKat(id, z, kat){
-  const b = Celebrate.beeld(kat || (session && session.kat), z.stand);
-  const el = $(id);
-  if(!b){ el.hidden = true; return; }
-  // de andere stand alvast laden, zodat het wisselen straks meteen gaat
-  const ander = Celebrate.beeld(b.id, b.stand === "goed" ? "bijna" : "goed");
-  if(ander) new Image().src = ander.src;
-  const img = el.querySelector(".kat"), zin = el.querySelector(".spraak");
-  if(img && zin && !el.hidden){
-    img.src = b.src; img.width = b.width; img.height = b.height;
-    zin.textContent = z.tekst;
-    return;
-  }
-  el.outerHTML = UI.KatRand({ id, beeld: b, text: z.tekst });
+  kat = kat || (session && session.kat);
+  const beurt = katBeurt[id] = (katBeurt[id] || 0) + 1;
+  const doe = () => {
+    if(katBeurt[id] !== beurt) return;
+    const b = Celebrate.beeld(kat, z.stand);
+    let el = $(id);
+    if(!b){ if(katSpelers[id]) katSpelers[id].stop(); el.hidden = true; return; }
+    const img = el.querySelector(".kat"), zin = el.querySelector(".spraak");
+    if(img && zin && !el.hidden && katSpelers[id]){
+      zin.textContent = z.tekst;
+    } else {
+      if(katSpelers[id]) katSpelers[id].stop();
+      el.outerHTML = UI.KatRand({ id, beeld: b, text: z.tekst });
+      el = $(id);
+      katSpelers[id] = Celebrate.speler(el.querySelector(".kat"), { plaats: "rechts" });
+    }
+    katSpelers[id].speel(kat, z.stand);
+  };
+  if(Celebrate.catalogus()) doe(); else Celebrate.laadCatalogus().then(doe);
 }
 
 // Tijdens een afgedwongen pauze kan er geen nieuwe ronde starten. De
@@ -1139,6 +1150,7 @@ function startSession(){
     // elke ronde een andere kat, binnen de ronde steeds dezelfde
     kat: Celebrate.nieuweRonde() };
   save(SKEY(list.id), session);
+  Celebrate.laadKat(session.kat);   // alleen de kat van deze ronde
   ui.pauseShown = false;
   show("scr-quiz"); renderQuestion(); startTimer();
 }
@@ -1151,6 +1163,7 @@ function resumeSession(){
   // hem niet meteen herhaalt.
   if(Celebrate.bestaat(session.kat)) Celebrate.onthoud(session.kat);
   else { session.kat = Celebrate.nieuweRonde(); save(SKEY(list.id), session); }
+  Celebrate.laadKat(session.kat);
   session.startedAt = Date.now();
   ui.pauseShown = false;
   show("scr-quiz"); renderQuestion(); startTimer();
@@ -1917,12 +1930,14 @@ function zetBeta(){
 }
 
 // ---------- welkom ----------
-// Bij het openen een kort welkom met de kat van de eerstvolgende ronde
-// (UI.Welkom, ds.css .welkom). Bij elke keer openen, een keer per sessie:
-// niet opnieuw bij herladen of terugkeren naar hetzelfde tabblad. Niet als
-// er een ronde openstaat die je kunt hervatten: die heeft al een eigen kat.
-// Het beeld moet binnen 300 ms klaar zijn (uit de cache, ook offline);
-// anders slaat het welkom stil over. Tik of toets haalt het eerder weg.
+// Bij het openen een kort welkom met de goed-clip van de kat van de
+// eerstvolgende ronde (UI.Welkom, ds.css .welkom). Bij elke keer openen,
+// een keer per sessie: niet opnieuw bij herladen of terugkeren naar
+// hetzelfde tabblad. Niet als er een ronde openstaat die je kunt hervatten:
+// die heeft al een eigen kat. De beelden van die kat moeten binnen 300 ms
+// klaar zijn (uit de cache, ook offline); anders slaat het welkom stil
+// over. Het staat minstens --welkom-duur en sluit pas als de clip op zijn
+// eindbeeld staat. Tik of toets haalt het eerder weg.
 //
 // Hoe vaak: WELKOM_PER_DAG. Op false (nu, keuze van Daan) elke sessie.
 // Op true komt het hooguit een keer per kalenderdag per apparaat; dan
@@ -1950,43 +1965,53 @@ function welkom(){
     if(WELKOM_PER_DAG && localStorage.getItem(WELKOM_DAG) === dagVan(new Date())) return;
   }catch(e){ return; }   // zonder opslag kunnen we "een keer per sessie" niet waarmaken
   if(terug || heeftOpenRonde()) return;
-  const beeld = Celebrate.welkomBeeld(Celebrate.volgende());
-  if(!beeld) return;
+  const id = Celebrate.volgende();
   const stil = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
-  const img = new Image();
-  img.src = stil ? (beeld.stil || beeld.src) : beeld.src;
   new Promise((klaar, mis) => {
     setTimeout(mis, WELKOM_WACHT);
-    (img.decode ? img.decode() : Promise.reject()).then(klaar, mis);
-  }).then(() => toonWelkom(beeld, stil), () => { /* te traag of kapot: stil overslaan */ });
+    Celebrate.laadKat(id).then(g => (g.volledig ? klaar() : mis()));
+  }).then(() => toonWelkom(Celebrate.welkomBeeld(id), stil), () => { /* te traag of kapot: stil overslaan */ });
 }
 function toonWelkom(beeld, stil){
   const app = document.querySelector("body > .app");
   // al verder getikt, of er staat er al een
-  if(!app || document.querySelector(".welkom") || $("scr-lessons").hidden) return;
+  if(!beeld || !app || document.querySelector(".welkom") || $("scr-lessons").hidden) return;
   if(WELKOM_PER_DAG) try{ localStorage.setItem(WELKOM_DAG, dagVan(new Date())); }catch(e){}
   document.body.insertAdjacentHTML("beforeend", UI.Welkom({ beeld, naam: learner, stil }));
   const el = document.body.lastElementChild;
   app.inert = true;
-  // de duur staat in ds.css, in ms
-  const duur = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--welkom-duur")) || 1200;
-  let klok = null;
-  function weg(e){
+  // de tijden staan in ds.css, in ms
+  const css = getComputedStyle(document.documentElement);
+  const duur = parseFloat(css.getPropertyValue("--welkom-duur")) || 3500;
+  const vervaag = parseFloat(css.getPropertyValue("--welkom-vervaag")) || 300;
+  const speler = Celebrate.speler(el.querySelector(".welkom-kat"), { plaats: "midden" });
+  let klok = null, weg = false;
+  function sluit(e){
     // de tik of toets die het welkom wegdoet, doet verder niets in de app
     if(e){ e.preventDefault(); e.stopPropagation(); }
+    if(weg) return;
+    weg = true;
     clearTimeout(klok);
-    el.removeEventListener("click", weg);
-    document.removeEventListener("keydown", weg, true);
+    speler.stop();
+    el.removeEventListener("click", sluit);
+    document.removeEventListener("keydown", sluit, true);
     el.remove();
     app.inert = false;
   }
-  klok = setTimeout(() => weg(), duur);
-  el.addEventListener("click", weg);
-  document.addEventListener("keydown", weg, true);
+  // minstens de duur, en de clip op zijn eindbeeld; dan vervagen en weg
+  const tijd = new Promise(r => { klok = setTimeout(r, Math.max(0, duur - vervaag)); });
+  Promise.all([tijd, speler.speel(beeld.id, "goed")]).then(() => {
+    if(weg) return;
+    el.classList.add("vervaagt");
+    klok = setTimeout(() => sluit(), vervaag);
+  });
+  el.addEventListener("click", sluit);
+  document.addEventListener("keydown", sluit, true);
 }
 
 function init(){
   registreerSW();
+  Celebrate.laadCatalogus();   // katten.json: klein, en dan staat de kat meteen klaar
   zetBeta();
   UI.hydrateIcons(document);
   lists = allLists();

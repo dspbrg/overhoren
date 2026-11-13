@@ -23,8 +23,10 @@
 !/icons/
 
 # Binnen die mappen toch niet
-# geen submappen in katten/, fonts/ en icons/
+# geen submappen in katten/, fonts/ en icons/, behalve katten/clips/
 /katten/*/
+!/katten/clips/
+/katten/clips/*/
 /fonts/*/
 /icons/*/
 # alles wat met een punt begint (.DS_Store, .gitkeep, ...)
@@ -32,5 +34,6 @@
 # uitleg en bronbestanden
 *.md
 *.zip
-# bron van de iconen; manifest.json en index.html gebruiken alleen de png's
+# bron van het icoon; manifest.json, index.html en designsystem.html gebruiken
+# alleen de png's (icoon-192, icoon-512, apple-touch-icon, favicon-32)
 /icons/icoon.svg

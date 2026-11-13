@@ -260,18 +260,22 @@
 
   // --- Katten -------------------------------------------------
   // Elke kat komt binnen als beeld-object uit Celebrate.beeld(id, stand):
-  // { naam, karakter, src, width, height, alt }. Vaste width en height,
-  // zodat er niets verspringt als het plaatje binnenkomt.
-  function katImg(b, alt) {
-    return '<img class="kat" src="' + esc(b.src) + '"' +
+  // { id, src, beeld, width, height, kijkt }. Vaste width en height (het
+  // doek uit katten.json, voor alle beelden gelijk), zodat er niets
+  // verspringt als het plaatje binnenkomt of wisselt. data-kat en
+  // data-beeld zeggen welk beeld er staat; Celebrate.speler werkt ze bij.
+  function katImg(b, cl) {
+    return '<img class="' + esc(cl) + '" src="' + esc(b.src) + '"' +
       ' width="' + (Number(b.width) || 0) + '" height="' + (Number(b.height) || 0) + '"' +
-      ' alt="' + esc(alt) + '" decoding="async">';
+      ' alt="" data-kat="' + esc(b.id) + '" data-beeld="' + esc(b.beeld) + '" decoding="async">';
   }
 
   // KatRand: de kat van de ronde op de bovenrand van een kaart, rechts,
-  // gespiegeld zodat hij naar binnen kijkt, met links een Spraak. Zet hem
-  // samen met de kaart in een .kat-kaart. De kat is versiering (alt
-  // leeg): de zin zegt wat er te zeggen is. Alles gaat door esc().
+  // met links een Spraak. Hij kijkt naar binnen: kijkt hij naar rechts,
+  // dan gespiegeld (de regel van Celebrate.spiegel, hier staat hij altijd
+  // rechts). Zet hem samen met de kaart in een .kat-kaart. De kat is
+  // versiering (alt leeg): de zin zegt wat er te zeggen is. Alles gaat
+  // door esc(). Beweging doet Celebrate.speler op het <img>.
   //   beeld   Celebrate.beeld(id, stand)
   //   text    de zin in de spraakbalk
   //   textId  optioneel id op de spraakbalk
@@ -279,26 +283,27 @@
     o = o || {};
     if (!o.beeld) return "";
     return '<div class="' + esc(cls("kat-rand", o.className)) + '"' + attr("id", o.id) + '>' +
-      Spraak({ text: o.text, id: o.textId }) + katImg(o.beeld, "") + '</div>';
+      Spraak({ text: o.text, id: o.textId }) + katImg(o.beeld, cls("kat", o.beeld.kijkt === "rechts" && "gespiegeld")) + '</div>';
   }
 
   // Welkom: bij het openen, een keer per sessie, heel scherm. De naam van de
-  // app, de kat van de eerstvolgende ronde springt omhoog en wiebelt, dan
-  // "Hoi <naam>". Daarna vervaagt alles (ds.css, --welkom-duur). Zonder
-  // naam alleen de kat. De kat is versiering (alt leeg).
+  // app, de kat van de eerstvolgende ronde, dan "Hoi <naam>". De kat
+  // beweegt alleen met zijn eigen clip (Celebrate.speler, in index.html),
+  // er komt geen css-beweging bovenop. Hij staat in het midden en wordt dus
+  // nooit gespiegeld. Daarna vervaagt alles (ds.css, .welkom.vervaagt).
+  // Zonder naam alleen de kat. De kat is versiering (alt leeg).
   //   beeld  Celebrate.welkomBeeld(id)
   //   naam   wie er oefent; gaat door esc()
-  //   stil   true bij reduced motion: het stilstaande beeld, geen beweging
+  //   stil   true bij reduced motion: meteen het eindbeeld
   function Welkom(o) {
     o = o || {};
     const b = o.beeld;
     if (!b) return "";
     const naam = String(o.naam == null ? "" : o.naam).trim();
-    const src = o.stil ? (b.stil || b.src) : b.src;
-    return '<div class="' + cls("welkom", b.beweegtZelf && !o.stil && "beweegt-zelf") + '" role="status">' +
+    const kat = o.stil ? { id: b.id, src: b.stil || b.src, beeld: "goed-eind", width: b.width, height: b.height } : b;
+    return '<div class="welkom" role="status">' +
       '<p class="welkom-merk">Overhoren <span class="beta-chip">Beta</span></p>' +
-      '<div class="welkom-podium"><img class="welkom-kat" src="' + esc(src) + '"' +
-        ' width="' + (Number(b.width) || 0) + '" height="' + (Number(b.height) || 0) + '" alt=""></div>' +
+      '<div class="welkom-podium">' + katImg(kat, "welkom-kat") + '</div>' +
       (naam ? '<p class="welkom-groet">Hoi ' + esc(naam) + '</p>' : "") +
       '</div>';
   }

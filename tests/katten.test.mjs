@@ -5,7 +5,8 @@
 // Mijn katten, geen sync van katten. Eerst zonder browser (catalogus,
 // wisselen, teksten, markup), daarna elk moment in de levende app: wacht,
 // goed, fout, lastige ronde, vlekkeloze ronde, hervatten, sync en reduced
-// motion. Contrast en overloop tellen op elk kattenscherm mee.
+// motion. Contrast en overloop tellen op elk kattenscherm mee. De beelden
+// zelf (clips, eindbeelden, spiegelen, verspringen) test kattenclips.test.mjs.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
@@ -19,6 +20,10 @@ const MIN_CONTRAST = Number(process.env.MIN_CONTRAST || 4.5);
 const lees = f => readFileSync(join(REPO, f), "utf8");
 const ALLE = ["strepen", "tuxedo", "lapjes", "sokjes", "stippen", "rodestreep"];
 const VORIGE = "overhoor:kat:vorige";
+const MAP = "katten/clips/";
+const KAT = JSON.parse(lees(MAP + "katten.json"));
+// de kat kijkt naar binnen: rechts op de rand gespiegeld als hij naar rechts kijkt (rust volgt goed)
+const kijkt = (kat, stand) => (stand === "bijna" ? KAT.katten[kat].bijna : KAT.katten[kat].goed).kijkt;
 // wat de kat zegt (opdracht kat-maatje, variant B)
 const ZIN = {
   wacht: "Ik kijk mee.",
@@ -31,8 +36,8 @@ const ZIN = {
 };
 
 // ---------- zonder browser ----------
-// celebrate.js en ui.js in een eigen context, met nep-opslag en een
-// stuurbare Math.random.
+// celebrate.js en ui.js in een eigen context, met nep-opslag, een
+// stuurbare Math.random en een fetch die de bestanden uit de repo leest.
 function laad({ opslag = {}, kapot = false } = {}) {
   const store = opslag;
   const ctx = vm.createContext({
@@ -40,7 +45,8 @@ function laad({ opslag = {}, kapot = false } = {}) {
       getItem: k => { if (kapot) throw new Error("geen opslag"); return k in store ? store[k] : null; },
       setItem: (k, v) => { if (kapot) throw new Error("geen opslag"); store[k] = String(v); }
     },
-    __r: null
+    __r: null,
+    fetch: async pad => { const buf = readFileSync(join(REPO, pad)); return { ok: true, json: async () => JSON.parse(buf.toString("utf8")), blob: async () => ({ pad }) }; }
   });
   ctx.window = ctx;
   ctx.matchMedia = () => ({ matches: true });   // reduced: geen confetti, geen DOM nodig
@@ -62,18 +68,24 @@ function webpMaat(buf) {
   throw new Error("onbekende WebP-soort " + soort);
 }
 
-test("catalogus: zes katten met naam, karakter en twee standen; afmetingen kloppen met de bestanden", () => {
+test("catalogus: zes katten met naam en karakter, rust en twee standen uit katten.json; afmetingen kloppen met de bestanden", async () => {
   const { C } = laad();
   assert.deepEqual(json(C.KATTEN.map(k => [k.id, k.naam, k.karakter])), [
     ["strepen", "Strepen", "knus"], ["tuxedo", "Tuxedo", "muziek"], ["lapjes", "Lapjes", "leergierig"],
     ["sokjes", "Sokjes", "sportief"], ["stippen", "Stippen", "avontuurlijk"], ["rodestreep", "Rode streep", "ondeugend"]]);
-  for (const k of C.KATTEN) for (const stand of ["goed", "bijna"]) {
+  assert.equal(C.beeld("strepen", "goed"), null, "zonder katten.json hoort er geen beeld te zijn");
+  assert.ok(await C.laadCatalogus(), "katten.json laadt niet");
+  assert.deepEqual(json(C.KATTEN.map(k => k.id)).sort(), Object.keys(KAT.katten).sort(), "katten.json en celebrate.js kennen niet dezelfde katten");
+  for (const k of C.KATTEN) for (const stand of ["rust", "goed", "bijna"]) {
     const b = C.beeld(k.id, stand);
-    assert.equal(b.src, `katten/${k.id}-${stand}.webp`);
+    const bestand = stand === "rust" ? KAT.katten[k.id].rust : KAT.katten[k.id][stand].eind;
+    assert.equal(b.src, MAP + bestand);
+    assert.equal(b.beeld, stand === "rust" ? "rust" : stand + "-eind");
+    assert.equal(b.kijkt, kijkt(k.id, stand));
     const pad = join(REPO, b.src);
     assert.ok(existsSync(pad), b.src + " bestaat niet");
     // vaste width/height op het <img> voorkomen verspringen; die moeten kloppen
-    assert.deepEqual(webpMaat(readFileSync(pad)), [b.width, b.height], b.src + ": afmetingen in celebrate.js kloppen niet");
+    assert.deepEqual(webpMaat(readFileSync(pad)), [b.width, b.height], b.src + ": afmetingen kloppen niet met katten.json");
   }
   assert.equal(C.beeld("strepen", "goed").alt, "Strepen, knus, blij");
   assert.equal(C.beeld("rodestreep", "bijna").alt, "Rode streep, ondeugend, rustig");
@@ -98,9 +110,9 @@ test("oude katten en het verzamelen zijn weg; service worker en allowlist kennen
   assert.doesNotMatch(lees("scripts/deploy.sh"), /maak-catalogus|cats\.js|\bcats\b/);
   const sw = lees("sw.js");
   const schil = [...sw.matchAll(/"\.\/([^"]+)"/g)].map(m => m[1]);
-  for (const id of ALLE) for (const s of ["goed", "bijna"]) assert.ok(schil.includes(`katten/${id}-${s}.webp`), `katten/${id}-${s}.webp niet in SCHIL`);
+  for (const id of ALLE) for (const s of ["rust", "goed", "goed-eind", "bijna", "bijna-eind"]) assert.ok(schil.includes(`${MAP}${id}-${s}.webp`), `${MAP}${id}-${s}.webp niet in SCHIL`);
   const allow = lees(".assetsignore").split("\n").map(r => r.trim());
-  assert.ok(allow.includes("!/katten/") && allow.includes("/katten/*/"), "katten/ niet goed in .assetsignore");
+  assert.ok(allow.includes("!/katten/") && allow.includes("!/katten/clips/"), "katten/clips/ niet goed in .assetsignore");
   assert.ok(!allow.some(r => /cats/.test(r) && !r.startsWith("#")), "oude cats-regels staan nog in .assetsignore");
   // de API van Celebrate heeft niets meer om te verzamelen
   const { C, UI } = laad();
@@ -162,11 +174,11 @@ test("wisselen per ronde: ook na herladen, bij Math.random van bijna 0 of 1, met
 
 test("teksten: de kat zegt per moment de vaste zin in de goede stand, en gedag met de naam", () => {
   const { C } = laad();
-  assert.deepEqual(json(C.zegt("wacht")), { stand: "bijna", tekst: ZIN.wacht });
+  assert.deepEqual(json(C.zegt("wacht")), { stand: "rust", tekst: ZIN.wacht });
   assert.deepEqual(json(C.zegt("goed")), { stand: "goed", tekst: ZIN.goed });
   assert.deepEqual(json(C.zegt("fout")), { stand: "bijna", tekst: ZIN.fout });
   assert.deepEqual(json(C.gedag("gestopt", "Pia")), { stand: "goed", tekst: ZIN.gestopt("Pia") });
-  assert.deepEqual(json(C.zegt("onbekend")), { stand: "bijna", tekst: ZIN.wacht });
+  assert.deepEqual(json(C.zegt("onbekend")), { stand: "rust", tekst: ZIN.wacht });
   assert.deepEqual(json(C.gedag("vlekkeloos", "Pia")), { stand: "goed", tekst: ZIN.vlekkeloos("Pia") });
   assert.deepEqual(json(C.gedag("gewoon", "Tom")), { stand: "goed", tekst: ZIN.gewoon("Tom") });
   assert.deepEqual(json(C.gedag("lastig", "Pia")), { stand: "bijna", tekst: ZIN.lastig("Pia") });
@@ -182,18 +194,21 @@ test("teksten: de kat zegt per moment de vaste zin in de goede stand, en gedag m
   assert.equal(C.celebrate({ woorden: 15 }), undefined, "celebrate geeft nog een lofzin terug");
 });
 
-test("markup: KatRand en Spraak laten geen vrije HTML toe, alles ontsnapt; KatRij, KatBeloning en de beker zijn weg", () => {
+test("markup: KatRand en Spraak laten geen vrije HTML toe, alles ontsnapt; KatRij, KatBeloning en de beker zijn weg", async () => {
   const { C, UI } = laad();
-  const rand = UI.KatRand({ id: "q-kat", beeld: C.beeld("strepen", "bijna"), text: ZIN.wacht, textId: "q-zin" });
+  await C.laadCatalogus();
+  // strepen kijkt in rust naar rechts: rechts op de rand gespiegeld; bijna kijkt hij vooruit
+  const rand = UI.KatRand({ id: "q-kat", beeld: C.beeld("strepen", "rust"), text: ZIN.wacht, textId: "q-zin" });
   assert.equal(rand, '<div class="kat-rand" id="q-kat"><p class="spraak" id="q-zin">Ik kijk mee.</p>' +
-    '<img class="kat" src="katten/strepen-bijna.webp" width="347" height="480" alt="" decoding="async"></div>');
+    '<img class="kat gespiegeld" src="katten/clips/strepen-rust.webp" width="400" height="480" alt="" data-kat="strepen" data-beeld="rust" decoding="async"></div>');
+  assert.match(UI.KatRand({ beeld: C.beeld("strepen", "bijna"), text: "t" }), /<img class="kat" src="katten\/clips\/strepen-bijna-eind\.webp"/);
   assert.equal(UI.Spraak({ text: "a < b" }), '<p class="spraak">a &lt; b</p>');
   assert.doesNotMatch(UI.KatRand({ beeld: C.beeld("strepen", "goed"), html: "<script>alert(1)</script>", text: "ok" }), /script/);
   for (const weg of ["KatRij", "KatBeloning"]) assert.equal(UI[weg], undefined, "UI." + weg + " bestaat nog");
   assert.equal(UI.ICONS.trophy, undefined, "het bekertje staat nog bij de iconen");
   for (const f of ["index.html", "ds.css", "designsystem.html", "ui.js"]) assert.doesNotMatch(lees(f), /trophy|kat-beloning|KatBeloning|kat-rij|KatRij|sum-beloning|sum-perfect/, f);
   // vijandige invoer in elk veld
-  const boos = { naam: '<img src=x onerror=alert(1)>', karakter: '"><script>', src: 'x" onerror="alert(1)', width: "<b>", height: "1 onload=x", alt: '"><svg onload=1>' };
+  const boos = { id: '"><b>', beeld: '" onload="x', naam: '<img src=x onerror=alert(1)>', karakter: '"><script>', src: 'x" onerror="alert(1)', width: "<b>", height: "1 onload=x", alt: '"><svg onload=1>' };
   const kwaad = '"><img src=x onerror=alert(1)>';
   for (const html of [
     UI.KatRand({ beeld: boos, text: kwaad, textId: kwaad, id: kwaad, className: kwaad }),
@@ -203,7 +218,7 @@ test("markup: KatRand en Spraak laten geen vrije HTML toe, alles ontsnapt; KatRi
     // aanhalingsteken dat ontsnapt zou, laat hier een handler of tag achter.
     const kaal = html.replace(/="[^"]*"/g, '=""');
     const namen = [...kaal.matchAll(/\s([\w-]+)=""/g)].map(m => m[1]);
-    assert.deepEqual(namen.filter(n => !["class", "id", "src", "width", "height", "alt", "decoding"].includes(n)), [], "vreemd attribuut: " + html);
+    assert.deepEqual(namen.filter(n => !["class", "id", "src", "width", "height", "alt", "decoding", "data-kat", "data-beeld"].includes(n)), [], "vreemd attribuut: " + html);
     assert.deepEqual([...kaal.matchAll(/<(\w+)/g)].map(m => m[1]).filter(t => !["div", "img", "p"].includes(t)), [], html);
   }
   assert.match(UI.KatRand({ beeld: boos, text: "t" }), /width="0" height="0"/);
@@ -241,7 +256,8 @@ const rondeKat = page => page.evaluate(() => {
   for (const k of Object.keys(localStorage)) if (k.startsWith("overhoor:session:")) { const s = JSON.parse(localStorage.getItem(k)); if (s) return s.kat; }
   return null;
 });
-const katVan = src => /^katten\/(\w+)-(goed|bijna)\.webp$/.exec(src)?.[1];
+// welke kat er op de rand staat (de speler zet data-kat)
+const katOp = (page, sel) => page.locator(sel).getAttribute("data-kat");
 async function frans(page) {
   await page.locator(".lesson", { hasText: "Arrêt Apprendre" }).first().click(); await wachtOpScherm(page, "scr-home");
   await page.click("#btn-start"); await wachtOpScherm(page, "scr-quiz");
@@ -288,19 +304,22 @@ async function meetRand(page, rand, kaart) {
     }
     for (const e of k.querySelectorAll("button, input, .choice")) if (e.checkVisibility() && raakt(e.getBoundingClientRect())) onder.push(e.id || e.className);
     const bovenop = document.elementFromPoint(ri.left + ri.width / 2, ri.bottom - 8);
-    return { src: img.getAttribute("src"), alt: img.getAttribute("alt"), hoogte: Math.round(ri.height),
+    return { kat: img.dataset.kat, beeld: img.dataset.beeld, src: img.getAttribute("src"), alt: img.getAttribute("alt"), hoogte: Math.round(ri.height),
       oor: Math.round((ri.bottom - rk.top) * 10) / 10, transform: getComputedStyle(img).transform, onder,
       rechts: ri.left > rk.left + rk.width / 2 && ri.right <= rk.right, zinLinks: rz.right <= ri.left,
       katBoven: bovenop === img, tekst: zin.textContent.trim(),
       kaartTop: Math.round(rk.top + scrollY), randTop: r.getBoundingClientRect().top, randOnder: r.getBoundingClientRect().bottom };
   }, [rand, kaart]);
 }
+// stand: rust, of goed of bijna (dan de clip of al het eindbeeld)
 function keurRand(r, kat, stand, tekst, naam) {
-  assert.equal(r.src, `katten/${kat}-${stand}.webp`, naam + ": niet de kat van de ronde in " + stand);
+  assert.equal(r.kat, kat, naam + ": niet de kat van de ronde");
+  assert.ok(stand === "rust" ? r.beeld === "rust" : [stand, stand + "-eind"].includes(r.beeld), naam + `: ${r.beeld} in plaats van ${stand}`);
+  assert.ok(stand === "rust" ? r.src === `${MAP}${kat}-rust.webp` : (/^blob:/.test(r.src) || r.src === `${MAP}${kat}-${stand}-eind.webp`), naam + ": beeld " + r.src);
   assert.equal(r.alt, "", naam + ": de kat op de rand is versiering");
   assert.equal(r.hoogte, 104, naam);
   assert.ok(Math.abs(r.oor - 30) <= 1, naam + ": de kat zit " + r.oor + "px over de kaart, verwacht 30");
-  assert.equal(r.transform, "matrix(-1, 0, 0, 1, 0, 0)", naam + ": de kat rechts hoort gespiegeld te zijn");
+  assert.equal(r.transform, kijkt(kat, stand) === "rechts" ? "matrix(-1, 0, 0, 1, 0, 0)" : "none", naam + ": de kat rechts kijkt niet naar binnen");
   assert.ok(r.rechts, naam + ": de kat zit niet rechts op de kaart");
   assert.ok(r.zinLinks, naam + ": de spraakbalk staat niet links van de kat");
   assert.deepEqual(r.onder, [], naam + ": de kat valt over tekst of bediening van de kaart");
@@ -325,7 +344,7 @@ for (const thema of THEMAS) {
 
     // voor het antwoord: de kat kijkt al mee
     let r = await meetRand(page, "#q-kat", "#scr-quiz .q-card");
-    keurRand(r, kat, "bijna", ZIN.wacht, "wacht");
+    keurRand(r, kat, "rust", ZIN.wacht, "wacht");
     const kaartTop = r.kaartTop;
     await keur(page, "wacht", problemen, fouten);
 
@@ -355,7 +374,7 @@ for (const thema of THEMAS) {
     // nog een goed antwoord: nog steeds dezelfde kat
     await page.click("#btn-next"); await page.locator("#btn-check").waitFor();
     await beantwoord(page, true);
-    assert.equal(katVan(await page.locator("#q-kat .kat").getAttribute("src")), kat, "binnen de ronde een andere kat");
+    assert.equal(await katOp(page, "#q-kat .kat"), kat, "binnen de ronde een andere kat");
 
     // lastige ronde: nog een fout (2 van 3), dan stoppen
     await page.click("#btn-next"); await page.locator("#btn-check").waitFor();
@@ -429,7 +448,7 @@ for (const thema of THEMAS) {
     // volgende ronde: een andere kat dan de vlekkeloze
     await page.click("#btn-sum-home"); await wachtOpScherm(page, "scr-home");
     await page.click("#btn-start"); await wachtOpScherm(page, "scr-quiz");
-    const kat3 = katVan(await page.locator("#q-kat .kat").getAttribute("src"));
+    const kat3 = await katOp(page, "#q-kat .kat");
     assert.notEqual(kat3, kat2, "na de vlekkeloze ronde dezelfde kat");
     assert.equal(kat3, await vorige(page));
     await geenKattenOpslag(page);
@@ -445,7 +464,7 @@ test("wisselen in de app: tien rondes achter elkaar nooit dezelfde kat, ook na h
     if (i === 5) { await page.reload(); await wachtOpScherm(page, "scr-lessons"); }
     await frans(page);
     await beantwoord(page, i % 2 === 0);
-    const kat = katVan(await page.locator("#q-kat .kat").getAttribute("src"));
+    const kat = await katOp(page, "#q-kat .kat");
     assert.equal(kat, await rondeKat(page));
     if (katten.length) assert.notEqual(kat, katten[katten.length - 1], `ronde ${i + 1}: dezelfde kat als ronde ${i}`);
     katten.push(kat);
@@ -462,7 +481,7 @@ test("hervatte ronde: na herladen dezelfde kat; een ronde van voor de katten kri
   await frans(page);
   await beantwoord(page, true);
   await beeldGeladen(page, "#q-kat .kat");
-  const kat = katVan(await page.locator("#q-kat .kat").getAttribute("src"));
+  const kat = await katOp(page, "#q-kat .kat");
   await page.click("#btn-next"); await page.locator("#btn-check").waitFor();
   await page.reload(); await wachtOpScherm(page, "scr-lessons");
   await page.locator(".lesson", { hasText: "Arrêt Apprendre" }).first().click(); await wachtOpScherm(page, "scr-home");
@@ -470,7 +489,8 @@ test("hervatte ronde: na herladen dezelfde kat; een ronde van voor de katten kri
   await page.click("#btn-resume"); await wachtOpScherm(page, "scr-quiz");
   await beantwoord(page, false);
   await beeldGeladen(page, "#q-kat .kat");
-  assert.equal(await page.locator("#q-kat .kat").getAttribute("src"), `katten/${kat}-bijna.webp`, "hervatte ronde heeft een andere kat");
+  assert.equal(await katOp(page, "#q-kat .kat"), kat, "hervatte ronde heeft een andere kat");
+  assert.match(await page.locator("#q-kat .kat").getAttribute("data-beeld"), /^bijna/);
   assert.equal(await vorige(page), kat, "hervatten koos een nieuwe kat");
 
   // een opgeslagen ronde zonder kat (of met een onbekende): krijgt er een die niet de vorige is
@@ -488,14 +508,14 @@ test("hervatte ronde: na herladen dezelfde kat; een ronde van voor de katten kri
     await page.click("#btn-resume"); await wachtOpScherm(page, "scr-quiz");
     await beantwoord(page, true);
     await beeldGeladen(page, "#q-kat .kat");
-    const nieuw = katVan(await page.locator("#q-kat .kat").getAttribute("src"));
+    const nieuw = await katOp(page, "#q-kat .kat");
     assert.ok(ALLE.includes(nieuw), "geen kat bij een oude ronde");
     assert.notEqual(nieuw, voor);
     assert.equal(await rondeKat(page), nieuw, "de nieuwe kat is niet in de ronde bewaard");
     await page.click("#btn-next"); await page.locator("#btn-check").waitFor();
   }
   // herladen terwijl een kattenbeeld nog laadt, breekt dat verzoek af; dat is de test, geen fout
-  const afgebroken = f => /katten\/\w+-(goed|bijna)\.webp \(net::ERR_ABORTED\)/.test(f);
+  const afgebroken = f => /katten\/clips\/[\w-]+\.(webp|json) \(net::ERR_ABORTED\)/.test(f);
   assert.deepEqual(fouten.filter(f => !/HTTP 404: .*\/x$/.test(f) && !afgebroken(f)), []);
   await context.close();
 });
@@ -529,7 +549,7 @@ test("hervatte ronde na een andere ronde: de volgende nieuwe ronde herhaalt de h
     await page.click("#btn-sum-lessons"); await wachtOpScherm(page, "scr-lessons");
   }
   // herladen terwijl een kattenbeeld nog laadt, breekt dat verzoek af; dat is de test, geen fout
-  assert.deepEqual(fouten.filter(f => !/katten\/\w+-(goed|bijna)\.webp \(net::ERR_ABORTED\)/.test(f)), []);
+  assert.deepEqual(fouten.filter(f => !/katten\/clips\/[\w-]+\.(webp|json) \(net::ERR_ABORTED\)/.test(f)), []);
   await context.close();
 });
 
@@ -562,19 +582,15 @@ test("reduced motion: geen confetti en de kat komt zonder beweging", async () =>
   await context.close();
 });
 
-test("zonder reduced motion: korte entree, onder 400 ms, geen lus, alleen transform en opacity", async () => {
-  const { context, page } = await open("light");
+test("zonder reduced motion: geen css-beweging op de kat, alleen zijn clip", async () => {
+  const { context, page, fouten } = await open("light");
   await frans(page);
+  assert.equal(await page.locator("#q-kat .kat").evaluate(e => e.getAnimations().length), 0, "css-beweging op de kat in rust");
   await beantwoord(page, true);
-  const a = await page.locator("#q-kat .kat").evaluate(e => e.getAnimations().map(x => {
-    const t = x.effect.getTiming();
-    const props = [...new Set(x.effect.getKeyframes().flatMap(k => Object.keys(k)).filter(k => !["offset", "easing", "composite", "computedOffset"].includes(k)))];
-    return { duur: t.duration, keer: t.iterations, props };
-  }));
-  assert.equal(a.length, 1);
-  assert.ok(a[0].duur < 400, "entree duurt " + a[0].duur + " ms");
-  assert.equal(a[0].keer, 1);
-  for (const p of a[0].props) assert.ok(["opacity", "translate", "scale", "rotate", "transform"].includes(p), "animeert " + p);
+  assert.equal(await page.locator("#q-kat .kat").evaluate(e => e.getAnimations().length), 0, "css-beweging bovenop de clip");
+  assert.match(await page.locator("#q-kat .kat").getAttribute("data-beeld"), /^goed/);
+  assert.doesNotMatch(lees("ds.css"), /kat-in|welkom-hop|welkom-wiebel/, "de oude entree, sprong of wiebel staat nog in ds.css");
+  assert.deepEqual(fouten, []);
   await context.close();
 });
 
