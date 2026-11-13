@@ -37,6 +37,9 @@ const MIME = {
 // stand.gestempeld = false is GitHub Pages: ?v= en VERSIE blijven zoals ze
 // in de repo staan, ook als de inhoud verandert. stand.swBron = "oud"
 // serveert de sw.js van main van voor deze fix (tests/fixtures).
+// stand.traag: { "/pad/begin": ms } wacht zo lang met elk pad dat zo begint.
+// stand.faalPagina: de hoeveelste verzoeken om de pagina een 500 geven.
+// /katten/ en /fonts/ krijgen een kop X-Testversie met de versie van de app.
 const SW_OUD = readFileSync(join(REPO, "tests", "fixtures", "sw-oud-main.js"), "utf8");
 function startVersieServer() {
   const stand = { app: "A", sw: "A", gestempeld: true, swBron: "nieuw" };
@@ -49,7 +52,12 @@ function startVersieServer() {
     let body = readFileSync(bestand);
     const naam = bestand.slice(REPO.length);
     const v = stand.app;
+    for (const [begin, ms] of Object.entries(stand.traag || {})) if (naam.startsWith(begin)) await new Promise(r => setTimeout(r, ms));
+    const koppen = { "Content-Type": MIME[extname(bestand)] || "application/octet-stream", "Cache-Control": "no-store" };
+    if (/^\/(katten|fonts)\//.test(naam)) koppen["X-Testversie"] = v;
     if (naam === "/index.html") {
+      stand.paginaTeller = (stand.paginaTeller || 0) + 1;
+      if ((stand.faalPagina || []).includes(stand.paginaTeller)) { res.writeHead(500, { "Cache-Control": "no-store" }); return res.end("kapot"); }
       // stand.trageHtml: zo veel ms wachten met de pagina (een traag netwerk)
       if (stand.trageHtml) await new Promise(r => setTimeout(r, stand.trageHtml));
       body = String(body);
@@ -65,7 +73,7 @@ function startVersieServer() {
       body = stand.swBron === "oud" ? SW_OUD : String(body);
       if (stand.gestempeld) body = body.replace(/^const VERSIE = ".*";/m, "const VERSIE = \"" + STEMPEL[stand.sw] + "\";");
     }
-    res.writeHead(200, { "Content-Type": MIME[extname(bestand)] || "application/octet-stream", "Cache-Control": "no-store" });
+    res.writeHead(200, koppen);
     res.end(body);
   });
   return new Promise(ok => server.listen(0, "localhost", () => {
@@ -79,7 +87,7 @@ let browser, server;
 before(async () => { browser = await startBrowser(); server = await startVersieServer(); });
 after(async () => { await browser?.close(); await server?.stop(); });
 // Zet de server in een stand; wat niet genoemd wordt, wordt de standaard.
-const zet = stand => Object.assign(server.stand, { app: "A", sw: "A", gestempeld: true, swBron: "nieuw", trageHtml: 0 }, stand);
+const zet = stand => Object.assign(server.stand, { app: "A", sw: "A", gestempeld: true, swBron: "nieuw", trageHtml: 0, traag: {}, faalPagina: [], paginaTeller: 0 }, stand);
 
 async function nieuweContext() {
   const context = await browser.newContext({ viewport: { width: 360, height: 780 }, serviceWorkers: "allow", locale: "nl-NL" });
@@ -446,4 +454,156 @@ test("sw A, server al B: de eerste keer openen is meteen B, en de cache van A ho
       `open ${i}: de cache van A bevat een pagina van een andere versie`);
   }
   await context.close();
+});
+
+// ---------- ronde 2 van de keuring ----------
+
+test("ongestempeld: een bestand dat blijft hangen houdt de app niet wit, het komt na de time-out uit de cache", async () => {
+  zet({ app: "A", gestempeld: false });
+  const { context, page, fouten } = await nieuweContext();
+  await installeer(page);
+  await open(page);
+  assert.equal(await heel(page, fouten, "A"), "A");
+
+  // slechte wifi: de pagina komt, ui.js blijft 10 s hangen
+  zet({ app: "A", gestempeld: false, traag: { "/ui.js": 10000 } });
+  const t0 = Date.now();
+  await page.goto(server.url + "/", { waitUntil: "commit" });
+  // de lijsten staan er pas als ui.js en de rest geladen zijn
+  await page.locator("#lessons .lesson").first().waitFor({ state: "visible", timeout: 6000 }).catch(() => {});
+  const duur = Date.now() - t0;
+  assert.ok(duur < 6000, "de app bleef " + duur + " ms wit door een hangende ui.js");
+  assert.equal(await heel(page, fouten, "ui.js hangt"), "A");
+  zet({ app: "A", gestempeld: false });
+  await context.close();
+});
+
+test("ongestempeld: katten en fonts komen meteen uit de cache en worden op de achtergrond ververst", async () => {
+  zet({ app: "A", gestempeld: false });
+  const { context, page, fouten } = await nieuweContext();
+  await installeer(page);
+  const haal = u => page.evaluate(async u => {
+    const t = performance.now(); const r = await fetch(u); await r.arrayBuffer();
+    return { ms: performance.now() - t, versie: r.headers.get("X-Testversie"), ok: r.ok };
+  }, u);
+  const bestanden = ["katten/strepen-goed.webp", "fonts/inter-latin-wght-normal.woff2"];
+  // het net is traag en heeft een nieuwe versie (B)
+  zet({ app: "B", gestempeld: false, traag: { "/katten/": 2000, "/fonts/": 2000 } });
+  for (const u of bestanden) {
+    const r = await haal(u);
+    assert.ok(r.ok && r.ms < 1000, u + ": niet meteen uit de cache (" + Math.round(r.ms) + " ms)");
+    assert.equal(r.versie, "A", u + ": niet de bewaarde versie");
+  }
+  // na het verversen op de achtergrond staat B in de eigen cache
+  await page.waitForTimeout(2600);
+  for (const u of bestanden) {
+    const r = await haal(u);
+    assert.ok(r.ms < 1000, u + ": tweede keer niet meteen (" + Math.round(r.ms) + " ms)");
+    assert.equal(r.versie, "B", u + ": niet op de achtergrond ververst");
+  }
+  assert.deepEqual(fouten, []);
+  zet({ app: "A", gestempeld: false });
+  await context.close();
+});
+
+test("update terwijl het welkom openstaat: pas herladen als het welkom weg is, en dan een keer", async () => {
+  zet({ app: "A", sw: "A" });
+  const { context, page, fouten, laden } = await nieuweContext();
+  await installeer(page);
+  // een welkom over het lessenscherm (zoals UI.Welkom, klasse .welkom)
+  await page.evaluate(() => document.body.insertAdjacentHTML("beforeend", '<div class="welkom"></div>'));
+  const voor = laden.length;
+  server.stand.app = "B"; server.stand.sw = "B";
+  await zoekUpdate(page);
+  await wachtOpSw(page, STEMPEL.B);
+  await page.waitForTimeout(1000);
+  assert.equal(laden.length - voor, 0, "herladen terwijl het welkom openstaat");
+  await page.evaluate(() => document.querySelector(".welkom").remove());
+  await page.waitForFunction(() => document.documentElement.dataset.testversie === "B", null, { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(1000);
+  assert.equal(laden.length - voor, 1, "niet precies een keer herladen na het welkom: " + laden.slice(voor).join(", "));
+  assert.equal(await heel(page, fouten, "na het welkom"), "B");
+  await context.close();
+});
+
+test("ongestempeld: de bewaarde pagina krijgt zijn bewaarde bestanden, ook na een herstart van de service worker", async () => {
+  zet({ app: "A", gestempeld: false });
+  const { context, page, fouten } = await nieuweContext();
+  await installeer(page);
+  await open(page);
+  // B staat klaar, de pagina is te traag: de bewaarde A-pagina
+  zet({ app: "B", gestempeld: false, trageHtml: 4000 });
+  await open(page);
+  assert.equal(await heel(page, fouten, "trage pagina"), "A");
+  zet({ app: "B", gestempeld: false });
+  // de service worker stopt tussendoor (in Chromium na te bootsen); zijn
+  // geheugen is dan leeg
+  if (browser.browserType().name() === "chromium") {
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("ServiceWorker.enable");
+    await cdp.send("ServiceWorker.stopAllWorkers");
+    await page.waitForTimeout(300);
+  }
+  // de pagina vraagt nog een keer zijn eigen ui.js en ds.css
+  const r = await page.evaluate(async () => {
+    const js = document.querySelector('script[src^="ui.js"]').src, css = document.querySelector('link[href^="ds.css"]').href;
+    return { js: await (await fetch(js)).text(), css: await (await fetch(css)).text() };
+  });
+  assert.ok(r.js.includes("testVersieA") && !r.js.includes("testVersieB"), "de bewaarde pagina krijgt een andere ui.js");
+  assert.ok(r.css.includes('--testversie: "A"'), "de bewaarde pagina krijgt een andere ds.css");
+  await context.close();
+});
+
+test("installatie: lukt de pagina niet, dan installeert de service worker niet half, en de volgende keer wel heel", async () => {
+  // verzoek 1 is het openen, verzoek 2 de installatie: die faalt
+  zet({ app: "A", sw: "A", faalPagina: [2] });
+  const { context, page, fouten } = await nieuweContext();
+  await page.goto(server.url + "/");
+  await wachtOpScherm(page, "scr-lessons");
+  await page.waitForTimeout(1500);
+  // de volgende keer openen, online
+  await page.goto(server.url + "/");
+  await wachtOpScherm(page, "scr-lessons");
+  await wachtTot(page, async () => {
+    if (!navigator.serviceWorker.controller) return false;
+    const n = await caches.keys(); if (n.length !== 1) return false;
+    return !!(await (await caches.open(n[0])).match("./"));
+  }).catch(() => {});
+  await context.setOffline(true);
+  const res = await page.goto(server.url + "/").catch(e => e);
+  assert.ok(!(res instanceof Error) && res.ok(), "offline geen app na een mislukte installatie: " + (res?.message || res?.status()));
+  assert.equal(await heel(page, fouten.filter(f => !f.includes("HTTP 500")), "offline"), "A");
+  await context.close();
+});
+
+test("een vreemde cache (van een andere versie of een oude service worker) wordt nooit gebruikt", async () => {
+  zet({ app: "A", sw: "A" });
+  const { context, page } = await nieuweContext();
+  await installeer(page);
+  // een cache die er niet hoort: een oude service worker die hem na het
+  // opruimen opnieuw aanmaakte. Met een bestand dat de eigen cache niet heeft.
+  await page.evaluate(async () => {
+    const c = await caches.open("overhoren-vreemd");
+    await c.put(new URL("icons/apple-touch-icon.png", location.href).href, new Response("vreemd", { headers: { "Content-Type": "text/plain" } }));
+  });
+  await context.setOffline(true);
+  const r = await page.evaluate(async () => {
+    try { return await (await fetch("icons/apple-touch-icon.png")).text(); } catch (e) { return "netwerkfout"; }
+  });
+  assert.notEqual(r, "vreemd", "de service worker gaf een bestand uit een vreemde cache");
+  await context.close();
+});
+
+test("de ongestempelde waarde in sw.js is gelijk aan VERSIE in sw.js en de ?v= in index.html en designsystem.html", async () => {
+  const sw = readFileSync(join(REPO, "sw.js"), "utf8");
+  const regel = /^const NIET_GESTEMPELD = \[(.*)\];/m.exec(sw);
+  assert.ok(regel, "geen NIET_GESTEMPELD in sw.js");
+  const waarden = regel[1].split(",").map(d => d.trim().split("+").map(x => JSON.parse(x.trim())).join(""));
+  const versie = /^const VERSIE = "(.*)";/m.exec(sw)[1];
+  assert.ok(waarden.includes(versie), "VERSIE " + versie + " staat niet in NIET_GESTEMPELD " + waarden.join(", "));
+  const html = readFileSync(join(REPO, "index.html"), "utf8");
+  const stempels = new Set([...html.matchAll(/\?v=([A-Za-z0-9]+)/g)].map(m => m[1]));
+  assert.deepEqual([...stempels], [versie], "index.html heeft een andere ?v= dan VERSIE");
+  const ds = readFileSync(join(REPO, "designsystem.html"), "utf8");
+  for (const m of ds.matchAll(/\?v=([A-Za-z0-9]+)/g)) assert.ok(waarden.includes(m[1]), "designsystem.html heeft ?v=" + m[1] + ", niet ongestempeld");
 });

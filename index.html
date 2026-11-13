@@ -1846,6 +1846,7 @@ function bind(){
 //   - niet bij de allereerste installatie (er was nog geen controller)
 //   - niet midden in een ronde: alleen op het lessenscherm, anders zodra
 //     het lessenscherm weer verschijnt, of de volgende keer openen
+//   - niet terwijl het welkom (.welkom) erover ligt: pas als het weg is
 //   - hooguit een keer per versie van de pagina (SW_HERLADEN in
 //     sessionStorage), zodat het nooit een lus wordt; zonder opslag niet
 // Ongestempeld (GitHub Pages) zijn de pagina en elke service worker
@@ -1855,8 +1856,21 @@ function bind(){
 // zonder iets op te lossen.
 const SW_HERLADEN = "overhoor:sw:herladen";
 let swVerversen = false;
+let welkomWacht = null;
 function verversNaUpdate(){
   if(!swVerversen || $("scr-lessons").hidden) return;
+  // het welkom ligt over het lessenscherm: pas herladen als het weg is
+  if(document.querySelector(".welkom")){
+    if(!welkomWacht){
+      welkomWacht = new MutationObserver(() => {
+        if(document.querySelector(".welkom")) return;
+        welkomWacht.disconnect(); welkomWacht = null;
+        verversNaUpdate();
+      });
+      welkomWacht.observe(document.body, { childList: true, subtree: true });
+    }
+    return;
+  }
   swVerversen = false;
   try{
     if(sessionStorage.getItem(SW_HERLADEN) === UI.VERSIE) return;

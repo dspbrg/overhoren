@@ -37,9 +37,14 @@
 //   - online komt alles vers van het net (cache: "no-cache", zodat ook de
 //     http-cache van de browser niets ouds geeft), dus alles uit dezelfde
 //     versie; elk goed antwoord gaat in de eigen cache
-//   - offline, of een navigatie die te traag is (NAV_WACHT), uit de cache
-//   - kwam de pagina uit de cache, dan ook zijn bestanden uit de cache
-//     (uitDeCache), anders een verse ui.js bij een bewaarde pagina
+//   - offline, of te traag (NAV_WACHT voor de pagina, BESTAND_WACHT voor
+//     een bestand), uit de cache; een hangend bestand houdt de app niet wit
+//   - kwam de pagina uit de cache, dan krijgt elke ?v= in die pagina er
+//     &bron=cache bij (merk). Zo'n bestand komt dan ook uit de cache, en
+//     dat staat in de url zelf: het werkt ook na een herstart van de
+//     service worker, en zonder clientId
+//   - katten/ en fonts/ veranderen zelden en het welkom wacht er maar kort
+//     op: die meteen uit de cache, en op de achtergrond verversen
 //   - index.html herlaadt hier nooit na een update: de pagina is online al
 //     vers, en er is geen versie om mee te vergelijken
 //
@@ -84,6 +89,9 @@ const SCHIL = [
   "./katten/rodestreep-goed.webp", "./katten/rodestreep-bijna.webp"
 ];
 
+// Zonder deze geen app: de pagina en de code (zie install).
+const KERN = ["./", "./ds.css", "./ui.js", "./celebrate.js", "./engine.js", "./lists.js"];
+
 // Alleen gewone, directe antwoorden bewaren. De kopie wordt meteen
 // gemaakt, voordat de browser het origineel kan uitlezen.
 function bewaar(sleutel, res) {
@@ -112,6 +120,10 @@ function uitCache(sleutel) {
 
 // Zo lang wacht een navigatie op het netwerk; daarna de bewaarde pagina.
 const NAV_WACHT = 3000;
+// Zo lang wacht een bestand op het netwerk (ongestempeld); daarna de cache.
+const BESTAND_WACHT = 2500;
+// Ongestempeld: de pagina kwam uit de cache, zijn bestanden dus ook.
+const MERK = "bron";
 
 // Het netwerk, maar niet langer dan ms, tot en met de inhoud als lees
 // waar is. Te traag geeft een fout. Geeft { res, tekst }. "no-cache":
@@ -125,7 +137,17 @@ function netMetTijd(sleutel, ms, lees) {
 
 self.addEventListener("install", e => {
   // faalt er een bestand, dan niet de hele installatie laten klappen
-  e.waitUntil(Promise.allSettled(SCHIL.map(u => fetch(u).then(res => bewaar(u, res)))).then(() => self.skipWaiting()));
+  // maar zonder de pagina en de code is de app offline niets: lukt een van
+  // die (KERN) niet, dan faalt de installatie en probeert de browser het
+  // de volgende keer opnieuw. Vers ophalen, niet uit de http-cache.
+  const haal = u => fetch(u, { cache: "no-cache" }).then(res => {
+    if (!res.ok || res.redirected) throw new Error(u + " " + res.status);
+    return bewaar(u, res);
+  });
+  e.waitUntil(Promise.all([
+    Promise.all(SCHIL.filter(u => KERN.includes(u)).map(haal)),
+    Promise.allSettled(SCHIL.filter(u => !KERN.includes(u)).map(haal))
+  ]).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", e => {
@@ -141,11 +163,6 @@ self.addEventListener("activate", e => {
 self.addEventListener("message", e => {
   if (e.data === "versie" && e.ports && e.ports[0]) e.ports[0].postMessage(VERSIE);
 });
-
-// Ongestempeld: de pagina's (clients) die uit de cache kwamen. Hun
-// bestanden komen dan ook uit de cache, zodat ze bij elkaar passen.
-// Gaat verloren als de service worker stopt; dan weer gewoon van het net.
-const uitDeCache = new Set();
 
 self.addEventListener("fetch", e => {
   const req = e.request;
@@ -196,32 +213,58 @@ self.addEventListener("fetch", e => {
 
 // Ongestempeld: alles network-first (zie de uitleg bovenaan).
 function ongestempeld(e, req, url) {
+  const sleutel = url.origin + url.pathname;
   if (req.mode === "navigate") {
     const app = isApp(url);
-    const sleutel = app ? "./" : url.origin + url.pathname;
-    const bewaard = () => uitCache(sleutel).then(hit => {
-      if (hit && e.resultingClientId) uitDeCache.add(e.resultingClientId);
-      return hit;
-    });
+    const sl = app ? "./" : sleutel;
+    // de bewaarde pagina, met het merk op zijn bestanden
+    const bewaard = () => uitCache(sl).then(hit => hit && app ? gemerkt(hit) : hit);
     e.respondWith(
       netMetTijd(app ? "./" : req.url, NAV_WACHT, false)
         .then(({ res }) => {
           if (!res.ok) return bewaard().then(hit => hit || res);
-          bewaar(sleutel, res);
+          bewaar(sl, res);
           return schoon(res);
         })
         .catch(() => bewaard().then(hit => hit || Response.error()))
     );
     return;
   }
-  const sleutel = url.origin + url.pathname;
-  if (uitDeCache.has(e.clientId)) {
+  // een bestand van een bewaarde pagina: uit de cache
+  if (url.searchParams.get(MERK) === "cache") {
     e.respondWith(uitCache(sleutel).then(hit => hit || fetch(req)));
     return;
   }
+  // katten en fonts: meteen uit de cache, op de achtergrond verversen
+  if (zelden(url)) {
+    const vers = fetch(req, { cache: "no-cache" }).then(res => bewaar(sleutel, res).then(() => res));
+    e.respondWith(uitCache(sleutel).then(hit => {
+      if (!hit) return vers;
+      e.waitUntil(vers.catch(() => {}));
+      return hit;
+    }));
+    return;
+  }
   e.respondWith(
-    fetch(req, { cache: "no-cache" })
-      .then(res => { bewaar(sleutel, res); return res; })
+    netMetTijd(req, BESTAND_WACHT, false)
+      .then(({ res }) => { bewaar(sleutel, res); return res; })
       .catch(() => uitCache(sleutel).then(hit => hit || Response.error()))
   );
+}
+
+// Bestanden die zelden veranderen: de katten en de fonts.
+function zelden(url) {
+  const basis = new URL(self.registration.scope).pathname;
+  return url.pathname.startsWith(basis + "katten/") || url.pathname.startsWith(basis + "fonts/");
+}
+
+// De bewaarde pagina, met &bron=cache achter elke ?v=, zodat zijn
+// bestanden ook uit de cache komen (zie de uitleg bovenaan).
+function gemerkt(res) {
+  return res.text().then(html => {
+    const koppen = new Headers(res.headers);
+    koppen.delete("Content-Length");
+    return new Response(html.replace(/\?v=([A-Za-z0-9]+)/g, "?v=$1&" + MERK + "=cache"),
+      { headers: koppen, status: res.status, statusText: res.statusText });
+  });
 }
