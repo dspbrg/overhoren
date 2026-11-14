@@ -1,6 +1,6 @@
 // Het Beta-label naast Overhoren in de kop van het startscherm. Een klein
 // chipje; tikken, Enter of Spatie opent een regel eronder, nog een keer of
-// Escape sluit hem. Onder de uitleg een kleine regel met de versie.
+// Escape sluit hem. De versie staat in het menu (menu.test.mjs).
 // aria-expanded volgt mee, het tikdoel is minstens 44 px
 // en de tekst haalt 4,5:1, open en dicht, licht en donker, 360 en 1280 px.
 import { test, before, after } from "node:test";
@@ -38,12 +38,8 @@ test("Beta: een knop in de kop naast Overhoren, dicht bij de start", async () =>
   assert.equal((await b.textContent()).trim(), "Beta");
   assert.equal(await b.getAttribute("type"), "button");
   assert.deepEqual(await staat(page), { expanded: "false", zichtbaar: false, tekst: UITLEG, focus: false });
-  // onder de uitleg een kleine regel met de versie: de eerste zeven tekens van de ?v= van ui.js
-  const versie = await page.evaluate(() => ({
-    regel: document.querySelector("#beta-uitleg > .beta-versie")?.textContent.trim(),
-    v: new URL(document.querySelector('script[src^="ui.js"]').src).searchParams.get("v")
-  }));
-  assert.equal(versie.regel, "Versie " + versie.v.slice(0, 7));
+  // de versie staat niet meer onder de uitleg maar in het menu
+  assert.equal(await page.locator("#beta-uitleg .beta-versie").count(), 0, "nog een versieregel onder de Beta-uitleg");
   // naast de titel, op dezelfde regel
   const r = await page.evaluate(() => {
     const h = document.querySelector("#scr-lessons .brand h1"), b = h.querySelector(".beta");

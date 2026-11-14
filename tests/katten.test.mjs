@@ -14,7 +14,7 @@ import { join } from "node:path";
 import vm from "node:vm";
 import { REPO, startBrowser, startServer, schermNetwerkAf, volgFouten, THEMAS } from "./lib/omgeving.mjs";
 import { contrastMeting, overloopMeting, rondAnimatiesAf } from "./lib/meten.mjs";
-import { beantwoord, wachtOpScherm } from "./lib/schermen.mjs";
+import { beantwoord, wachtOpScherm, uitMenu } from "./lib/schermen.mjs";
 
 const MIN_CONTRAST = Number(process.env.MIN_CONTRAST || 4.5);
 const lees = f => readFileSync(join(REPO, f), "utf8");
@@ -726,7 +726,7 @@ test("beveiliging: getallen uit opslag komen nooit rauw in Voortgang en Rapport"
   await page.click("#btn-progress"); await wachtOpScherm(page, "scr-progress");
   assert.equal(await page.locator("#progress-body img").count(), 0, "HTML uit opslag in Voortgang");
   await page.click("#btn-progress-back"); await page.click("#btn-home-back");
-  await page.click("#btn-report"); await wachtOpScherm(page, "scr-report");
+  await uitMenu(page, "#btn-report"); await wachtOpScherm(page, "scr-report");
   assert.equal(await page.locator("#report-body img").count(), 0, "HTML uit opslag in Rapport");
   await page.waitForTimeout(200);
   assert.equal(await page.evaluate(() => window.__xss), undefined);

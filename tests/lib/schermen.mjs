@@ -5,6 +5,22 @@ export async function wachtOpScherm(page, id) {
   await page.locator("#" + id).waitFor({ state: "visible", timeout: 5000 });
 }
 
+// Rapport, Over Overhoren en het thema zitten in het menu rechtsboven op
+// het startscherm. openMenu opent het als het dicht is; uitMenu kiest een
+// item (#btn-report, #btn-info); kiesThema tikt Systeem, Licht of Donker.
+export async function openMenu(page) {
+  if (await page.locator("#btn-menu").getAttribute("aria-expanded") !== "true") await page.click("#btn-menu");
+  await page.locator("#menu").waitFor({ state: "visible", timeout: 5000 });
+}
+export async function uitMenu(page, item) {
+  await openMenu(page);
+  await page.click(item);
+}
+export async function kiesThema(page, naam) {
+  await openMenu(page);
+  await page.locator("#theme-seg button", { hasText: naam }).click();
+}
+
 // Beantwoordt de huidige vraag. goed=true: met het officiele antwoord uit
 // window.WORDLISTS. goed=false: met onzin.
 export async function beantwoord(page, goed) {
@@ -40,11 +56,11 @@ export async function loopSchermen(page, basis, bijScherm) {
   await wachtOpScherm(page, "scr-lessons");
   await bijScherm("lessenoverzicht");
 
-  await page.click("#btn-info"); await wachtOpScherm(page, "scr-info");
-  await bijScherm("hoe werkt het");
+  await uitMenu(page, "#btn-info"); await wachtOpScherm(page, "scr-info");
+  await bijScherm("over overhoren");
   await page.click("#btn-info-back"); await wachtOpScherm(page, "scr-lessons");
 
-  await page.click("#btn-report"); await wachtOpScherm(page, "scr-report");
+  await uitMenu(page, "#btn-report"); await wachtOpScherm(page, "scr-report");
   await bijScherm("rapport (leeg)");
   await page.click("#btn-report-back"); await wachtOpScherm(page, "scr-lessons");
 
@@ -118,7 +134,7 @@ export async function loopSchermen(page, basis, bijScherm) {
   await page.click("#btn-progress-back"); await wachtOpScherm(page, "scr-home");
   await page.click("#btn-home-back"); await wachtOpScherm(page, "scr-lessons");
   await bijScherm("lessenoverzicht (na een ronde)");
-  await page.click("#btn-report"); await wachtOpScherm(page, "scr-report");
+  await uitMenu(page, "#btn-report"); await wachtOpScherm(page, "scr-report");
   await bijScherm("rapport (met data)");
   await page.click("#btn-report-back"); await wachtOpScherm(page, "scr-lessons");
 }

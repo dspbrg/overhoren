@@ -9,7 +9,7 @@ import { join } from "node:path";
 import vm from "node:vm";
 import { pathToFileURL } from "node:url";
 import { REPO, startBrowser, startServer, schermNetwerkAf, volgFouten } from "./lib/omgeving.mjs";
-import { beantwoord, wachtOpScherm } from "./lib/schermen.mjs";
+import { beantwoord, wachtOpScherm, uitMenu } from "./lib/schermen.mjs";
 
 // dezelfde regels in de worker, voor de pariteitstest
 const MERGE = await import(pathToFileURL(join(REPO, "worker", "src", "merge.js")).href);
@@ -95,7 +95,7 @@ async function bekijkAlles(page, titel) {
   await page.click("#btn-progress"); await wachtOpScherm(page, "scr-progress");
   await page.click("#btn-progress-back"); await wachtOpScherm(page, "scr-home");
   await terugNaarLessen(page);
-  await page.click("#btn-report"); await wachtOpScherm(page, "scr-report");
+  await uitMenu(page, "#btn-report"); await wachtOpScherm(page, "scr-report");
   await page.waitForTimeout(100);
   await page.click("#btn-report-back"); await wachtOpScherm(page, "scr-lessons");
 }
@@ -152,7 +152,7 @@ test("localStorage: voortgang met kapotte items en sessions laat lessen, voortga
   await bekijkAlles(page, WL[0].title);
   await bekijkAlles(page, WL[1].title);
   // de goede delen van de Engelse voortgang staan in het rapport
-  await page.click("#btn-report"); await wachtOpScherm(page, "scr-report");
+  await uitMenu(page, "#btn-report"); await wachtOpScherm(page, "scr-report");
   const rapport = await page.locator("#report-body").textContent();
   assert.match(rapport, new RegExp(ENGELS.title));
   await page.click("#btn-report-back"); await wachtOpScherm(page, "scr-lessons");

@@ -3,12 +3,12 @@
 // uit lists.js. Nee: alleen eigen lijsten, en een lege staat met een
 // duidelijke knop voor een nieuwe lijst. Wie al voortgang, eigen lijsten of
 // een naam op het toestel heeft, krijgt de vraag niet en telt als ja.
-// Wisselen kan later onder "Hoe werkt het?". De keuze blijft op het toestel.
+// Wisselen kan later onder "Over Overhoren". De keuze blijft op het toestel.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startBrowser, startServer, schermNetwerkAf, volgFouten, THEMAS, BREEDTES } from "./lib/omgeving.mjs";
 import { contrastMeting, overloopMeting, rondAnimatiesAf } from "./lib/meten.mjs";
-import { wachtOpScherm } from "./lib/schermen.mjs";
+import { wachtOpScherm, uitMenu } from "./lib/schermen.mjs";
 
 const MIN_CONTRAST = Number(process.env.MIN_CONTRAST || 4.5);
 const KLAS_KEY = "overhoor:klas";
@@ -160,10 +160,10 @@ test("klas: een bestaande gebruiker krijgt de vraag niet en houdt de klaslijsten
   await context.close();
 });
 
-test("klas: de schakelaar onder Hoe werkt het wisselt en blijft bewaard", async () => {
+test("klas: de schakelaar onder Over Overhoren wisselt en blijft bewaard", async () => {
   const { context, page, fouten } = await open({ naam: true });
   const alleKlas = await klasIds(page);
-  await page.click("#btn-info"); await wachtOpScherm(page, "scr-info");
+  await uitMenu(page, "#btn-info"); await wachtOpScherm(page, "scr-info");
   const groep = page.locator('[role="group"][aria-labelledby="klas-label"]');
   assert.ok(await groep.isVisible(), "geen schakelaar");
   assert.equal((await page.locator("#klas-label").textContent()).trim(), "Klaslijsten van Mendel 1EHA2 tonen");
@@ -177,7 +177,7 @@ test("klas: de schakelaar onder Hoe werkt het wisselt en blijft bewaard", async 
   // na herladen nog steeds uit
   await page.reload(); await wachtOpScherm(page, "scr-lessons");
   assert.deepEqual(await lijstIds(page), []);
-  await page.click("#btn-info"); await wachtOpScherm(page, "scr-info");
+  await uitMenu(page, "#btn-info"); await wachtOpScherm(page, "scr-info");
   assert.deepEqual(await pressed(), ["Ja:false", "Nee:true"]);
   await page.click('#klas-seg button[data-klas="ja"]');
   await page.click("#btn-info-back"); await wachtOpScherm(page, "scr-lessons");
@@ -192,7 +192,7 @@ test("klas: verborgen klaslijsten met voortgang breken het rapport niet", async 
   const voortgang = JSON.stringify({ items: { 0: { box: 1, seen: 1, due: 0 } }, sessions: [{ date: 1, n: 1, first: 1, ms: 1000 }], updated: 5 });
   const { context, page, fouten } = await open({ naam: true, zaai: { [KLAS_KEY]: "false", ["overhoor:progress:pia:" + lid]: voortgang, "overhoor:current": JSON.stringify(lid) } });
   assert.deepEqual(await lijstIds(page), []);
-  await page.click("#btn-report"); await wachtOpScherm(page, "scr-report");
+  await uitMenu(page, "#btn-report"); await wachtOpScherm(page, "scr-report");
   await page.locator("#report-body .card").first().waitFor();
   await page.click("#btn-report-back"); await wachtOpScherm(page, "scr-lessons");
   assert.deepEqual(fouten, []);
@@ -332,17 +332,17 @@ test("klas: na Nee werkt Alles door elkaar met eigen lijsten, en het rapport en 
   assert.ok(alle.some(x => x.word === prompt), "vraag komt niet uit de eigen lijsten: " + prompt);
   await page.click("#btn-quit");
   await page.goto(server.url + "/index.html"); await wachtOpScherm(page, "scr-lessons");
-  await page.click("#btn-report"); await wachtOpScherm(page, "scr-report");
+  await uitMenu(page, "#btn-report"); await wachtOpScherm(page, "scr-report");
   await page.click("#btn-report-back"); await wachtOpScherm(page, "scr-lessons");
   assert.deepEqual(fouten, []);
   await context.close();
 });
 
-test("klas: Nee zonder eigen lijst: het rapport, Hoe werkt het en de knop Nieuwe lijst geven geen fouten", async () => {
+test("klas: Nee zonder eigen lijst: het rapport, Over Overhoren en de knop Nieuwe lijst geven geen fouten", async () => {
   const { context, page, fouten } = await open({ naam: true, zaai: { [KLAS_KEY]: "false" } });
-  await page.click("#btn-report"); await wachtOpScherm(page, "scr-report");
+  await uitMenu(page, "#btn-report"); await wachtOpScherm(page, "scr-report");
   await page.click("#btn-report-back"); await wachtOpScherm(page, "scr-lessons");
-  await page.click("#btn-info"); await wachtOpScherm(page, "scr-info");
+  await uitMenu(page, "#btn-info"); await wachtOpScherm(page, "scr-info");
   await page.click("#btn-info-back"); await wachtOpScherm(page, "scr-lessons");
   await page.click("#btn-learner"); await page.locator("#learner-form").waitFor({ state: "visible" });
   await page.fill("#learner-name", "Mees"); await page.click("#btn-learner-save");

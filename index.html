@@ -38,7 +38,8 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
 <section id="scr-lessons" class="screen">
   <div class="app">
     <div class="start-kop">
-      <header class="brand"><h1 id="app-titel">Overhoren</h1><p class="tag">Woordjes leren met slimme herhaling</p></header>
+      <!-- de menuknop en het menu komen in .kop-rij (zie zetMenu) -->
+      <header class="brand"><div class="kop-rij" id="kop-rij"><h1 id="app-titel">Overhoren</h1></div><p class="tag">Woordjes leren met slimme herhaling</p></header>
       <!-- hier komt de uitleg bij Beta (zie zetBeta) -->
       <div class="learner-row">
         <span id="learner-view">Wie oefent: <b id="learner-label"></b> <button class="link" id="btn-learner">wissel</button></span>
@@ -60,17 +61,6 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
     </div>
     <div class="lessons" id="lessons"></div>
     <div class="start-acties"><button class="btn add-list-btn" id="btn-import">+ Nieuwe lijst</button></div>
-    <footer class="start-foot">
-      <p class="foot"><button class="link" id="btn-report">Rapport</button><button class="link" id="btn-info">Hoe werkt het?</button></p>
-      <div class="theme-row" role="group" aria-labelledby="theme-label">
-        <span class="eyebrow" id="theme-label">Thema</span>
-        <div class="seg" id="theme-seg">
-          <button type="button" data-theme="" aria-pressed="true" class="on">Systeem</button>
-          <button type="button" data-theme="light" aria-pressed="false">Licht</button>
-          <button type="button" data-theme="dark" aria-pressed="false">Donker</button>
-        </div>
-      </div>
-    </footer>
   </div>
 </section>
 
@@ -217,12 +207,13 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
   </div>
 </section>
 
-<!-- HOE WERKT HET -->
+<!-- OVER OVERHOREN -->
 <section id="scr-info" class="screen" hidden>
   <div class="app">
     <div class="topbar"><button class="link" data-icon="back" id="btn-info-back">Terug</button></div>
+    <header class="brand"><h1>Over Overhoren</h1><p class="tag">Waarom het werkt, en wie het maakte.</p></header>
     <div class="card info">
-      <h2>Hoe werkt het?</h2>
+      <h2>De wetenschap</h2>
       <p>De app is gebouwd op wat onderzoek naar leren en geheugen laat zien. Per punt: wat het onderzoek zegt, en wat de app daarmee doet.</p>
       <h3>1. Ophalen werkt beter dan herlezen</h3>
       <ul>
@@ -263,7 +254,9 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
         <li>Engelse definities hoeven niet letterlijk: als de kernwoorden erin zitten is het goed. Een vertaling moet kloppen, maar lidwoorden en kleine typo's tellen niet. Bij twijfel beslis je zelf.</li>
         <li>Een Engels woord (bij definitie naar woord) moet goed gespeld zijn, zoals op de toets. Eén letter fout heet "bijna" en telt als fout.</li>
       </ul>
-      <h3>Klaslijsten</h3>
+    </div>
+    <div class="card info">
+      <h2>Klaslijsten</h2>
       <div class="theme-row" role="group" aria-labelledby="klas-label">
         <span class="eyebrow" id="klas-label"></span>
         <div class="seg" id="klas-seg">
@@ -271,6 +264,15 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
           <button type="button" data-klas="nee" aria-pressed="false">Nee</button>
         </div>
       </div>
+    </div>
+    <!-- de namen van de katten gelijk houden met KATTEN in celebrate.js -->
+    <div class="card info" id="colofon">
+      <h2>Colofon</h2>
+      <p>Gemaakt door Daan Spangenberg.</p>
+      <h3>Letters</h3>
+      <p>Chakra Petch voor de titels en Inter voor de rest, allebei onder de SIL Open Font License.</p>
+      <h3>Katten</h3>
+      <p>Strepen, Tuxedo, Lapjes, Sokjes, Stippen en Rode streep. In elke ronde kijkt er een mee. De katten zijn met AI gemaakt.</p>
     </div>
   </div>
 </section>
@@ -2475,6 +2477,19 @@ function registreerSW(){
   sw.register("sw.js").catch(()=>{});
 }
 
+// Menuknop rechts in de kop, met het menu eronder (UI.IconBtn, UI.Menu,
+// UI.bindMenu): Rapport, Over Overhoren, het thema en de versie.
+function zetMenu(){
+  const rij = $("kop-rij");
+  if(!rij || $("btn-menu")) return;
+  rij.insertAdjacentHTML("beforeend",
+    UI.IconBtn({ id: "btn-menu", icon: "menu", label: "Menu", controls: "menu" }) +
+    UI.Menu({ id: "menu", versieId: "menu-versie",
+      items: [{ id: "btn-report", icon: "chart", label: "Rapport" }, { id: "btn-info", icon: "info", label: "Over Overhoren" }],
+      thema: { id: "theme-seg", labelId: "theme-label" } }));
+  UI.bindMenu($("btn-menu"));
+}
+
 // Beta naast de naam, met de uitleg onder de kop (UI.Beta, UI.bindBeta)
 function zetBeta(){
   const titel = $("app-titel");
@@ -2586,6 +2601,7 @@ function init(){
   registreerSW();
   Celebrate.laadCatalogus();   // katten.json: klein, en dan staat de kat meteen klaar
   zetBeta();
+  zetMenu();
   UI.hydrateIcons(document);
   klasStart();   // voor er iets in opslag komt, zoals de laatste lijst
   zetKlasTeksten();

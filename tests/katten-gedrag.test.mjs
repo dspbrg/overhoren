@@ -12,7 +12,7 @@ import { join } from "node:path";
 import vm from "node:vm";
 import { REPO, startBrowser, startServer, schermNetwerkAf, volgFouten, THEMAS } from "./lib/omgeving.mjs";
 import { contrastMeting, overloopMeting, rondAnimatiesAf } from "./lib/meten.mjs";
-import { wachtOpScherm } from "./lib/schermen.mjs";
+import { wachtOpScherm, uitMenu } from "./lib/schermen.mjs";
 
 const MIN_CONTRAST = Number(process.env.MIN_CONTRAST || 4.5);
 const lees = f => readFileSync(join(REPO, f), "utf8");
@@ -315,7 +315,7 @@ test("oude voortgang van woorden, lijsten en oefenaars blijft na de update staan
   assert.equal(rij[0], "le français"); assert.match(rij[1], /moeilijk/); assert.match(rij[1], /●●●○/); assert.equal(rij[2], "2");
   await page.click("#btn-progress-back"); await page.click("#btn-home-back"); await wachtOpScherm(page, "scr-lessons");
   // Rapport kent de oude ronde
-  await page.click("#btn-report"); await wachtOpScherm(page, "scr-report");
+  await uitMenu(page, "#btn-report"); await wachtOpScherm(page, "scr-report");
   assert.match(await page.locator("#report-body").textContent(), /12\/15/);
   await page.click("#btn-report-back"); await wachtOpScherm(page, "scr-lessons");
   // na een ronde: oude woordtoestand en oude ronde staan er nog, de nieuwe komt erbij

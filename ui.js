@@ -47,7 +47,9 @@
     flame:   '<path d="M12 3.2c3 3.8 5 5.6 5 8.9a5 5 0 0 1-10 0c0-1.6.7-2.8 1.6-3.7.2 1.2.9 1.9 1.6 1.9-.9-2.4.3-5.2 1.8-7.1z"/>',
     play:    '<path d="M8.5 5.4l10 6.6-10 6.6z"/>',
     alert:   '<path d="M12 4.2l8.6 15.3H3.4z"/><path d="M12 10v4"/><circle cx="12" cy="16.8" r=".9" fill="currentColor" stroke="none"/>',
-    sparkle: '<path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/>'
+    sparkle: '<path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/>',
+    menu:    '<path d="M5 7h14M5 12h14M5 17h14"/>',
+    info:    '<circle cx="12" cy="12" r="8.5"/><path d="M12 11.2V16"/><circle cx="12" cy="8.2" r=".9" fill="currentColor" stroke="none"/>'
   };
   // name: sleutel uit ICONS. size volgt standaard de tekstgrootte (1em).
   function Icon(name, o) {
@@ -146,11 +148,12 @@
   // Een knop die een korte uitleg eronder opent en sluit. Het vlak is
   // klein, het tikdoel 44 px (ds.css). Zet BetaUitleg ergens onder de
   // kop en koppel ze met bindBeta(knop). uitlegId is het id van die regel.
-  // Onder de uitleg een kleine regel met de versie van de app.
+  // De versie van de app staat in het menu (UI.Menu).
   const BETA_UITLEG = "We leren nog. Dingen kunnen veranderen.";
   // De versie van de app: de ?v= van dit script, die de deploy stempelt
   // (op Cloudflare de korte commit-sha). Zonder stempel, of buiten een
   // browser, "dev". index.html gebruikt hem ook na een update (registreerSW).
+  // Het menu toont de eerste zeven tekens (UI.Menu).
   const VERSIE = (function () {
     try { return new URL(document.currentScript.src).searchParams.get("v") || "dev"; }
     catch (e) { return "dev"; }
@@ -163,8 +166,7 @@
   }
   function BetaUitleg(o) {
     o = o || {};
-    return '<p class="beta-uitleg"' + attr("id", o.id) + (o.open ? "" : " hidden") + '>' + esc(BETA_UITLEG) +
-      '<small class="beta-versie">Versie ' + esc(VERSIE.slice(0, 7)) + '</small></p>';
+    return '<p class="beta-uitleg"' + attr("id", o.id) + (o.open ? "" : " hidden") + '>' + esc(BETA_UITLEG) + '</p>';
   }
   // Tikken, Enter of Spatie wisselt (dat doet een <button> vanzelf),
   // Escape sluit en zet de focus terug op de knop.
@@ -179,6 +181,78 @@
       zet(false); knop.focus();
     });
     knop.dataset.betaDone = "1";
+  }
+
+  // --- IconBtn: vierkante knop met alleen een icoon -----------
+  // label is verplicht: het is de naam voor een schermlezer. Met
+  // controls wordt het een knop die iets opent (aria-expanded).
+  function IconBtn(o) {
+    o = o || {};
+    return '<button type="button" class="' + cls("icon-btn", o.className) + '"' + attr("id", o.id) +
+      attr("aria-label", o.label) +
+      (o.controls ? ' aria-expanded="' + (o.open ? "true" : "false") + '"' + attr("aria-controls", o.controls) : "") + '>' +
+      Icon(o.icon) + '</button>';
+  }
+
+  // --- Menu: kaart onder de menuknop ---------------------------
+  // items: [{ id, icon, label }], knoppen die ergens heen gaan.
+  // thema: { id, labelId } zet de themakiezer erin (Systeem, Licht,
+  // Donker; de app zet zelf welke aan staat). Onderaan de versie.
+  // Ervoor een dimlaag die een tik buiten het menu opvangt.
+  // Zet hem naast de menuknop (UI.IconBtn met controls) en koppel ze
+  // met bindMenu(knop).
+  function Menu(o) {
+    o = o || {};
+    const open = !!o.open;
+    const items = (o.items || []).map(function (it) {
+      return '<button type="button" class="menu-item"' + attr("id", it.id) + '>' + Icon(it.icon) + '<span>' + esc(it.label) + '</span></button>';
+    }).join("");
+    const th = o.thema;
+    const thema = th ? '<div class="menu-sectie" role="group"' + attr("aria-labelledby", th.labelId) + '>' +
+      '<span class="eyebrow"' + attr("id", th.labelId) + '>Thema</span>' +
+      '<div class="seg"' + attr("id", th.id) + '>' +
+        '<button type="button" data-theme="" aria-pressed="true" class="on">Systeem</button>' +
+        '<button type="button" data-theme="light" aria-pressed="false">Licht</button>' +
+        '<button type="button" data-theme="dark" aria-pressed="false">Donker</button>' +
+      '</div></div>' : "";
+    return '<div class="menu-scrim" aria-hidden="true"' + (open ? "" : " hidden") + '></div>' +
+      '<nav class="menu"' + attr("id", o.id) + ' aria-label="Menu"' + (open ? "" : " hidden") + '>' + items + thema +
+      '<p class="menu-versie"' + attr("id", o.versieId) + '>Versie ' + esc(String(o.versie || VERSIE).slice(0, 7)) + '</p></nav>';
+  }
+  // Tikken op de knop opent en sluit. Open: de focus naar het eerste item,
+  // de knop wordt een kruis. Escape, een tik op de dimlaag of de knop
+  // sluiten en zetten de focus terug op de knop. Een menu-item kiezen
+  // sluit het menu ook; de focus gaat dan mee naar waar het item heen
+  // gaat. Gaat de focus met Tab uit het menu, dan sluit het stil.
+  function bindMenu(knop) {
+    if (!knop || knop.dataset.menuDone) return;
+    const menu = document.getElementById(knop.getAttribute("aria-controls"));
+    if (!menu) return;
+    const vorige = menu.previousElementSibling;
+    const scrim = vorige && vorige.classList.contains("menu-scrim") ? vorige : null;
+    const isOpen = () => !menu.hidden;
+    function zet(open, focusTerug) {
+      menu.hidden = !open;
+      if (scrim) scrim.hidden = !open;
+      knop.setAttribute("aria-expanded", open ? "true" : "false");
+      knop.innerHTML = Icon(open ? "close" : "menu");
+      if (open) { const eerste = menu.querySelector("button, a[href]"); if (eerste) eerste.focus(); }
+      else if (focusTerug) knop.focus();
+    }
+    knop.addEventListener("click", () => zet(!isOpen(), true));
+    if (scrim) scrim.addEventListener("click", () => zet(false, true));
+    menu.addEventListener("click", e => { if (e.target.closest(".menu-item")) zet(false, false); });
+    menu.addEventListener("focusout", e => {
+      const naar = e.relatedTarget;
+      if (isOpen() && naar && naar !== knop && !menu.contains(naar)) zet(false, false);
+    });
+    // in de vangfase: Escape sluit eerst het menu en verder niets
+    document.addEventListener("keydown", e => {
+      if (e.key !== "Escape" || !isOpen()) return;
+      e.stopPropagation();
+      zet(false, true);
+    }, true);
+    knop.dataset.menuDone = "1";
   }
 
   // --- Choice: woordsoortknop met toetshint -------------------
@@ -376,5 +450,5 @@
   }
 
   root.UI = { esc, cls, pct, Icon, ICONS, Button, Link, TopBar, Stat, StatsRow, Meter, Ring, Chip,
-              Beta, BetaUitleg, BETA_UITLEG, VERSIE, bindBeta, Choice, Choices, Notice, CodePaneel, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, Welkom, hydrateIcons };
+              Beta, BetaUitleg, BETA_UITLEG, VERSIE, bindBeta, IconBtn, Menu, bindMenu, Choice, Choices, Notice, CodePaneel, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, Welkom, hydrateIcons };
 })(typeof window === "object" ? window : globalThis);
