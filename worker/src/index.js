@@ -303,15 +303,36 @@ async function vraagTeller(env, pad, data, naam = "foto") {
   return res.json();
 }
 
+// Een melding naar hq, en als hq hem heeft (200 of 201) afvinken in de
+// teller. Gooit nooit: de melding mag het foto-antwoord niet raken.
+async function meldEnVink(env, maand, drempel) {
+  try {
+    if (await meldDrempel(env, maand, drempel)) await vraagTeller(env, "/gemeld", { maand, drempel });
+  } catch (e) {
+    console.error("Melding hq: afvinken mislukt");
+  }
+}
+
+// De openstaande meldingen (teMelden) versturen. Ze starten meteen en lopen
+// parallel aan de AI-aanroep; ctx.waitUntil houdt ze in leven als het
+// antwoord eerder klaar is. Het antwoord wacht er nooit op. Zonder
+// HQ_MELD_URL en HQ_MELD_TOKEN: niets.
+function meldOpen(env, ctx, r) {
+  if (!env.HQ_MELD_URL || !env.HQ_MELD_TOKEN) return;
+  for (const m of Array.isArray(r.teMelden) ? r.teMelden : []) {
+    const p = meldEnVink(env, m.maand, m.drempel);
+    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(p);
+  }
+}
+
 // Reserveert vooraf een plek. Bij een volle grens: 429 met de grens.
 // onbeperkt: de hash uit ONBEPERKT of null. Dan geen FOTO_PER_MAAND maar
 // ONBEPERKT_PER_MAAND voor die hash; wel meetellen (en drempels melden).
-async function reserveer(env, soort, toestel, onbeperkt = null) {
+// Ook een geweigerde reservering probeert de openstaande meldingen opnieuw.
+async function reserveer(env, ctx, soort, toestel, onbeperkt = null) {
   const r = await vraagTeller(env, "/reserveer", { soort, toestel, onbeperkt });
+  meldOpen(env, ctx, r);
   if (!r.ok) throw new GrensFout(r.grens === "maand" ? "maand" : "toestel");
-  for (const d of r.drempels || []) {
-    try { await meldDrempel(env, r.maand, d); } catch (e) { console.error("Melding mislukt"); }
-  }
   return { soort, toestel, dag: r.dag, maand: r.maand, onbeperkt };
 }
 
@@ -346,7 +367,7 @@ function geldigeHint(hint) {
   throw new HttpFout(400, "Ongeldige hint");
 }
 
-async function handleExtract(request, env) {
+async function handleExtract(request, env, ctx) {
   const toestel = leesToestel(request, env);
   const onbeperkt = await onbeperktHash(request, env);
   const { image, mediaType, subjectHint } = await leesJson(request, MAX_EXTRACT_BYTES);
@@ -361,7 +382,7 @@ async function handleExtract(request, env) {
   const hint = buildHint(geldigeHint(subjectHint));
   const prompt = EXTRACT_PROMPT + "\n\nHINT VAN DE GEBRUIKER: " + hint;
 
-  const plek = await reserveer(env, "extract", toestel, onbeperkt);
+  const plek = await reserveer(env, ctx, "extract", toestel, onbeperkt);
   const response = await metPlek(env, plek, () => callClaude(
     EXTRACT_MODEL,
     EXTRACT_MAX_TOKENS,
@@ -384,7 +405,7 @@ async function handleExtract(request, env) {
   return json(result, 200, env, request);
 }
 
-async function handleEnrich(request, env) {
+async function handleEnrich(request, env, ctx) {
   const toestel = leesToestel(request, env);
   const onbeperkt = await onbeperktHash(request, env);
   const { items, mode, subject } = await leesJson(request, MAX_ENRICH_BYTES);
@@ -410,7 +431,7 @@ async function handleEnrich(request, env) {
       ? `Dit zijn ${taal}-items met vertalingen.`
       : `Dit zijn Engelse vocabulaire-items met Engelse definities.`;
 
-  const plek = await reserveer(env, "enrich", toestel, onbeperkt);
+  const plek = await reserveer(env, ctx, "enrich", toestel, onbeperkt);
   const response = await metPlek(env, plek, () => callClaude(
     ENRICH_MODEL,
     ENRICH_MAX_TOKENS,
@@ -497,7 +518,7 @@ async function handleMigreer(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: cors(env, request) });
     }
@@ -512,7 +533,7 @@ export default {
         if (!(await binnenTempo(request, env.FOTO_TEMPO, "FOTO_TEMPO"))) {
           return json({ error: "Te veel verzoeken", grens: "tempo" }, 429, env, request);
         }
-        return url.pathname === "/extract" ? await handleExtract(request, env) : await handleEnrich(request, env);
+        return url.pathname === "/extract" ? await handleExtract(request, env, ctx) : await handleEnrich(request, env, ctx);
       }
 
       // Sync per persoon (x-code), de overstap en de oude sync: begrensd per
