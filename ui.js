@@ -288,9 +288,9 @@
 
   // Welkom: bij het openen, een keer per sessie, heel scherm. De naam van de
   // app, de kat van de eerstvolgende ronde, dan "Hoi <naam>". De kat
-  // beweegt alleen met zijn eigen clip (Celebrate.speler, in index.html),
+  // beweegt alleen met zijn eigen clip, hier in een lus (Celebrate.speler, in index.html),
   // er komt geen css-beweging bovenop. Hij staat in het midden en wordt dus
-  // nooit gespiegeld. Daarna vervaagt alles (ds.css, .welkom.vervaagt).
+  // nooit gespiegeld. Daarna opent een zeshoekig gat (ds.css, .welkom.opent).
   // Zonder naam alleen de kat. De kat is versiering (alt leeg).
   //   beeld  Celebrate.welkomBeeld(id)
   //   naam   wie er oefent; gaat door esc()

@@ -13,7 +13,8 @@
 // In de browser (360 px): voor alle zes katten elk moment in een echte
 // ronde, zonder verspringen (getBoundingClientRect op elk frame), met
 // spiegelen, opruimen van URL's en alleen de beelden van die kat; reduced
-// motion; het gedag; en het welkom (minstens 1,2 s, sluit op het eindbeeld).
+// motion; het gedag; en het welkom (3,5 s, de goed-clip in een lus die
+// netjes bij het eerste beeld herbegint, en na sluiten loopt er niets meer).
 //
 // Ook in WebKit: PW_BROWSER=webkit node --test tests/kattenclips.test.mjs
 import { test, before, after } from "node:test";
@@ -204,6 +205,60 @@ test("speler: twee keer hetzelfde moment start opnieuw met een nieuwe object-URL
   // stoppen ruimt ook op
   sp.speel("tuxedo", "bijna"); sp.stop();
   assert.deepEqual([...urls.weg].sort(), [...urls.gemaakt].sort(), "stop() ruimt de URL niet op");
+});
+
+test("speler in een lus (alleen het welkom): na elke duurMs opnieuw met een nieuwe URL, de oude opgeruimd; uitlopen eindigt op het eindbeeld; stop() laat niets lopen", async () => {
+  for (const id of ALLE) {
+    const { C, tik, urls, timers } = laad();
+    await C.laadKat(id);
+    const img = nepImg(), sp = C.speler(img, { plaats: "midden" });
+    const d = KAT.katten[id].goed.duurMs;
+    let klaar = null;
+    sp.speel(id, "goed", { lus: true }).then(v => { klaar = v; });
+    const starts = [img.src];
+    for (let ronde = 1; ronde <= 4; ronde++) {
+      tik(d - 1);
+      assert.equal(img.src, starts.at(-1), `${id}: de lus herstart te vroeg (ronde ${ronde})`);
+      tik(1);
+      assert.match(img.src, new RegExp("^blob:test/\\d+/" + MAP + `${id}-goed\\.webp$`), `${id}: ronde ${ronde} start niet met de clip`);
+      assert.equal(img.getAttribute("data-beeld"), "goed", `${id}: in de lus komt het eindbeeld`);
+      assert.ok(!starts.includes(img.src), `${id}: ronde ${ronde} hergebruikt een oude URL`);
+      starts.push(img.src);
+      assert.deepEqual([...urls.weg].sort(), starts.slice(0, -1).sort(), `${id}: de vorige URL is niet opgeruimd (ronde ${ronde})`);
+    }
+    assert.ok(!img.log.some(s => /-eind\.webp$/.test(s)), `${id}: eindbeeld tijdens de lus`);
+    // uitlopen: de lopende ronde maakt hij af, dan het eindbeeld, geen nieuwe ronde
+    tik(300); sp.uitlopen();
+    tik(d - 300);
+    assert.equal(img.src, MAP + KAT.katten[id].goed.eind, `${id}: na uitlopen niet het eindbeeld`);
+    assert.equal(urls.gemaakt.length, 5, `${id}: na uitlopen nog een ronde`);
+    await nogEven();
+    assert.equal(klaar, true);
+    assert.deepEqual([...urls.weg].sort(), [...urls.gemaakt].sort());
+    // stop() midden in een lus: alles opgeruimd, geen timer meer
+    sp.speel(id, "goed", { lus: true }); tik(d + 50); sp.stop();
+    assert.equal(timers.size, 0, `${id}: na stop() loopt er nog een timer`);
+    tik(10 * d);
+    assert.equal(urls.gemaakt.length, 7);
+    assert.deepEqual([...urls.weg].sort(), [...urls.gemaakt].sort(), `${id}: stop() laat een URL staan`);
+  }
+  // zonder lus (de ronde): nog steeds een keer, dan het eindbeeld
+  const { C, tik, urls } = laad();
+  await C.laadKat("lapjes");
+  const img = nepImg(), sp = C.speler(img, { plaats: "rechts" });
+  sp.speel("lapjes", "goed"); tik(5 * KAT.katten.lapjes.goed.duurMs);
+  assert.equal(urls.gemaakt.length, 1, "in de ronde speelt de clip vaker dan een keer");
+  assert.equal(img.getAttribute("data-beeld"), "goed-eind");
+});
+
+test("speler in een lus bij reduced motion: geen lus, meteen het eindbeeld", async () => {
+  const { C, tik, urls, timers } = laad({ reduced: true });
+  await C.laadKat("tuxedo");
+  const img = nepImg(), sp = C.speler(img, { plaats: "midden" });
+  sp.speel("tuxedo", "goed", { lus: true });
+  assert.equal(img.getAttribute("data-beeld"), "goed-eind");
+  tik(10000);
+  assert.equal(urls.gemaakt.length, 0); assert.equal(timers.size, 0);
 });
 
 test("speler: een nieuw moment tijdens een clip breekt hem af; het oude eindbeeld komt nooit", async () => {
@@ -556,13 +611,29 @@ test("gedag: gestopte ronde met veel fout geeft de bijna-clip, een gewone ronde 
   }
 });
 
-test("welkom: de goed-clip van de kat van de volgende ronde, minstens 1,2 s, en het sluit pas op het eindbeeld", async () => {
+test("welkom: de goed-clip van de kat van de volgende ronde in een lus tot de overgang, 3,5 s, daarna loopt er niets meer", async () => {
   for (const reduced of [false, true]) {
     for (let keer = 0; keer < 3; keer++) {
       const context = await browser.newContext({ welkom: true, viewport: { width: 360, height: 780 }, serviceWorkers: "block", locale: "nl-NL",
         reducedMotion: reduced ? "reduce" : "no-preference" });
       await schermNetwerkAf(context);
       await context.addInitScript(volger);
+      // het beeld net na elke start van de clip, verkleind, om te zien dat
+      // elke ronde van de lus bij hetzelfde eerste beeld begint
+      await context.addInitScript(() => {
+        window.__eerste = [];
+        new MutationObserver(lijst => {
+          for (const m of lijst) if (m.target.matches?.(".welkom-kat") && m.target.dataset.beeld === "goed") {
+            const img = m.target, src = img.getAttribute("src");
+            img.decode().then(() => {
+              if (img.getAttribute("src") !== src) return;
+              const c = document.createElement("canvas"); c.width = 40; c.height = 48;
+              const g = c.getContext("2d"); g.drawImage(img, 0, 0, 40, 48);
+              window.__eerste.push([...g.getImageData(0, 0, 40, 48).data]);
+            }, () => {});
+          }
+        }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-beeld", "src"] });
+      });
       await context.addInitScript(() => {
         window.__welkom = { in: 0, uit: 0, laatste: null };
         new MutationObserver(lijst => {
@@ -589,21 +660,40 @@ test("welkom: de goed-clip van de kat van de volgende ronde, minstens 1,2 s, en 
       const wissels = await page.evaluate(() => window.__wissels.filter(x => x.waar === "welkom-kat"));
       const kat = w.laatste.kat, d = KAT.katten[kat].goed.duurMs;
       assert.ok(ALLE.includes(kat));
-      assert.equal(w.laatste.beeld, "goed-eind", "het welkom sloot voor het eindbeeld stond");
-      assert.equal(w.laatste.src, MAP + `${kat}-goed-eind.webp`);
       const duur = w.uit - w.in;
       if (reduced) {
         assert.deepEqual(wissels.map(x => x.beeld), ["goed-eind"], "reduced motion: niet meteen het eindbeeld");
         assert.ok(duur > 3450 && duur < 3900, `reduced motion: welkom stond ${Math.round(duur)} ms, verwacht 3500`);
       } else {
         assert.equal(wissels[0].beeld, "goed"); assert.match(wissels[0].src, /^blob:/, "de clip speelt niet");
-        const eind = wissels.find(x => x.beeld === "goed-eind");
-        assert.ok(eind && eind.t <= w.uit, "het eindbeeld kwam niet voor het sluiten");
-        assert.ok(duur >= 1180, `welkom stond maar ${Math.round(duur)} ms`);
-        assert.ok(duur >= d, `welkom sloot na ${Math.round(duur)} ms, de clip duurt ${d} ms`);
-        assert.ok(duur < Math.max(3500, d + 300) + 400, `welkom stond te lang: ${Math.round(duur)} ms (clip ${d} ms)`);
+        assert.ok(duur > 3350 && duur < 3900, `welkom stond ${Math.round(duur)} ms, verwacht 3500 (clip ${d} ms)`);
+        // de lus: tot de overgang (3000 ms) start de clip na elke duurMs opnieuw
+        const starts = wissels.filter(x => x.beeld === "goed" && x.t < w.uit);
+        const minstens = Math.floor(3000 / d) + 1;
+        assert.ok(starts.length >= minstens, `${kat}: de clip startte ${starts.length} keer in het welkom, verwacht minstens ${minstens}`);
+        assert.equal(new Set(starts.map(x => x.src)).size, starts.length, "een ronde van de lus hergebruikt een oude URL");
+        for (const x of starts) assert.match(x.src, /^blob:/);
+        // geen sprong: een ronde begint pas als het laatste beeld (600 ms) van de vorige uit is
+        for (let i = 1; i < starts.length; i++) {
+          const tussen = starts[i].t - starts[i - 1].t;
+          assert.ok(tussen > d - 40 && tussen < d + 150, `${kat}: ronde ${i + 1} begon na ${Math.round(tussen)} ms, de clip duurt ${d} ms`);
+        }
+        // geen eindbeeld zolang de lus loopt
+        assert.ok(!wissels.some(x => x.beeld === "goed-eind" && x.t < starts.at(-1).t), "het eindbeeld kwam midden in de lus");
+        // elke ronde begint bij hetzelfde eerste beeld
+        const eerste = await page.evaluate(() => window.__eerste);
+        assert.ok(eerste.length >= 2, `te weinig rondes gezien (${eerste.length})`);
+        for (let i = 1; i < eerste.length; i++) {
+          const verschil = eerste[i].reduce((som, v, j) => som + Math.abs(v - eerste[0][j]), 0) / eerste[0].length;
+          assert.ok(verschil < 4, `${kat}: ronde ${i + 1} begint niet bij het eerste beeld (verschil ${verschil.toFixed(1)})`);
+        }
+        // na sluiten: alle URL's opgeruimd en er komt niets meer bij
         const u = await page.evaluate(() => window.__urls);
-        assert.deepEqual([...u.weg].sort(), [...u.gemaakt].sort(), "de object-URL van het welkom is niet opgeruimd");
+        assert.equal(u.gemaakt.length, starts.length, "na het sluiten nog een ronde");
+        assert.deepEqual([...u.weg].sort(), [...u.gemaakt].sort(), "de object-URL's van het welkom zijn niet opgeruimd");
+        await page.waitForTimeout(d + 300);
+        const later = await page.evaluate(() => ({ urls: window.__urls.gemaakt.length, wissels: window.__wissels.filter(x => x.waar === "welkom-kat").length }));
+        assert.deepEqual(later, { urls: u.gemaakt.length, wissels: wissels.length }, "na het sluiten loopt de lus nog");
       }
       assert.deepEqual(fouten, []);
       await context.close();
@@ -611,7 +701,7 @@ test("welkom: de goed-clip van de kat van de volgende ronde, minstens 1,2 s, en 
   }
 });
 
-test("welkom: wegtikken midden in de clip haalt het meteen weg en ruimt de URL op", async () => {
+test("welkom: wegtikken midden in de clip stopt de lus, haalt het weg en ruimt de URL op", async () => {
   const context = await browser.newContext({ welkom: true, viewport: { width: 360, height: 780 }, serviceWorkers: "block" });
   await schermNetwerkAf(context);
   await context.addInitScript(volger);
@@ -621,10 +711,10 @@ test("welkom: wegtikken midden in de clip haalt het meteen weg en ruimt de URL o
   await page.locator("body > .welkom").waitFor({ state: "attached", timeout: 1500 });
   await page.waitForTimeout(200);
   await page.mouse.click(180, 390);
-  await page.locator("body > .welkom").waitFor({ state: "detached", timeout: 300 });
+  await page.locator("body > .welkom").waitFor({ state: "detached", timeout: 1000 });
   await page.waitForTimeout(2000);
   const u = await page.evaluate(() => window.__urls);
-  assert.ok(u.gemaakt.length >= 1);
+  assert.equal(u.gemaakt.length, 1, "na wegtikken liep de lus door");
   assert.deepEqual([...u.weg].sort(), [...u.gemaakt].sort(), "wegtikken laat een object-URL staan");
   assert.equal(await page.locator(".welkom").count(), 0);
   assert.deepEqual(fouten, []);
