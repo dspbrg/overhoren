@@ -283,9 +283,63 @@ drempels; een toestel dat door terugboeken op 0 komt, gaat uit de lijst.
 De toestelgrens is te omzeilen met een nieuw id; de maandgrens is de echte rem.
 Werkt de teller of de tempo-binding niet, dan volgt 500 en geen AI-aanroep.
 
-Bij 80 en 100 foto's (`/extract`) in een maand geeft de teller die drempel
-terug bij precies de reservering die hem haalt, en roept de worker
-`meldDrempel` aan. Die doet nog niets en gaat niet het net op.
+## Melding naar hq bij 80 en 100 foto's
+
+Bij 80 en 100 foto's (`/extract`) in een maand stuurt de worker een melding
+naar het dashboard hq:
+
+    POST <HQ_MELD_URL>
+    Authorization: Bearer <HQ_MELD_TOKEN>
+    Content-Type: application/json
+
+    {"bron":"overhoren","soort":"foto-80","maand":"2026-11"}
+
+(`soort` is `foto-80` of `foto-100`.) hq antwoordt 201 (nieuw) of 200 (al
+bekend); allebei goed. Al het andere telt als fout.
+
+- Alleen als `HQ_MELD_URL` en `HQ_MELD_TOKEN` allebei gezet zijn. Anders
+  gaat er niets het net op.
+- `HQ_MELD_URL` moet precies `https://hq.vandaan.net/api/melding` zijn: https,
+  host `hq.vandaan.net` (vast in de code, `MELD_HOST`), geen poort, en dit
+  pad zonder slash op het eind en zonder `?`. Anders gaat er niets weg en
+  staat er een regel "HQ_MELD_URL ongeldig" in de logs. Zo kan het token
+  nooit naar een andere host.
+- Een redirect wordt niet gevolgd (dan zou het token meegaan naar een ander
+  adres); een 3xx telt als fout.
+- De melding start meteen bij de reservering en loopt parallel aan de
+  AI-aanroep (`ctx.waitUntil` houdt hem in leven), met een time-out van 5
+  seconden. Het foto-antwoord wacht er niet op, en een fout bij hq laat de
+  foto niet mislukken.
+- Niet aangekomen? De teller houdt bij welke drempels hq nog niet bevestigd
+  heeft (`teMelden` in de rij van `/extract`, hooguit 4, ook over de
+  maandgrens). Een volgende reservering voor `/extract`, ook een die op de
+  grens wordt geweigerd, probeert ze opnieuw, maar hooguit eens per 5
+  minuten (`MELD_PAUZE_MS`, bijgehouden in `laatstePoging`). Een drempel die
+  net gehaald is, gaat altijd meteen. Na 200 of 201 vinkt de worker hem af
+  in de teller (`/gemeld`). Een melding kan dus twee keer aankomen; hq geeft
+  dan 200. Komt er een vijfde open melding bij, dan valt de oudste weg, met
+  een logregel zonder details.
+- In de logs staat alleen de status of een korte reden (time-out,
+  netwerkfout), nooit het token of de Authorization-kop.
+
+Kosten: geen betaalde dienst. Per poging hooguit een aanroep naar hq per open
+melding (hooguit 4), en zo'n poging hooguit eens per 5 minuten. Daarbovenop
+gaat een net gehaalde drempel meteen, en dat is hooguit twee keer per maand.
+
+Zo zet je het aan (vanuit `worker/`, en altijd met `-c wrangler.toml`):
+
+1. `npx wrangler secret put HQ_MELD_TOKEN -c wrangler.toml` en plak hetzelfde
+   token als in de `.env` van hq. Het token komt niet in git en niet in
+   `wrangler.toml`.
+2. `npx wrangler secret put HQ_MELD_URL -c wrangler.toml` en geef
+   `https://hq.vandaan.net/api/melding`. Alleen als secret, niet als `[vars]`
+   in `wrangler.toml`: dan staat de melding alleen aan waar Daan beide
+   secrets zelf heeft gezet.
+3. Daarna de worker uitrollen (alleen na akkoord, zie Uitrollen).
+
+Uitzetten: `npx wrangler secret delete HQ_MELD_TOKEN -c wrangler.toml`.
+
+## Fouten en wat er wordt opgeslagen
 
 Kapotte JSON geeft 400. Fouten van de Anthropic-API geven 502 met een algemene
 melding; de details staan alleen in de logs.
@@ -333,8 +387,8 @@ de config van de app. De eerste keer maakt de migratie `v1` de Durable Object
 
     npx wrangler deploy -c wrangler.toml
 
-Geheimen (`APP_SECRET`, `ANTHROPIC_API_KEY`, `ONBEPERKT`) staan als secret in
-Cloudflare, niet in deze map.
+Geheimen (`APP_SECRET`, `ANTHROPIC_API_KEY`, `ONBEPERKT`, `HQ_MELD_TOKEN`)
+staan als secret in Cloudflare, niet in deze map.
 
 Volgorde bij de sync per persoon:
 

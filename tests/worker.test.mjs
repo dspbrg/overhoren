@@ -722,7 +722,7 @@ test("foto-import: dag en maand volgen Amsterdam, een oude dag blijft niet staan
     assert.equal((await worker.fetch(open("/extract", FOTO), env(kv))).status, 200, "nieuwe dag");
   });
   // in de teller staat alleen de nieuwe dag; de maand loopt door
-  assert.deepEqual(standVan(kv, "extract"), { dag: "2026-11-15", toestellen: { [TOESTEL]: 1 }, maand: "2026-11", maandStand: 11, gemeld: [] });
+  assert.deepEqual(standVan(kv, "extract"), { dag: "2026-11-15", toestellen: { [TOESTEL]: 1 }, maand: "2026-11", maandStand: 11, gemeld: [], teMelden: [], laatstePoging: 0 });
   assert.equal([...kv.data.keys()].some(k => k.startsWith("teller:")), false, "geen tellers meer in KV");
 });
 
@@ -935,6 +935,424 @@ test("drempels: meldDrempel doet niets zonder HQ_MELD_URL", async (t) => {
   assert.equal(await meldDrempel(env(), "2026-11", 80), false);
   assert.equal(await meldDrempel({ ...env(), HQ_MELD_URL: "https://hq.test/meld" }, "2026-11", 100), false);
   assert.equal(netwerk, 0);
+});
+
+// ---------- melding naar hq (80 en 100 foto's per maand) ----------
+
+const HQ_URL = "https://hq.vandaan.net/api/melding";
+const { MELD_PAUZE_MS: PAUZE, MELD_HOST } = await import(pathToFileURL(join(SRC, "teller.js")).href);
+const MINUUT = 60 * 1000;
+// binnen metTijd: de klok verzetten (metTijd zet hem daarna terug)
+const zetTijd = ms => { Date.now = () => ms; };
+const HQ_TOKEN = "hq-tok-geheim-7f3a9c";
+const hqEnv = (kv) => ({ ...env(kv), HQ_MELD_URL: HQ_URL, HQ_MELD_TOKEN: HQ_TOKEN });
+// Nep-fetch: de AI antwoordt altijd goed, hq volgens `hq` (een functie die
+// een Response geeft of gooit). Elke hq-aanroep komt in `hq.aanroepen`.
+function nepNet(t, hq) {
+  const ai = nepAI(t);
+  const net = { ai: 0, aanroepen: [], hq };
+  const aiFetch = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    if (String(url).startsWith("https://api.anthropic.com")) { net.ai++; return aiFetch(url, init); }
+    net.aanroepen.push({ url: String(url), init });
+    return net.hq(net.aanroepen.length);
+  });
+  return net;
+}
+// ctx zoals in Cloudflare: waitUntil verzamelt het werk na het antwoord
+function nepCtx() {
+  const taken = [];
+  return { taken, waitUntil: p => { taken.push(p); }, klaar: () => Promise.all(taken) };
+}
+const teMelden = kv => standVan(kv, "extract").teMelden || [];
+function vangLogs(t) {
+  const logs = [];
+  for (const m of ["error", "log", "warn", "info", "debug"]) t.mock.method(console, m, (...a) => logs.push(a.map(String).join(" ")));
+  return logs;
+}
+
+test("hq: zonder HQ_MELD_URL of HQ_MELD_TOKEN geen netwerk, ook niet via /extract", async (t) => {
+  const { meldDrempel } = await import(pathToFileURL(join(SRC, "teller.js")).href);
+  const net = nepNet(t, () => new Response(null, { status: 201 }));
+  assert.equal(await meldDrempel({ HQ_MELD_TOKEN: HQ_TOKEN }, "2026-11", 80), false);
+  assert.equal(await meldDrempel({ HQ_MELD_URL: HQ_URL }, "2026-11", 80), false);
+  assert.equal(await meldDrempel({ HQ_MELD_URL: HQ_URL, HQ_MELD_TOKEN: "" }, "2026-11", 80), false);
+  const kv = nepKV();
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 79, gemeld: [] });
+  const ctx = nepCtx();
+  await metTijd(MIDDAG, async () => {
+    assert.equal((await worker.fetch(open("/extract", FOTO), { ...env(kv), HQ_MELD_URL: HQ_URL }, ctx)).status, 200);
+  });
+  await ctx.klaar();
+  assert.equal(net.aanroepen.length, 0);
+  assert.equal(net.ai, 1);
+});
+
+test("hq: een POST met de juiste URL, koppen en precies de afgesproken body; 200 en 201 zijn goed", async (t) => {
+  const { meldDrempel } = await import(pathToFileURL(join(SRC, "teller.js")).href);
+  let status = 201;
+  const net = nepNet(t, () => new Response('{"ok":true}', { status }));
+  assert.equal(await meldDrempel(hqEnv(), "2026-11", 80), true);
+  status = 200;
+  assert.equal(await meldDrempel(hqEnv(), "2026-12", 100), true);
+  assert.equal(net.aanroepen.length, 2);
+  const [a, b] = net.aanroepen;
+  assert.equal(a.url, HQ_URL);
+  assert.equal(a.init.method, "POST");
+  assert.equal(a.init.redirect, "manual");
+  assert.ok(a.init.signal instanceof AbortSignal, "met een time-out");
+  const h = new Headers(a.init.headers);
+  assert.equal(h.get("authorization"), "Bearer " + HQ_TOKEN);
+  assert.equal(h.get("content-type"), "application/json");
+  assert.deepEqual([...h.keys()].sort(), ["authorization", "content-type"]);
+  assert.equal(a.init.body, '{"bron":"overhoren","soort":"foto-80","maand":"2026-11"}');
+  assert.equal(b.init.body, '{"bron":"overhoren","soort":"foto-100","maand":"2026-12"}');
+  // andere antwoorden zijn fout
+  for (const s of [400, 401, 404, 413, 415, 429, 500, 503]) {
+    status = s;
+    vangLogs(t);
+    assert.equal(await meldDrempel(hqEnv(), "2026-11", 80), false, String(s));
+  }
+});
+
+test("hq: alleen https://hq.vandaan.net met precies het pad /api/melding, anders geen fetch en een log zonder URL of token", async (t) => {
+  assert.equal(MELD_HOST, "hq.vandaan.net");
+  const { meldDrempel } = await import(pathToFileURL(join(SRC, "teller.js")).href);
+  const net = nepNet(t, () => new Response(null, { status: 201 }));
+  const logs = vangLogs(t);
+  const fout = [
+    "http://hq.vandaan.net/api/melding",
+    "https://hq.vandaan.net/api/melding/",
+    "https://hq.vandaan.net/api/meld",
+    "https://hq.vandaan.net/",
+    "https://hq.vandaan.net/api/melding?x=1",
+    "https://user:pw@hq.vandaan.net/api/melding",
+    "https://hq.vandaan.net:8443/api/melding",
+    // een andere https-host met het goede pad
+    "https://hq.test/api/melding",
+    "https://elders.vandaan.net/api/melding",
+    "https://hq.vandaan.net.evil.test/api/melding",
+    "geen url",
+  ];
+  for (const u of fout) {
+    const voor = logs.length;
+    assert.equal(await meldDrempel({ HQ_MELD_URL: u, HQ_MELD_TOKEN: HQ_TOKEN }, "2026-11", 80), false, u);
+    assert.equal(logs.length - voor, 1, "een log-regel: " + u);
+  }
+  assert.equal(net.aanroepen.length, 0);
+  assert.equal(logs.some(l => /hq\.|evil|elders/.test(l) || l.includes(HQ_TOKEN)), false, "geen URL of token in de logs");
+});
+
+test("hq: een redirect wordt niet gevolgd en telt als fout", async (t) => {
+  const { meldDrempel } = await import(pathToFileURL(join(SRC, "teller.js")).href);
+  const net = nepNet(t, () => new Response(null, { status: 302, headers: { Location: "https://elders.test/api/melding" } }));
+  vangLogs(t);
+  assert.equal(await meldDrempel(hqEnv(), "2026-11", 80), false);
+  assert.equal(net.aanroepen.length, 1);
+  assert.equal(net.aanroepen[0].init.redirect, "manual");
+  for (const s of [301, 307, 308]) {
+    net.hq = () => new Response(null, { status: s, headers: { Location: "https://elders.test/" } });
+    assert.equal(await meldDrempel(hqEnv(), "2026-11", 80), false, String(s));
+  }
+});
+
+test("hq: bij 500 of een netwerkfout opnieuw bij de volgende reservering, na succes niet meer", async (t) => {
+  for (const storing of [() => new Response("kapot", { status: 500 }), () => { throw new TypeError("fetch failed"); }]) {
+    let n = 0;
+    const net = nepNet(t, () => (++n === 1 ? storing() : new Response(null, { status: 201 })));
+    const logs = vangLogs(t);
+    const kv = nepKV();
+    zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 79, gemeld: [] });
+    await metTijd(MIDDAG, async () => {
+      // de 80e: melding faalt, het foto-antwoord blijft 200
+      let ctx = nepCtx();
+      assert.equal((await worker.fetch(open("/extract", FOTO, toestel(1)), hqEnv(kv), ctx)).status, 200);
+      await ctx.klaar();
+      assert.equal(net.aanroepen.length, 1);
+      assert.deepEqual(teMelden(kv), [{ maand: "2026-11", drempel: 80 }], "blijft open");
+      // binnen 5 minuten: geen nieuwe poging
+      zetTijd(MIDDAG + 4 * MINUUT);
+      ctx = nepCtx();
+      assert.equal((await worker.fetch(open("/extract", FOTO, toestel(4)), hqEnv(kv), ctx)).status, 200);
+      await ctx.klaar();
+      assert.equal(net.aanroepen.length, 1, "binnen de pauze geen tweede fetch");
+      // na 5 minuten: opnieuw geprobeerd, nu 201, en afgevinkt
+      zetTijd(MIDDAG + PAUZE);
+      ctx = nepCtx();
+      assert.equal((await worker.fetch(open("/extract", FOTO, toestel(2)), hqEnv(kv), ctx)).status, 200);
+      await ctx.klaar();
+      assert.equal(net.aanroepen.length, 2);
+      assert.equal(net.aanroepen[1].init.body, '{"bron":"overhoren","soort":"foto-80","maand":"2026-11"}');
+      assert.deepEqual(teMelden(kv), []);
+      // de volgende en een verrijking, ook na de pauze: niets meer naar hq
+      zetTijd(MIDDAG + 3 * PAUZE);
+      ctx = nepCtx();
+      await worker.fetch(open("/extract", FOTO, toestel(3)), hqEnv(kv), ctx);
+      await worker.fetch(open("/enrich", WOORDEN, toestel(3)), hqEnv(kv), ctx);
+      await ctx.klaar();
+      assert.equal(net.aanroepen.length, 2);
+    });
+    assert.deepEqual(standVan(kv, "extract").gemeld, [80]);
+    assert.equal(logs.some(l => l.includes(HQ_TOKEN) || l.includes("Bearer")), false);
+  }
+});
+
+test("hq: een mislukte melding van 100 wordt ook bij een geweigerde reservering (429) opnieuw geprobeerd", async (t) => {
+  let n = 0;
+  const net = nepNet(t, () => (++n === 1 ? new Response(null, { status: 503 }) : new Response(null, { status: 200 })));
+  vangLogs(t);
+  const kv = nepKV();
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 99, gemeld: [80] });
+  await metTijd(MIDDAG, async () => {
+    let ctx = nepCtx();
+    assert.equal((await worker.fetch(open("/extract", FOTO, toestel(1)), hqEnv(kv), ctx)).status, 200);
+    await ctx.klaar();
+    assert.deepEqual(teMelden(kv), [{ maand: "2026-11", drempel: 100 }]);
+    zetTijd(MIDDAG + PAUZE);
+    ctx = nepCtx();
+    const vol = await worker.fetch(open("/extract", FOTO, toestel(2)), hqEnv(kv), ctx);
+    assert.equal(vol.status, 429);
+    assert.equal((await vol.json()).grens, "maand");
+    await ctx.klaar();
+  });
+  assert.equal(net.aanroepen.length, 2);
+  assert.equal(net.aanroepen[1].init.body, '{"bron":"overhoren","soort":"foto-100","maand":"2026-11"}');
+  assert.deepEqual(teMelden(kv), []);
+  assert.equal(net.ai, 1, "de geweigerde reservering gaat niet naar de AI");
+});
+
+test("hq: het foto-antwoord wacht niet op hq en blijft 200 als hq faalt", async (t) => {
+  let laatGaan;
+  const hangt = new Promise(r => { laatGaan = r; });
+  const net = nepNet(t, () => hangt.then(() => { throw new Error("time-out " + HQ_TOKEN); }));
+  const logs = vangLogs(t);
+  const kv = nepKV();
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 79, gemeld: [] });
+  const ctx = nepCtx();
+  await metTijd(MIDDAG, async () => {
+    const res = await worker.fetch(open("/extract", FOTO), hqEnv(kv), ctx);
+    assert.equal(res.status, 200, "antwoord terwijl hq nog bezig is");
+    assert.deepEqual(await res.json(), { items: [{ word: "a", def: "b" }] });
+  });
+  assert.equal(ctx.taken.length, 1, "de melding loopt via ctx.waitUntil");
+  assert.equal(net.aanroepen.length, 1);
+  laatGaan();
+  await ctx.klaar();
+  assert.deepEqual(teMelden(kv), [{ maand: "2026-11", drempel: 80 }]);
+  assert.equal(logs.some(l => l.includes(HQ_TOKEN) || l.includes("Bearer")), false, "token niet in de logs, ook niet uit een foutobject");
+  assert.ok(logs.some(l => l.includes("Melding hq")), "wel een korte reden");
+});
+
+test("hq: open meldingen hooguit eens per 5 minuten opnieuw, ook bij een geweigerde reservering", async (t) => {
+  assert.equal(PAUZE, 5 * MINUUT);
+  const net = nepNet(t, () => new Response(null, { status: 500 }));
+  vangLogs(t);
+  const kv = nepKV();
+  // de 80 staat open; TOESTEL zit vandaag op 10 (geweigerd), andere toestellen mogen
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: { [TOESTEL]: 10 }, maand: "2026-11", maandStand: 85, gemeld: [80], teMelden: [{ maand: "2026-11", drempel: 80 }] });
+  const stap = async (ms, id, status) => {
+    zetTijd(ms);
+    const ctx = nepCtx();
+    assert.equal((await worker.fetch(open("/extract", FOTO, id), hqEnv(kv), ctx)).status, status);
+    await ctx.klaar();
+    return net.aanroepen.length;
+  };
+  await metTijd(MIDDAG, async () => {
+    assert.equal(await stap(MIDDAG, toestel(1), 200), 1, "eerste poging");
+    assert.equal(standVan(kv, "extract").laatstePoging, MIDDAG);
+    assert.equal(await stap(MIDDAG + MINUUT, toestel(2), 200), 1, "geslaagde reservering binnen de pauze");
+    assert.equal(await stap(MIDDAG + MINUUT, TOESTEL, 429), 1, "geweigerde reservering binnen de pauze");
+    assert.equal(await stap(MIDDAG + PAUZE - 1, toestel(3), 200), 1, "net voor de pauze om is");
+    assert.equal(await stap(MIDDAG + PAUZE, TOESTEL, 429), 2, "na de pauze, ook als de reservering geweigerd wordt");
+    assert.equal(standVan(kv, "extract").laatstePoging, MIDDAG + PAUZE);
+    assert.equal(await stap(MIDDAG + PAUZE + MINUUT, toestel(4), 200), 2);
+    assert.equal(await stap(MIDDAG + 2 * PAUZE, toestel(5), 200), 3);
+  });
+  assert.equal(net.ai, 5);
+});
+
+test("hq: een net gehaalde drempel gaat meteen, ook binnen de pauze", async (t) => {
+  const net = nepNet(t, () => new Response(null, { status: 500 }));
+  vangLogs(t);
+  const kv = nepKV();
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 99, gemeld: [80], teMelden: [{ maand: "2026-11", drempel: 80 }], laatstePoging: MIDDAG - MINUUT });
+  await metTijd(MIDDAG, async () => {
+    const ctx = nepCtx();
+    await worker.fetch(open("/extract", FOTO, toestel(1)), hqEnv(kv), ctx);
+    await ctx.klaar();
+  });
+  assert.deepEqual(net.aanroepen.map(a => JSON.parse(a.init.body).soort), ["foto-80", "foto-100"]);
+});
+
+test("hq: een vijfde open melding laat de oudste vallen, met een logregel zonder details", async (t) => {
+  nepNet(t, () => new Response(null, { status: 500 }));
+  const logs = vangLogs(t);
+  const kv = nepKV();
+  const vier = [
+    { maand: "2026-08", drempel: 80 }, { maand: "2026-08", drempel: 100 },
+    { maand: "2026-09", drempel: 80 }, { maand: "2026-09", drempel: 100 },
+  ];
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 78, gemeld: [], teMelden: vier });
+  await metTijd(MIDDAG, async () => {
+    await worker.fetch(open("/extract", FOTO, toestel(1)), hqEnv(kv), nepCtx()); // 79: niets valt weg
+    assert.equal(logs.filter(l => l.includes("vervallen")).length, 0);
+    const ctx = nepCtx();
+    await worker.fetch(open("/extract", FOTO, toestel(2)), hqEnv(kv), ctx); // 80: de oudste valt weg
+    await ctx.klaar();
+  });
+  const regels = logs.filter(l => l.includes("vervallen"));
+  assert.deepEqual(regels, ["Melding hq: oudste open melding vervallen"]);
+  assert.equal(teMelden(kv).length, 4);
+  assert.equal(logs.some(l => l.includes(HQ_TOKEN) || l.includes(TOESTEL) || l.includes(toestel(2))), false);
+});
+
+test("hq: de teller vinkt alleen een geldige melding af via /gemeld", async () => {
+  const teller = new FotoTeller({ storage: { kv: nepDOOpslag() } }, {});
+  await metTijd(MIDDAG, async () => {
+    for (let i = 0; i < 80; i++) teller.reserveer("extract", toestel(i));
+  });
+  const vraag = body => teller.fetch(new Request("https://teller/gemeld", { method: "POST", body: JSON.stringify(body) }));
+  for (const fout of [{}, { maand: "2026-11", drempel: 81 }, { maand: "2026-13", drempel: 80 }, { maand: 202611, drempel: 80 }]) {
+    assert.equal((await vraag(fout)).status, 400, JSON.stringify(fout));
+  }
+  assert.deepEqual(teller.stand("extract", "2026-11-14", "2026-11").teMelden, [{ maand: "2026-11", drempel: 80 }]);
+  assert.equal((await vraag({ maand: "2026-11", drempel: 80 })).status, 200);
+  assert.deepEqual(teller.stand("extract", "2026-11-14", "2026-11").teMelden, []);
+});
+
+test("hq: een open melding van vorige maand wordt na de maandwissel met die maand afgeleverd", async (t) => {
+  let ok = false;
+  const net = nepNet(t, () => (ok ? new Response(null, { status: 201 }) : new Response(null, { status: 500 })));
+  vangLogs(t);
+  const kv = nepKV();
+  zaaiStand(kv, "extract", { dag: "2026-10-31", toestellen: {}, maand: "2026-10", maandStand: 100, gemeld: [80, 100], teMelden: [{ maand: "2026-10", drempel: 100 }] });
+  const NOV = Date.UTC(2026, 10, 1, 11, 0);
+  await metTijd(NOV, async () => {
+    let ctx = nepCtx();
+    assert.equal((await worker.fetch(open("/extract", FOTO, toestel(1)), hqEnv(kv), ctx)).status, 200, "nieuwe maand, dus weer ruimte");
+    await ctx.klaar();
+    assert.equal(net.aanroepen.length, 1);
+    assert.equal(net.aanroepen[0].init.body, '{"bron":"overhoren","soort":"foto-100","maand":"2026-10"}');
+    // mislukt: de melding van oktober blijft staan, ook in november
+    const s = standVan(kv, "extract");
+    assert.equal(s.maand, "2026-11");
+    assert.equal(s.maandStand, 1);
+    assert.deepEqual(s.gemeld, []);
+    assert.deepEqual(s.teMelden, [{ maand: "2026-10", drempel: 100 }]);
+    ok = true;
+    zetTijd(NOV + PAUZE);
+    ctx = nepCtx();
+    await worker.fetch(open("/extract", FOTO, toestel(2)), hqEnv(kv), ctx);
+    await ctx.klaar();
+    assert.equal(net.aanroepen[1].init.body, '{"bron":"overhoren","soort":"foto-100","maand":"2026-10"}');
+    assert.deepEqual(teMelden(kv), []);
+    assert.equal(net.aanroepen.length, 2);
+  });
+});
+
+test("hq: 80 en 100 allebei open gaan als twee aparte meldingen, en alleen de aangekomen wordt afgevinkt", async (t) => {
+  let alleenTachtig = false;
+  const net = nepNet(t, (n) => {
+    const body = net.aanroepen[n - 1].init.body;
+    return new Response(null, { status: alleenTachtig && body.includes("foto-80") ? 201 : 503 });
+  });
+  vangLogs(t);
+  const kv = nepKV();
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 79, gemeld: [], teMelden: [] });
+  await metTijd(MIDDAG, async () => {
+    let ctx = nepCtx();
+    await worker.fetch(open("/extract", FOTO, toestel(1)), hqEnv(kv), ctx); // 80, hq stuk
+    await ctx.klaar();
+    assert.equal(net.aanroepen.length, 1);
+    zaaiStand(kv, "extract", { ...standVan(kv, "extract"), maandStand: 99 });
+    net.aanroepen.length = 0;
+    ctx = nepCtx();
+    await worker.fetch(open("/extract", FOTO, toestel(2)), hqEnv(kv), ctx); // 100, hq nog stuk
+    await ctx.klaar();
+    assert.deepEqual(teMelden(kv), [{ maand: "2026-11", drempel: 80 }, { maand: "2026-11", drempel: 100 }]);
+    assert.deepEqual(net.aanroepen.map(a => JSON.parse(a.init.body).soort), ["foto-80", "foto-100"]);
+    // nu antwoordt hq alleen op de 80 goed; de reservering zelf wordt geweigerd (vol)
+    alleenTachtig = true;
+    net.aanroepen.length = 0;
+    zetTijd(MIDDAG + PAUZE);
+    ctx = nepCtx();
+    assert.equal((await worker.fetch(open("/extract", FOTO, toestel(3)), hqEnv(kv), ctx)).status, 429);
+    await ctx.klaar();
+    assert.equal(net.aanroepen.length, 2);
+    assert.deepEqual(teMelden(kv), [{ maand: "2026-11", drempel: 100 }], "alleen de 100 blijft open");
+  });
+});
+
+test("hq: hooguit 4 openstaande meldingen, dus hooguit 4 fetches per reservering, en een enrich heeft er geen", async (t) => {
+  const net = nepNet(t, () => new Response(null, { status: 500 }));
+  vangLogs(t);
+  const kv = nepKV();
+  const vier = [
+    { maand: "2026-08", drempel: 80 }, { maand: "2026-08", drempel: 100 },
+    { maand: "2026-09", drempel: 80 }, { maand: "2026-09", drempel: 100 },
+  ];
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 79, gemeld: [], teMelden: vier });
+  await metTijd(MIDDAG, async () => {
+    let ctx = nepCtx();
+    await worker.fetch(open("/extract", FOTO, toestel(1)), hqEnv(kv), ctx); // haalt 80 erbij: vijf, de oudste valt af
+    await ctx.klaar();
+    assert.equal(net.aanroepen.length, 4, "de reservering ziet de stand voor de nieuwe 80: vier");
+    assert.equal(teMelden(kv).length, 4);
+    assert.deepEqual(teMelden(kv)[3], { maand: "2026-11", drempel: 80 });
+    assert.deepEqual(teMelden(kv)[0], { maand: "2026-08", drempel: 100 }, "de oudste is weggevallen");
+    net.aanroepen.length = 0;
+    zetTijd(MIDDAG + PAUZE);
+    ctx = nepCtx();
+    await worker.fetch(open("/extract", FOTO, toestel(2)), hqEnv(kv), ctx);
+    await ctx.klaar();
+    assert.equal(net.aanroepen.length, 4, "nooit meer dan vier");
+    // enrich: eigen rij, geen meldingen
+    net.aanroepen.length = 0;
+    ctx = nepCtx();
+    await worker.fetch(open("/enrich", WOORDEN, toestel(3)), hqEnv(kv), ctx);
+    await ctx.klaar();
+    assert.equal(net.aanroepen.length, 0);
+  });
+});
+
+test("hq: zonder ctx (of ctx zonder waitUntil) gaat het foto-antwoord gewoon door", async (t) => {
+  const net = nepNet(t, () => new Response(null, { status: 201 }));
+  vangLogs(t);
+  const kv = nepKV();
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 79, gemeld: [], teMelden: [] });
+  await metTijd(MIDDAG, async () => {
+    assert.equal((await worker.fetch(open("/extract", FOTO, toestel(1)), hqEnv(kv))).status, 200);
+    assert.equal((await worker.fetch(open("/extract", FOTO, toestel(2)), hqEnv(kv), {})).status, 200);
+  });
+});
+
+test("hq: /gemeld met een drempel die niet open staat verandert niets en laat de andere open", async () => {
+  const opslag = nepDOOpslag();
+  const teller = new FotoTeller({ storage: { kv: opslag } }, {});
+  await metTijd(MIDDAG, async () => {
+    for (let i = 0; i < 80; i++) teller.reserveer("extract", toestel(i));
+  });
+  const voor = JSON.stringify(teller.stand("extract", "2026-11-14", "2026-11"));
+  const vraag = body => teller.fetch(new Request("https://teller/gemeld", { method: "POST", body: JSON.stringify(body) }));
+  for (const b of [{ maand: "2026-11", drempel: 100 }, { maand: "2026-10", drempel: 80 }]) {
+    assert.equal((await vraag(b)).status, 200, JSON.stringify(b));
+    assert.equal(JSON.stringify(teller.stand("extract", "2026-11-14", "2026-11")), voor, "ongewijzigd: " + JSON.stringify(b));
+  }
+  // en een dubbele afvinking is veilig
+  assert.equal((await vraag({ maand: "2026-11", drempel: 80 })).status, 200);
+  assert.equal((await vraag({ maand: "2026-11", drempel: 80 })).status, 200);
+  assert.deepEqual(teller.stand("extract", "2026-11-14", "2026-11").teMelden, []);
+  // gemeld (de gehaald-lijst) blijft staan: de 80 komt niet opnieuw
+  assert.deepEqual(teller.stand("extract", "2026-11-14", "2026-11").gemeld, [80]);
+});
+
+test("hq: /gemeld raakt alleen de gekozen maand en drempel, ook als dezelfde drempel van twee maanden open staat", async () => {
+  const kv = nepKV();
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 80, gemeld: [80], teMelden: [{ maand: "2026-10", drempel: 80 }, { maand: "2026-11", drempel: 80 }] });
+  const teller = new FotoTeller({ storage: { kv: kv.teller.opslag } }, {});
+  const res = await teller.fetch(new Request("https://teller/gemeld", { method: "POST", body: JSON.stringify({ maand: "2026-10", drempel: 80 }) }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(standVan(kv, "extract").teMelden, [{ maand: "2026-11", drempel: 80 }]);
 });
 
 // ---------- aanvullende dekking foto-import ----------
