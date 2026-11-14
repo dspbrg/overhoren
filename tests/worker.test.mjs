@@ -631,7 +631,7 @@ async function metTijd(ms, fn) {
 const MIDDAG = Date.UTC(2026, 10, 14, 11, 0);
 
 test("grenzen staan als constanten in de worker: 10 per toestel per dag, 100 per maand", async () => {
-  const mod = await import(pathToFileURL(join(SRC, "index.js")).href);
+  const mod = await import(pathToFileURL(join(SRC, "teller.js")).href);
   assert.equal(mod.FOTO_PER_TOESTEL_PER_DAG, 10);
   assert.equal(mod.FOTO_PER_MAAND, 100);
 });
@@ -701,7 +701,7 @@ test("foto-import: de 101e foto in dezelfde maand krijgt 429 (maand), de eerste 
 });
 
 test("foto-import: dag en maand volgen Amsterdam, een oude dag blijft niet staan", async (t) => {
-  const { dagVan } = await import(pathToFileURL(join(SRC, "index.js")).href);
+  const { dagVan } = await import(pathToFileURL(join(SRC, "teller.js")).href);
   // 23:30 UTC in november is 00:30 in Amsterdam: al de volgende dag
   assert.equal(dagVan(Date.UTC(2026, 10, 14, 22, 59)), "2026-11-14");
   assert.equal(dagVan(Date.UTC(2026, 10, 14, 23, 30)), "2026-11-15");
@@ -887,7 +887,7 @@ test("CORS: x-toestel mag mee, alleen voor de twee origins", async () => {
 // ---------- drempels voor een latere melding (80 en 100 per maand) ----------
 
 test("drempels: de reservering die 80 of 100 haalt meldt het, precies een keer per maand", async () => {
-  const { MELD_DREMPELS } = await import(pathToFileURL(join(SRC, "index.js")).href);
+  const { MELD_DREMPELS } = await import(pathToFileURL(join(SRC, "teller.js")).href);
   assert.deepEqual(MELD_DREMPELS, [80, 100]);
   const teller = new FotoTeller({ storage: { kv: nepDOOpslag() } }, {});
   const drempels = [];
@@ -927,7 +927,7 @@ test("drempels: via /extract komen 80 en 100 elk een keer uit de teller, zonder 
 });
 
 test("drempels: meldDrempel doet niets zonder HQ_MELD_URL", async (t) => {
-  const { meldDrempel } = await import(pathToFileURL(join(SRC, "index.js")).href);
+  const { meldDrempel } = await import(pathToFileURL(join(SRC, "teller.js")).href);
   let netwerk = 0;
   t.mock.method(globalThis, "fetch", async () => { netwerk++; return new Response("{}"); });
   assert.equal(await meldDrempel(env(), "2026-11", 80), false);
@@ -1001,7 +1001,7 @@ test("middernacht Amsterdam: /enrich krijgt op een nieuwe dag weer ruimte, ook b
 });
 
 test("middernacht Amsterdam: nieuwjaar en de dag waarop de klok terugdraait", async (t) => {
-  const { dagVan } = await import(pathToFileURL(join(SRC, "index.js")).href);
+  const { dagVan } = await import(pathToFileURL(join(SRC, "teller.js")).href);
   assert.equal(dagVan(Date.UTC(2026, 11, 31, 22, 59)), "2026-12-31");
   assert.equal(dagVan(Date.UTC(2026, 11, 31, 23, 0)), "2027-01-01");
   // 25 oktober 2026: de klok gaat terug, 00:30 UTC is 02:30 zomertijd, 01:30 UTC is 02:30 wintertijd
@@ -1149,4 +1149,11 @@ test("oude app: zonder x-toestel maar met het wachtwoord mag de foto-import, ond
   assert.deepEqual(standVan(kv, "extract").toestellen, { wachtwoord: 10 });
   assert.equal(maandStand(kv, "extract"), 10, "telt mee voor de maand");
   assert.equal(ai.n, 11);
+});
+
+// workerd ziet elke export van index.js als ingang en weigert te starten
+// als er een getal of losse functie tussen zit (gezien in wrangler dev).
+test("index.js exporteert alleen de handler en FotoTeller", async () => {
+  const mod = await import(pathToFileURL(join(SRC, "index.js")).href);
+  assert.deepEqual(Object.keys(mod).sort(), ["FotoTeller", "default"]);
 });

@@ -1,11 +1,13 @@
 import { mergeSync, HttpFout } from "./merge.js";
-import { FotoTeller, FOTO_PER_TOESTEL_PER_DAG, FOTO_PER_MAAND, MELD_DREMPELS, dagVan } from "./teller.js";
+import { FotoTeller, FOTO_PER_TOESTEL_PER_DAG, FOTO_PER_MAAND, MELD_DREMPELS, dagVan, meldDrempel } from "./teller.js";
 
 // Foto-import zonder wachtwoord, met twee grenzen (Europe/Amsterdam): per
 // toestel per kalenderdag, en voor iedereen samen per kalendermaand. Ze
 // gelden voor /extract en /enrich elk apart en staan in teller.js. De
 // Durable Object FotoTeller telt atomair en vooraf.
-export { FotoTeller, FOTO_PER_TOESTEL_PER_DAG, FOTO_PER_MAAND, MELD_DREMPELS, dagVan };
+// Alleen de handler en de Durable Object exporteren: workerd ziet elke
+// export van dit bestand als ingang en start niet met een getal of functie.
+export { FotoTeller };
 
 const EXTRACT_MODEL = "claude-haiku-5-5";
 const ENRICH_MODEL = "claude-sonnet-5-5";
@@ -274,12 +276,6 @@ class GrensFout extends Error {
     super("Grens bereikt");
     this.grens = grens;
   }
-}
-
-// Haak voor de melding naar het dashboard bij 80 en 100 foto's in een maand.
-// Nog niet gebouwd: doet niets en gaat niet het net op.
-export async function meldDrempel(env, maand, drempel) {
-  return false;
 }
 
 async function metPlek(env, plek, aanroep) {

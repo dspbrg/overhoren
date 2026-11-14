@@ -94,3 +94,9 @@ export class FotoTeller {
     return antwoord({ error: "Niet gevonden" }, 404);
   }
 }
+
+// Haak voor de melding naar het dashboard bij 80 en 100 foto's in een maand.
+// Nog niet gebouwd: doet niets en gaat niet het net op.
+export async function meldDrempel(env, maand, drempel) {
+  return false;
+}
