@@ -101,6 +101,12 @@
     --card-3: light-dark(#EFEAFC, #2A2549);
     --card: linear-gradient(115deg, var(--card-1) 0 45%, var(--card-2) 45% 75%, var(--card-3) 75% 100%);
     --card-shadow-color: light-dark(#D2C8F2, #0C0A1A);
+    /* podium in het welkom: dezelfde drie banen als de kaart, maar altijd
+       licht, ook in het donkere thema. Er staat geen tekst op. */
+    --podium-1: #FFFFFF;
+    --podium-2: #F7F4FE;
+    --podium-3: #EFEAFC;
+    --podium: linear-gradient(115deg, var(--podium-1) 0 45%, var(--podium-2) 45% 75%, var(--podium-3) 75% 100%);
     /* vlak en schaduw van bedienbare elementen op een kaart. Licht: een
        lichtpaars vlak dat op alle drie de kaartbanen zichtbaar afsteekt
        (ook op de rechterbaan #EFEAFC; een lichtere tint viel daar weg).
@@ -202,6 +208,8 @@
     --cut-meter: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
     --cut-small: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px),
                          calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+    /* staande zeshoek, punt boven en onder: het podium in het welkom */
+    --cut-zeshoek: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
 
     --shadow: 0 var(--drop-y) 0 var(--card-shadow-color);   /* box-shadow-variant van --card-shadow */
 
@@ -283,7 +291,18 @@
     --kat-oor:       30px;    /* zoveel zit de kat over de bovenrand van de kaart */
     --lh-spraak:     1.35;    /* regelhoogte in de spraakbalk */
     --spraak-regels: 3;       /* zoveel regels houdt de rand vrij, zodat de kaart niet verspringt */
-    --kat-welkom-h:  232px;   /* kat in het welkom */
+    /* welkom: de kat in een staande zeshoek, waar hij bovenuit steekt.
+       Maten in ontwerp-pixels (getallen, de opzet van Daan op volle maat).
+       --kat-welkom-h is de hoogte van zeshoek plus kat op volle maat; op
+       een laag scherm hooguit 40dvh, en alles schaalt mee. */
+    --kat-welkom-h:  336px;   /* van de bovenkant van het kattendoek tot de punt onderaan */
+    --welkom-hoogte:    336;  /* hetzelfde als getal: kat-y plus kat-maat */
+    --welkom-zeshoek-b: 260;
+    --welkom-zeshoek-h: 300;
+    --welkom-kat-maat:  310;  /* het vierkante doek van de welkomclip */
+    --welkom-kat-x:     -25;  /* links van de zeshoek, zodat de kat in het midden staat */
+    --welkom-kat-y:     26;   /* zo hoog boven de punt onderaan staan de voeten */
+    --welkom-lucht:     34;   /* ruimte boven het doek, voor oren die omhoog gaan */
 
     /* --- welkom: hoe lang het welkom bij het openen staat, alles bij
        elkaar, met de overgang erin. index.html leest deze waarden (in ms);
@@ -674,10 +693,11 @@
     pointer-events: none;
   }
 
-  /* --- katten (bouwopdracht 3, kattenclips) ---
-     Zes vrijstaande katten op een doek van 400 x 480 (katten.json). Ze
-     bewegen alleen met hun eigen clip, 6 beelden per seconde, daarna het
-     eindbeeld (Celebrate.speler). Geen css-beweging bovenop. Afmetingen
+  /* --- katten ---
+     Zes vrijstaande katten op een doek van 400 x 480 (katten.json). In de
+     app staan ze stil: rust, goed-eind of bijna-eind (Celebrate.toon).
+     Alleen in het welkom beweegt de kat, met een eigen clip (.welkom-kat
+     hieronder). Geen css-beweging, nergens. Afmetingen
      staan als width/height op het <img>, dus de maat staat al vast voor
      het beeld binnen is. De kat kijkt naar binnen: rechts van de inhoud
      en naar rechts kijkend krijgt hij .gespiegeld. */
@@ -718,9 +738,10 @@
 
   /* --- welkom: bij het openen, een keer per sessie ---
      Heel scherm over de app (die is zolang inert). Tijdlijn:
-       0     de naam verschijnt (200 ms), de goed-clip van de kat begint
+       0     de naam verschijnt (200 ms), de welkomclip van de kat begint
        400   "Hoi <naam>" verschijnt (200 ms)
-       0 tot 3000  de goed-clip speelt in een lus (alleen hier, in de ronde een keer)
+       0 tot 3000  de welkomclip speelt (36 beelden, 12 per seconde; alleen
+             hier beweegt de kat, in de app staat hij stil)
        3000  .opent: vanuit het midden opent een plat zeshoekig gat dat in
              --welkom-overgang groeit tot over het hele scherm; door het gat
              verschijnt de app. Tegelijk vervaagt het welkom. Daarna haalt
@@ -728,9 +749,9 @@
      Samen --welkom-duur (3500 ms, keuze van Daan: "veeeel te kort", "nog
      een seconde langer"). Een tik of toets geeft .opent.snel: hetzelfde gat
      in --welkom-overgang-snel. De kat beweegt alleen met zijn clip, er zit
-     geen sprong of wiebel op. Bij reduced motion geen gat en geen
-     vervaging: alles staat stil in het eindbeeld (regel onderaan) en is na
-     --welkom-duur, of na een tik, meteen weg. */
+     geen sprong of wiebel op. Bij reduced motion geen clip, geen gat en
+     geen vervaging: het eerste beeld van de clip staat stil (regel
+     onderaan) en is na --welkom-duur, of na een tik, meteen weg. */
   .welkom {
     position: fixed; inset: 0; z-index: 100;
     display: grid; place-content: center; justify-items: center; gap: var(--gap-group);
@@ -743,8 +764,8 @@
   }
   /* De overgang. Een clip-path met evenodd: de rechthoek van het scherm en
      daarin een platte zeshoek (punten links en rechts, vlak boven en onder),
-     dezelfde vorm als de schaduw onder het podium. Wat in beide zit, valt
-     weg: dat is het gat. Ook tikken in het gat valt erdoor, op de app die
+     het podium een kwartslag gedraaid. Wat in beide zit, valt weg: dat is
+     het gat. Ook tikken in het gat valt erdoor, op de app die
      nog inert is, dus er gebeurt niets. */
   @media (prefers-reduced-motion: no-preference) {
     .welkom.opent {
@@ -765,15 +786,33 @@
     font-family: var(--display); font-weight: 700; font-size: var(--t-welkom); line-height: 1.1;
     animation: welkom-in var(--m3-effects) both;
   }
-  /* het podium draagt een vlakke zeshoekige schaduw onder de voeten */
-  .welkom-podium { position: relative; display: grid; justify-items: center; }
-  .welkom-podium::after {
-    content: ""; position: absolute; inset-block-end: calc(-1 * var(--s1)); z-index: -1;
-    inline-size: 60%; block-size: var(--s3);
-    background: var(--card-shadow-color);
-    clip-path: polygon(12% 0, 88% 0, 100% 50%, 88% 100%, 12% 100%, 0 50%);
+  /* het podium: een staande lichte zeshoek met de kaartbanen en een harde
+     schaduw, de kat staat erin en steekt er bovenuit. Alles rekent in
+     --u, een ontwerp-pixel: 1px op volle maat, kleiner op een laag scherm.
+     Het podium is zo breed als de zeshoek; de kat is breder en hangt er
+     aan beide kanten even ver overheen. */
+  .welkom-podium {
+    --u: calc(min(var(--kat-welkom-h), 40dvh) / var(--welkom-hoogte));
+    position: relative; isolation: isolate;
+    inline-size: calc(var(--welkom-zeshoek-b) * var(--u));
+    block-size: calc(var(--welkom-hoogte) * var(--u));
+    margin-block: calc(var(--welkom-lucht) * var(--u)) var(--drop-y);
   }
-  .welkom-kat { display: block; block-size: min(var(--kat-welkom-h), 40dvh); inline-size: auto; }
+  /* zelfde techniek als een kaart: het element draagt de schaduw, ::before het geknipte vlak */
+  .welkom-zeshoek {
+    position: absolute; inset-inline: 0; inset-block-end: 0; z-index: -1;
+    block-size: calc(var(--welkom-zeshoek-h) * var(--u));
+    filter: var(--card-shadow);
+  }
+  .welkom-zeshoek::before {
+    content: ""; position: absolute; inset: 0;
+    background: var(--podium); clip-path: var(--cut-zeshoek);
+  }
+  .welkom-kat {
+    position: absolute; display: block; max-inline-size: none;
+    inline-size: calc(var(--welkom-kat-maat) * var(--u)); block-size: calc(var(--welkom-kat-maat) * var(--u));
+    inset-inline-start: calc(var(--welkom-kat-x) * var(--u)); inset-block-end: calc(var(--welkom-kat-y) * var(--u));
+  }
   .welkom-groet {
     margin: 0; font-family: var(--display); font-weight: 600; font-size: var(--t-card); line-height: 1.15;
     animation: welkom-in var(--m3-effects) 400ms both;

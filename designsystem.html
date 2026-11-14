@@ -32,7 +32,7 @@
   /* het welkom is in de app heel scherm; hier in een vak. Het gat rekent
      dan met de maat van het vak (cqw, cqh) in plaats van het scherm, en
      door het gat verschijnt een plek waar in de app de app staat. */
-  .sg-welkom { position: relative; inline-size: 100%; block-size: 480px; overflow: hidden; clip-path: var(--cut-card);
+  .sg-welkom { position: relative; inline-size: 100%; block-size: 560px; overflow: hidden; clip-path: var(--cut-card);
     container-type: size; display: grid; place-items: center; background: var(--mark); color: var(--muted); }
   .sg-welkom > p { margin: 0; }
   .sg-welkom .welkom { position: absolute; --gat-max: max(50cqw + 28.9cqh, 57.8cqh); }
@@ -88,6 +88,7 @@
         <li><b>2026-11-13</b> Het welkom gaat weg met een zeshoekig gat: vanuit het midden opent een platte zeshoek die in 500 ms over het hele scherm groeit, terwijl het welkom vervaagt. Wegtikken geeft hetzelfde gat in 250 ms. In het welkom speelt de kat zijn goed-clip in een lus. Bij minder beweging geen lus en geen gat, alleen het eindbeeld en daarna meteen weg.</li>
         <li><b>2026-11-13</b> De kat beweegt met korte clips van zes beelden per seconde, bewust een beetje schokkerig, en blijft daarna in zijn eindstand staan. Per kat rust, een goed-clip en een bijna-clip, allemaal op hetzelfde doek van 400 bij 480 (katten.json). Geen css-beweging bovenop de clips, ook niet in het welkom. Rechts van de inhoud wordt een kat die naar rechts kijkt gespiegeld; een kat die recht vooruit kijkt nooit. Bij minder beweging meteen het eindbeeld.</li>
         <li><b>2026-11-14</b> Een menuknop rechtsboven op het startscherm, in plaats van de footer onder de lijsten. In het menu: Rapport, Over Overhoren, het thema en de versie. Open wordt de knop een kruis en dimt de pagina erachter. Over Overhoren heeft de wetenschap, de schakelaar voor klaslijsten en het colofon.</li>
+        <li><b>2026-11-14</b> Alleen het welkom beweegt. Daar staat de kat in een lichte staande zeshoek (punt boven en onder, de drie kaartbanen, ook in het donkere thema licht) en steekt er bovenuit; hij speelt een eigen welkomclip van 3 s, 12 beelden per seconde. In de app staat de kat stil: rust, of meteen het eindbeeld van goed of bijna. De oude goed- en bijna-clips staan in het archief. Bij minder beweging staat in het welkom het eerste beeld van de clip stil.</li>
       </ul>
       <span class="eyebrow">Rules</span>
       <ul class="sg-decisions">
@@ -147,6 +148,7 @@
         <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-chip)"></div><b>--cut-chip</b><code>--slant 8px, chip, choice, segment</code></div>
         <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-meter);height:16px"></div><b>--cut-meter</b><code>4px, meter</code></div>
         <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-small)"></div><b>--cut-small</b><code>6px, stat</code></div>
+        <div class="sg-row"><div class="sg-shape" style="clip-path:var(--cut-zeshoek);width:52px;height:60px"></div><b>--cut-zeshoek</b><code>staand, podium in het welkom</code></div>
       </div>
       <div class="sg-spec"><span>Shadow, every shape</span><code>--drop-y: 6px</code></div>
       <div class="sg-spec"><span>Card shadow</span><code>--card-shadow: drop-shadow(0 var(--drop-y) 0 #D2C8F2)</code></div>
@@ -260,6 +262,8 @@
       ["--page-1"], ["--page-2"], ["--page-3"], ["--page-4"],
       ["--card", "Kaart, drie schuine banen", "115deg · --card-1 … --card-3"],
       ["--card-1"], ["--card-2"], ["--card-3"], ["--card-shadow-color", "Harde schaduw onder kaart"],
+      ["--podium", "Podium in het welkom, altijd licht", "115deg · --podium-1 … --podium-3"],
+      ["--podium-1"], ["--podium-2"], ["--podium-3"],
       ["--control-surf", "Vlak van secundaire knop, segment, keuze"], ["--control-hover", "Zelfde, bij hover"],
       ["--control-shadow", "Harde schaduw onder die knoppen"],
       ["--control", "Invoervelden"]
@@ -451,8 +455,8 @@
         '<div class="card"><p>Ronde klaar: 4 van 12 in één keer goed.</p></div></div></div>']
     ], { col: true }),
 
-    block("Kattenclips", "Celebrate.speler(img, { plaats }) speelt per moment: rust staat stil, goed en bijna spelen hun clip (6 beelden per seconde, uit een nieuwe object-URL) en zetten na duurMs uit katten.json het eindbeeld. Een nieuw moment breekt een lopende clip af. Alleen de kat van de ronde wordt geladen (Celebrate.laadKat). Bij minder beweging meteen het eindbeeld. Kies een kat en een moment; twee keer hetzelfde moment speelt opnieuw.", [
-      ['Celebrate.speler(img, { plaats: "rechts" }).speel(id, moment)',
+    block("Kattenstanden", "In de app staat de kat stil. Celebrate.toon(img, id, stand, plaats) zet meteen het beeld van een stand: rust, goed-eind of bijna-eind, met data-kat en data-beeld, en spiegelt volgens de regel. Er speelt geen clip en er loopt geen timer. Alleen de stilstaande beelden van de kat van de ronde worden vooraf geladen (Celebrate.laadKat). Kies een kat en een moment.", [
+      ['Celebrate.toon(img, id, moment, "rechts")',
         '<div style="width:100%" class="sg-demo col">' +
         '<div class="sg-demo" id="sg-clip-katten">' + Celebrate.KATTEN.map((k, i) => UI.Button({ id: "sg-clip-" + k.id, label: k.naam, variant: i ? "" : "primary" })).join("") + '</div>' +
         '<div class="sg-demo">' + UI.Button({ id: "sg-clip-rust", label: "Rust" }) + UI.Button({ id: "sg-clip-goed", label: "Goed" }) + UI.Button({ id: "sg-clip-bijna", label: "Bijna" }) + '</div>' +
@@ -460,7 +464,7 @@
         '<div class="card"><span class="eyebrow">Woord</span><p class="prompt">awesome</p></div></div></div></div>']
     ], { col: true }),
 
-    block("Welkom", "Bij elke keer openen van de app, een keer per sessie (niet bij herladen of terugkeren naar hetzelfde tabblad), heel scherm over de app (die is zolang inert). De goed-clip van de kat van de eerstvolgende ronde (Celebrate.volgende, Celebrate.welkomBeeld), dan Hoi met de naam; zonder naam alleen de kat. De kat staat in het midden, wordt nooit gespiegeld en krijgt geen css-beweging bovenop zijn clip; alleen hier speelt de goed-clip in een lus (Celebrate.speler, speel met { lus: true }), elke ronde met een nieuwe object-URL, vanaf het eerste beeld. Het staat --welkom-duur (3,5 s). Het laatste stuk, --welkom-overgang (500 ms), is de overgang (.welkom.opent): vanuit het midden opent een plat zeshoekig gat (clip-path met evenodd, het getal --gat van 0 naar 1) dat groeit tot over het hele scherm, en het welkom vervaagt. De lus maakt dan zijn ronde af. Tik of toets geeft hetzelfde gat in --welkom-overgang-snel (250 ms, .opent.snel) en gaat niet door naar de app. De app blijft inert tot het welkom weg is. Niet bij een ronde die openstaat, en alleen als de beelden binnen 300 ms klaar zijn. Reduced motion: geen lus en geen gat, meteen het eindbeeld, na 3,5 s of na een tik meteen weg. Hier in een vak; tik erin voor de snelle overgang.", [
+    block("Welkom", "Bij elke keer openen van de app, een keer per sessie (niet bij herladen of terugkeren naar hetzelfde tabblad), heel scherm over de app (die is zolang inert). De kat van de eerstvolgende ronde (Celebrate.volgende, Celebrate.welkomBeeld) staat in een lichte staande zeshoek (.welkom-podium, .welkom-zeshoek: --cut-zeshoek, de banen van --podium, ook in het donkere thema licht, met --card-shadow eronder) en steekt er bovenuit; dan Hoi met de naam, zonder naam alleen de kat. Maten in ontwerp-pixels: zeshoek 260 bij 300, kat 310 bij 310, 25 links van de zeshoek en 26 boven de punt onderaan. Samen 336 hoog, op een laag scherm hooguit 40dvh, en alles schaalt mee. Alleen hier beweegt de kat: zijn welkomclip (welkom-kat.webp, 36 beelden, 12 per seconde, 3 s, met alpha) uit een nieuwe object-URL, dus vanaf het eerste beeld (Celebrate.laadWelkom, Celebrate.welkomSpeler). Tot de clip staat, en bij minder beweging, staat het eerste beeld stil (welkom-kat-stil.webp). Nooit gespiegeld, geen css-beweging bovenop. Het staat --welkom-duur (3,5 s). Het laatste stuk, --welkom-overgang (500 ms), is de overgang (.welkom.opent): vanuit het midden opent een plat zeshoekig gat (clip-path met evenodd, het getal --gat van 0 naar 1) dat groeit tot over het hele scherm, en het welkom vervaagt. Tik of toets geeft hetzelfde gat in --welkom-overgang-snel (250 ms, .opent.snel) en gaat niet door naar de app. De app blijft inert tot het welkom weg is. Niet bij een ronde die openstaat, en alleen als de beelden binnen 300 ms klaar zijn. Reduced motion: geen clip en geen gat, na 3,5 s of na een tik meteen weg. Hier in een vak; tik erin voor de snelle overgang.", [
       ['UI.Welkom({ beeld: Celebrate.welkomBeeld(id), naam })',
         '<div class="sg-welkom" id="sg-welkom"><p>Hier staat de app</p>' + UI.Welkom({ beeld: Celebrate.welkomBeeld("sokjes"), naam: "Pia" }) + '</div>' +
         UI.Button({ id: "sg-welkom-opnieuw", label: "Opnieuw afspelen", icon: "play" })]
@@ -474,23 +478,22 @@
   UI.hydrateIcons(document);
   document.querySelectorAll("#sg-components .beta").forEach(UI.bindBeta);
   UI.bindMenu($("sg-menu-knop"));
-  // het welkom: de goed-clip in een lus en de overgang, net als in de app
+  // het welkom: de welkomclip en de overgang, net als in de app
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const tokenMs = naam => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(naam));
   let welkomSpeler = null, welkomKlok = null;
   function speelWelkom() {
     if (welkomSpeler) welkomSpeler.stop();
     clearTimeout(welkomKlok);
-    $("sg-welkom").innerHTML = '<p>Hier staat de app</p>' + UI.Welkom({ beeld: Celebrate.welkomBeeld("sokjes"), naam: "Pia", stil: reduced });
+    $("sg-welkom").innerHTML = '<p>Hier staat de app</p>' + UI.Welkom({ beeld: Celebrate.welkomBeeld("sokjes"), naam: "Pia" });
     const el = $("sg-welkom").querySelector(".welkom");
-    welkomSpeler = Celebrate.speler(el.querySelector(".welkom-kat"), { plaats: "midden" });
-    welkomSpeler.speel("sokjes", "goed", { lus: true });
+    welkomSpeler = Celebrate.welkomSpeler(el.querySelector(".welkom-kat"));
+    welkomSpeler.speel("sokjes");
     const weg = () => { welkomSpeler.stop(); el.remove(); };
     const open = kort => {
       if (el.classList.contains("opent") || !el.isConnected) return;
       clearTimeout(welkomKlok);
       if (reduced) { weg(); return; }
-      welkomSpeler.uitlopen();
       el.classList.toggle("snel", kort);
       el.classList.add("opent");
       welkomKlok = setTimeout(weg, tokenMs(kort ? "--welkom-overgang-snel" : "--welkom-overgang"));
@@ -498,15 +501,16 @@
     welkomKlok = setTimeout(() => open(false), tokenMs("--welkom-duur") - (reduced ? 0 : tokenMs("--welkom-overgang")));
     el.addEventListener("click", () => open(true));
   }
-  Celebrate.laadKat("sokjes").then(speelWelkom);
-  $("sg-welkom-opnieuw").addEventListener("click", () => Celebrate.laadKat("sokjes").then(speelWelkom));
-  // kattenclips: een kat kiezen laadt alleen die, een moment speelt hem
-  const clipSpeler = Celebrate.speler($("sg-clip-rand").querySelector(".kat"), { plaats: "rechts" });
+  Celebrate.laadWelkom("sokjes").then(speelWelkom);
+  $("sg-welkom-opnieuw").addEventListener("click", () => Celebrate.laadWelkom("sokjes").then(speelWelkom));
+  // kattenstanden: een kat kiezen laadt alleen die, een moment zet meteen zijn beeld
+  const standKat = $("sg-clip-rand").querySelector(".kat");
   let clipKat = "strepen";
   const zin = { rust: Celebrate.zegt("wacht").tekst, goed: Celebrate.zegt("goed").tekst, bijna: Celebrate.zegt("fout").tekst };
   function moment(m) {
     $("sg-clip-rand").querySelector(".spraak").textContent = zin[m];
-    Celebrate.laadKat(clipKat).then(() => clipSpeler.speel(clipKat, m));
+    Celebrate.laadKat(clipKat);
+    Celebrate.toon(standKat, clipKat, m, "rechts");
   }
   function kiesKat(id) {
     clipKat = id;
