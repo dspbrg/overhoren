@@ -268,7 +268,7 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
     <!-- de namen van de katten gelijk houden met KATTEN in celebrate.js -->
     <div class="card info" id="colofon">
       <h2>Colofon</h2>
-      <p>Gemaakt door Daan Spangenberg.</p>
+      <p>Gemaakt door <a class="link" href="https://dspbrg.com" rel="noopener"><span>dspbrg.com</span></a></p>
       <h3>Letters</h3>
       <p>Chakra Petch voor de titels en Inter voor de rest, allebei onder de SIL Open Font License.</p>
       <h3>Katten</h3>
@@ -2280,7 +2280,9 @@ function bind(){
   $("btn-progress").addEventListener("click", ()=>{ renderProgress(); show("scr-progress"); });
   $("btn-progress-back").addEventListener("click", ()=>{ renderHome(); show("scr-home"); });
   $("btn-reset").addEventListener("click", ()=>{ if(confirm("Alle voortgang van '"+list.title+"' wissen?")){ progress={items:{},sessions:[]}; saveProgress(); save(SKEY(list.id),null); renderProgress(); } });
-  $("btn-info").addEventListener("click", ()=>{ markKlas(); show("scr-info"); });
+  // uit het menu: de focus naar Terug van het geopende scherm, want het
+  // menu-item zelf is dan verborgen; Terug zet hem weer op de menuknop
+  $("btn-info").addEventListener("click", ()=>{ markKlas(); show("scr-info"); $("btn-info-back").focus(); });
   // klaslijsten tonen: Ja of Nee, net als het thema een .seg met aria-pressed
   $("klas-seg").addEventListener("click", e=>{
     const b = e.target.closest("button"); if(!b) return;
@@ -2321,8 +2323,8 @@ function bind(){
     save(DKEY(list.id), e.target.value || null);
     renderHome();
   });
-  $("btn-report").addEventListener("click", ()=>{ show("scr-report"); renderReport(); });
-  $("btn-report-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
+  $("btn-report").addEventListener("click", ()=>{ show("scr-report"); renderReport(); $("btn-report-back").focus(); });
+  $("btn-report-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); $("btn-menu").focus(); });
   $("btn-report-copy").addEventListener("click", copyReport);
   $("btn-ander-toestel").addEventListener("click", ()=>{ if($("code-plek").hidden) toonCodePaneel(); else sluitCodePaneel(); });
   $("btn-learner").addEventListener("click", ()=>{ sluitCodePaneel(); $("learner-form").hidden=false; $("learner-view").hidden=true; $("learner-name").value=learner; $("learner-name").focus(); });
@@ -2341,7 +2343,7 @@ function bind(){
   };
   $("btn-learner-save").addEventListener("click", saveLearner);
   $("learner-name").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); saveLearner(); } });
-  $("btn-info-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
+  $("btn-info-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); $("btn-menu").focus(); });
   // eerst een naam, dan pas een lijst typen of fotograferen
   $("btn-import").addEventListener("click", ()=>{ if(!heeftNaam()){ vraagNaam(true); return; } show("scr-import"); });
   $("btn-import-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });

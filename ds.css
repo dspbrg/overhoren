@@ -257,6 +257,8 @@
     --gap-section: var(--s6);   /* secties: vakken, footer */
     --page-x: var(--s4);        /* paginarand opzij, 24 vanaf 600px (zie onder) */
     --page-y: var(--s5);        /* paginarand boven en onder */
+    --menu-breedte: 21rem;      /* het menu rechtsboven, smaller als het scherm dat is */
+    --menu-dim: 78%;            /* hoeveel van --page-1 de dimlaag achter het menu dekt */
     /* Veilige rand: als app op het beginscherm (iOS, black-translucent en
        viewport-fit=cover) loopt de pagina onder de statusbalk en de
        thuisbalk door. env() geeft daar de ruimte die vrij moet blijven,
@@ -818,10 +820,10 @@
 
   /* --- menu: een kaart onder de menuknop, rechts uitgelijnd (UI.Menu).
          De dimlaag erachter vangt een tik buiten het menu. --- */
-  .menu-scrim { position: fixed; inset: 0; z-index: 9; background: color-mix(in srgb, var(--page-1) 78%, transparent); }
+  .menu-scrim { position: fixed; inset: 0; z-index: 9; background: color-mix(in srgb, var(--page-1) var(--menu-dim), transparent); }
   .menu {
     position: absolute; z-index: 10; inset-block-start: calc(100% + var(--gap-label)); inset-inline-end: 0;
-    inline-size: min(21rem, calc(100vw - var(--page-x) * 2));
+    inline-size: min(var(--menu-breedte), calc(100vw - var(--page-x) * 2));
     isolation: isolate; filter: var(--card-shadow); margin-block-end: var(--drop-y);
     display: flex; flex-direction: column; padding: var(--pad-menu);
   }

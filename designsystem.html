@@ -152,6 +152,8 @@
       <div class="sg-spec"><span>Card shadow</span><code>--card-shadow: drop-shadow(0 var(--drop-y) 0 #D2C8F2)</code></div>
       <div class="sg-spec"><span>Primary button shadow</span><code>drop-shadow(0 var(--drop-y) 0 #4B2A99)</code></div>
       <div class="sg-spec"><span>Pressed</span><code>1 to 3px</code></div>
+      <div class="sg-spec"><span>Menu, breedte (smaller op een smal scherm)</span><code>--menu-breedte: 21rem</code></div>
+      <div class="sg-spec"><span>Dimlaag achter het menu, deel van --page-1</span><code>--menu-dim: 78%</code></div>
     </div>
   </section>
 
@@ -416,7 +418,7 @@
         UI.BetaUitleg({ id: "sg-beta-uitleg-open", open: true }) + '</div>']
     ], { col: true }),
 
-    block("Menu", "Een icoonknop rechts in de kop (UI.IconBtn, --tap vierkant, zelfde vlak en schaduw als een knop) opent een kaart eronder, rechts uitgelijnd. Menu-items zijn tekst met een icoon in --accent-strong, minstens --btn-h hoog. Daaronder de themakiezer en een regel met de versie: de eerste zeven tekens van de ?v= van ui.js (UI.VERSIE), lokaal dev. Open wordt de knop een kruis met het accent, en dimt een laag (--page-1 op 78%) de pagina erachter. UI.bindMenu(knop) regelt het gedrag: de focus naar het eerste item bij openen, Escape, een tik op de dimlaag of de knop sluit en zet de focus terug op de knop, een item kiezen sluit ook.", [
+    block("Menu", "Een icoonknop rechts in de kop (UI.IconBtn, --tap vierkant, zelfde vlak en schaduw als een knop) opent een kaart eronder, rechts uitgelijnd. Menu-items zijn tekst met een icoon in --accent-strong, minstens --btn-h hoog. Daaronder de themakiezer en een regel met de versie: de eerste zeven tekens van de ?v= van ui.js (UI.VERSIE), lokaal dev. Het menu is --menu-breedte breed. Open wordt de knop een kruis met het accent, en dimt een laag (--page-1 op --menu-dim) de pagina erachter. UI.bindMenu(knop) regelt het gedrag: de focus naar het eerste item bij openen, Escape, een tik op de dimlaag of de knop sluit en zet de focus terug op de knop, een item kiezen sluit ook; het scherm dat het item opent zet de focus op zijn Terug-knop, en Terug zet hem weer op de menuknop.", [
       ['UI.IconBtn({ id, icon, label, controls }) · UI.Menu({ id, items, thema }) · UI.bindMenu(knop)',
         '<header class="brand" style="width:100%"><div class="kop-rij"><h1>Overhoren</h1>' +
         UI.IconBtn({ id: "sg-menu-knop", icon: "menu", label: "Menu", controls: "sg-menu" }) +
