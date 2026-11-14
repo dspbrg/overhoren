@@ -362,6 +362,13 @@
       ['UI.Notice({ html, spread: true })', '<div style="width:100%">' + UI.Notice({ icon: false, spread: true, html: "<span>Je was nog bezig met een ronde.</span>" }) + '</div>']
     ], { col: true }),
 
+    block("CodePaneel", "Verder op een ander toestel. Opent onder de naam op het startscherm na een tik op Op een ander toestel verder. Zelfde vlak en schuine hoek als Notice, met een accentkantlijn. De code (drie woorden en twee cijfers) groot in Chakra Petch, de link klein; allebei in een keer te selecteren en ze breken af in plaats van over de rand te gaan. Daaronder het veld voor een code die je al hebt, met de zin dat voortgang per lijst wordt samengevoegd, en een korte melding (melding, role=status) na kopiëren of invullen. vorige: de code van voor de laatste overstap. vraag { ander, leeg }: een code van een ander toestel; dan geen kopieerknoppen en geen veld, maar de vraag met Overstappen (primair) en Mijn code houden. Zonder code alleen de melding, bijvoorbeeld als de overstap van het oude wachtwoord niet lukt. De code is een geheim: alleen hier staat hij in beeld. opgeslagen: false als de code nog niet op de server staat; dan geen kopieerknoppen en geen link. Het veld voor een code staat er altijd. voorvoegsel: voor de ids als er meer dan een op een pagina staat (hier wel, in de app niet).", [
+      ['UI.CodePaneel({ code, link, vorige, melding })', '<div style="width:100%">' + UI.CodePaneel({ code: "zwaluw-karton-bonbon-08", link: "https://overhoren.vandaan.net/#code=zwaluw-karton-bonbon-08", vorige: "appel-zebra-kous-11", melding: "Gekopieerd." }) + '</div>'],
+      ['UI.CodePaneel({ code, vraag: { ander: true, leeg: false }, voorvoegsel })', '<div style="width:100%">' + UI.CodePaneel({ code: "appel-zebra-kous-11", link: "https://overhoren.vandaan.net/#code=appel-zebra-kous-11", vraag: { ander: true, leeg: false }, voorvoegsel: "sg-vraag-" }) + '</div>'],
+      ['UI.CodePaneel({ code: "", melding, voorvoegsel })', '<div style="width:100%">' + UI.CodePaneel({ code: "", melding: "Dat lukt nu niet. Probeer het straks nog eens.", voorvoegsel: "sg-zonder-" }) + '</div>'],
+      ['UI.CodePaneel({ code, opgeslagen: false, melding, voorvoegsel })', '<div style="width:100%">' + UI.CodePaneel({ code: "kraai-tulp-ster-31", opgeslagen: false, melding: "Je code is nog niet opgeslagen. Probeer het straks nog eens.", voorvoegsel: "sg-niet-" }) + '</div>']
+    ], { col: true }),
+
     block("Empty", "Lege staat met karakter, zonder illustratie.", [
       ['UI.Empty({ glyph, title, body })', '<div style="width:100%">' + UI.Empty({ glyph: "?", title: "Nog niets te rapporteren.", body: "Doe eerst een ronde." }) + '</div>']
     ], { col: true }),
