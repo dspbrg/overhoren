@@ -251,6 +251,14 @@
     --gap-section: var(--s6);   /* secties: vakken, footer */
     --page-x: var(--s4);        /* paginarand opzij, 24 vanaf 600px (zie onder) */
     --page-y: var(--s5);        /* paginarand boven en onder */
+    /* Veilige rand: als app op het beginscherm (iOS, black-translucent en
+       viewport-fit=cover) loopt de pagina onder de statusbalk en de
+       thuisbalk door. env() geeft daar de ruimte die vrij moet blijven,
+       elders 0. De paginarand komt daar bovenop. */
+    --rand-boven: calc(var(--page-y) + env(safe-area-inset-top, 0px));
+    --rand-onder: calc(var(--page-y) + env(safe-area-inset-bottom, 0px));
+    --rand-links: calc(var(--page-x) + env(safe-area-inset-left, 0px));
+    --rand-rechts: calc(var(--page-x) + env(safe-area-inset-right, 0px));
 
     /* --- beweging: M3 springs, omgezet naar curves voor het web.
        spatial schiet bewust door (positie en formaat),
@@ -305,7 +313,7 @@
     font-family: var(--body); font-size: var(--t-body); line-height: 1.4;
     /* ss02: de onderscheidende I, l en 1 van Inter, belangrijk bij spellen */
     font-feature-settings: 'ss02' 1;
-    padding: var(--page-y) var(--page-x);
+    padding: var(--rand-boven) var(--rand-rechts) var(--rand-onder) var(--rand-links);
     min-height: 100vh;
   }
   /* De pagina-achtergrond staat stil op een eigen laag. background-attachment:
@@ -544,6 +552,11 @@
     background: var(--mark); color: var(--ink);
     font-size: var(--t-meta); line-height: var(--lh-spraak);
   }
+  /* de versie van de app, een kleine regel onder de uitleg */
+  .beta-versie {
+    display: block; margin-block-start: var(--s1);
+    font-size: var(--t-label-sm); color: var(--muted); font-variant-numeric: tabular-nums;
+  }
 
   /* --- meter: elke voortgangsbalk in de app. Licht schuin. --- */
   .meter { background: var(--track); clip-path: var(--cut-meter); overflow: hidden; display: flex; height: 8px; }
@@ -695,7 +708,7 @@
   .welkom {
     position: fixed; inset: 0; z-index: 100;
     display: grid; place-content: center; justify-items: center; gap: var(--gap-group);
-    padding: var(--page-y) var(--page-x); text-align: center; cursor: pointer;
+    padding: var(--rand-boven) var(--rand-rechts) var(--rand-onder) var(--rand-links); text-align: center; cursor: pointer;
     background: var(--page); color: var(--ink);
     /* zo groot wordt het gat op --gat 1: een platte zeshoek met straal R
        bedekt het scherm als R minstens halve breedte plus hoogte/(2 wortel 3)
@@ -904,6 +917,11 @@
   .learner-row { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); flex-wrap: wrap; }
   .learner-row .row { align-items: center; }
   .learner-row input { max-width: 200px; }
+  /* de vraag om een naam staat op een eigen regel onder het veld */
+  .learner-row .hint { flex-basis: 100%; }
+  .naam-vraag { display: flex; flex-direction: column; gap: var(--gap-inline); flex-basis: 100%; }
+  /* twee lange knoppen: op smal scherm onder elkaar in plaats van over de rand */
+  .naam-vraag .row > .btn { flex: 1 1 auto; }
 
   /* quiz */
   .q-card { gap: var(--gap-group); }

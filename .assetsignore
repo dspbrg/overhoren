@@ -34,5 +34,6 @@
 # uitleg en bronbestanden
 *.md
 *.zip
-# bron van de iconen; manifest.json en index.html gebruiken alleen de png's
+# bron van het icoon; manifest.json, index.html en designsystem.html gebruiken
+# alleen de png's (icoon-192, icoon-512, apple-touch-icon, favicon-32)
 /icons/icoon.svg

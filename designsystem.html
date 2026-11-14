@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Overhoren · Design system</title>
 <meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="stylesheet" href="ds.css?v=dev">
 <style>
 /* Alleen de opmaak van deze pagina zelf: rasters en labels rond de
@@ -389,7 +390,7 @@
       ['<button class="link" data-icon="chart">', '<button class="link" data-icon="chart" type="button">Rapport</button>']
     ]),
 
-    block("Beta", "Klein chipje naast de naam van de app, in de stijl van de chips: --control-surf, --accent-strong, 11px 600 in hoofdletters. Het is een knop met aria-expanded; tikken, Enter of Spatie opent de uitleg eronder, nog een keer of Escape sluit hem. Het vlak is klein, het tikdoel 44 px. Open krijgt het chipje het accent. UI.bindBeta(knop) regelt het gedrag.", [
+    block("Beta", "Klein chipje naast de naam van de app, in de stijl van de chips: --control-surf, --accent-strong, 11px 600 in hoofdletters. Het is een knop met aria-expanded; tikken, Enter of Spatie opent de uitleg eronder, nog een keer of Escape sluit hem. Onder de uitleg een kleine regel (--t-label-sm, --muted) met de versie: de eerste zeven tekens van de ?v= van ui.js (UI.VERSIE), lokaal dev. Het vlak is klein, het tikdoel 44 px. Open krijgt het chipje het accent. UI.bindBeta(knop) regelt het gedrag.", [
       ['UI.Beta({ uitlegId }) in de h1 · UI.BetaUitleg({ id })',
         '<div class="start-kop" style="width:100%"><header class="brand"><h1>Overhoren' + UI.Beta({ uitlegId: "sg-beta-uitleg" }) + '</h1></header>' +
         UI.BetaUitleg({ id: "sg-beta-uitleg" }) + '</div>'],

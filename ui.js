@@ -146,7 +146,15 @@
   // Een knop die een korte uitleg eronder opent en sluit. Het vlak is
   // klein, het tikdoel 44 px (ds.css). Zet BetaUitleg ergens onder de
   // kop en koppel ze met bindBeta(knop). uitlegId is het id van die regel.
+  // Onder de uitleg een kleine regel met de versie van de app.
   const BETA_UITLEG = "We leren nog. Dingen kunnen veranderen.";
+  // De versie van de app: de ?v= van dit script, die de deploy stempelt
+  // (op Cloudflare de korte commit-sha). Zonder stempel, of buiten een
+  // browser, "dev". index.html gebruikt hem ook na een update (registreerSW).
+  const VERSIE = (function () {
+    try { return new URL(document.currentScript.src).searchParams.get("v") || "dev"; }
+    catch (e) { return "dev"; }
+  })();
   function Beta(o) {
     o = o || {};
     return '<button type="button" class="beta"' + attr("id", o.id) +
@@ -155,7 +163,8 @@
   }
   function BetaUitleg(o) {
     o = o || {};
-    return '<p class="beta-uitleg"' + attr("id", o.id) + (o.open ? "" : " hidden") + '>' + esc(BETA_UITLEG) + '</p>';
+    return '<p class="beta-uitleg"' + attr("id", o.id) + (o.open ? "" : " hidden") + '>' + esc(BETA_UITLEG) +
+      '<small class="beta-versie">Versie ' + esc(VERSIE.slice(0, 7)) + '</small></p>';
   }
   // Tikken, Enter of Spatie wisselt (dat doet een <button> vanzelf),
   // Escape sluit en zet de focus terug op de knop.
@@ -322,5 +331,5 @@
   }
 
   root.UI = { esc, cls, pct, Icon, ICONS, Button, Link, TopBar, Stat, StatsRow, Meter, Ring, Chip,
-              Beta, BetaUitleg, BETA_UITLEG, bindBeta, Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, Welkom, hydrateIcons };
+              Beta, BetaUitleg, BETA_UITLEG, VERSIE, bindBeta, Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, Welkom, hydrateIcons };
 })(typeof window === "object" ? window : globalThis);
