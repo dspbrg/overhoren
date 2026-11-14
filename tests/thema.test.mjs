@@ -1,4 +1,4 @@
-// Themaknop op het startscherm (#theme-seg): Systeem, Licht, Donker.
+// Themaknop in het menu op het startscherm (#theme-seg): Systeem, Licht, Donker.
 // 1. elke stand zet data-theme, aria-pressed, .on en theme-color goed
 // 2. de keuze blijft na herladen, en staat er al voor de app-scripts
 // 3. een thema dat afwijkt van het systeem haalt alle eisen op alle schermen
@@ -8,7 +8,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startBrowser, startServer, schermNetwerkAf, volgFouten, BREEDTES } from "./lib/omgeving.mjs";
 import { contrastMeting, overloopMeting, rondAnimatiesAf } from "./lib/meten.mjs";
-import { loopSchermen } from "./lib/schermen.mjs";
+import { loopSchermen, kiesThema, openMenu } from "./lib/schermen.mjs";
 
 const MIN_CONTRAST = Number(process.env.MIN_CONTRAST || 4.5);
 const KLEUR = { light: "#F4F1FC", dark: "#16142A" };
@@ -82,15 +82,15 @@ for (const systeem of ["light", "dark"]) {
     // in een volgorde die elke overgang raakt, ook terug naar Systeem
     for (const doel of ["dark", "light", "", "light", "dark", ""]) {
       const naam = STANDEN.find(x => x.waarde === doel).naam;
-      await page.locator("#theme-seg button", { hasText: naam }).click();
+      await kiesThema(page, naam);
       controleerStand(await stand(page), doel, systeem);
       const bewaard = await page.evaluate(k => localStorage.getItem(k), SLEUTEL);
       assert.equal(bewaard, doel ? JSON.stringify(doel) : null, `localStorage na ${naam}`);
     }
     // Licht en Donker moeten ook echt een andere pagina geven
-    await page.locator("#theme-seg button", { hasText: "Licht" }).click();
+    await kiesThema(page, "Licht");
     const licht = (await stand(page)).tekstKleur;
-    await page.locator("#theme-seg button", { hasText: "Donker" }).click();
+    await kiesThema(page, "Donker");
     const donker = (await stand(page)).tekstKleur;
     assert.notEqual(licht, donker, "tekstkleur verandert niet tussen Licht en Donker");
 
@@ -120,7 +120,7 @@ for (const [systeem, keuze] of [["light", "dark"], ["dark", "light"], ["dark", "
     const fouten = volgFouten(page);
     await openStart(page);
     const naam = STANDEN.find(x => x.waarde === keuze).naam;
-    await page.locator("#theme-seg button", { hasText: naam }).click();
+    await kiesThema(page, naam);
 
     await page.reload();
     await page.locator("#scr-lessons").waitFor({ state: "visible" });
@@ -132,7 +132,7 @@ for (const [systeem, keuze] of [["light", "dark"], ["dark", "light"], ["dark", "
     controleerStand(await stand(page), keuze, systeem);
 
     // en terug naar Systeem overleeft ook een herlaadbeurt
-    await page.locator("#theme-seg button", { hasText: "Systeem" }).click();
+    await kiesThema(page, "Systeem");
     await page.reload();
     await page.locator("#scr-lessons").waitFor({ state: "visible" });
     assert.equal((await page.evaluate(() => window.__voorApp)).dataTheme, null);
@@ -172,7 +172,7 @@ for (const [systeem, keuze] of [["light", "dark"], ["dark", "light"]]) {
 
       // keuze maken via de knop; loopSchermen laadt daarna opnieuw
       await openStart(page);
-      await page.locator("#theme-seg button", { hasText: STANDEN.find(x => x.waarde === keuze).naam }).click();
+      await kiesThema(page, STANDEN.find(x => x.waarde === keuze).naam);
 
       await loopSchermen(page, server.url, async naam => {
         bezocht.push(naam);
@@ -210,7 +210,8 @@ async function datumveld(systeem, keuze) {
   const page = await context.newPage();
   const fouten = volgFouten(page);
   await openStart(page);
-  await page.locator("#theme-seg button", { hasText: STANDEN.find(x => x.waarde === keuze).naam }).click();
+  await kiesThema(page, STANDEN.find(x => x.waarde === keuze).naam);
+  await page.keyboard.press("Escape");   // het menu dicht, dan kun je weer bij de lijsten
   await page.locator(".lesson").first().click();
   await page.locator("#scr-home").waitFor({ state: "visible", timeout: 5000 });
   await page.locator("#deadline-seg button", { hasText: "Andere dag" }).click();
@@ -259,11 +260,11 @@ for (const systeem of ["light", "dark"]) {
     controleerStand(await stand(page), "", systeem);
 
     for (const doel of ["dark", "light", ""]) {
-      await page.locator("#theme-seg button", { hasText: STANDEN.find(x => x.waarde === doel).naam }).click();
+      await kiesThema(page, STANDEN.find(x => x.waarde === doel).naam);
       controleerStand(await stand(page), doel, systeem);
     }
     // herladen kan niets onthouden, maar mag ook niet stuk gaan
-    await page.locator("#theme-seg button", { hasText: "Donker" }).click();
+    await kiesThema(page, "Donker");
     await page.reload();
     await page.locator("#scr-lessons").waitFor({ state: "visible" });
     controleerStand(await stand(page), "", systeem);
@@ -285,9 +286,14 @@ test("toetsenbord: met Tab bereikbaar, Enter en Spatie wisselen de stand", async
     const a = document.activeElement;
     return a && a.closest("#theme-seg") ? a.textContent.trim() : null;
   });
-  // vanaf het begin van de pagina tabben tot we in de themaknop zijn
+  // vanaf het begin van de pagina tabben tot de menuknop, met Enter het
+  // menu open (de focus staat dan op Rapport), dan verder tot het thema
+  let opMenu = false;
+  for (let i = 0; i < 20 && !opMenu; i++) { await page.keyboard.press("Tab"); opMenu = await page.evaluate(() => document.activeElement?.id === "btn-menu"); }
+  assert.ok(opMenu, "de menuknop is niet met Tab te bereiken");
+  await page.keyboard.press("Enter");
   let naam = null;
-  for (let i = 0; i < 60 && !naam; i++) { await page.keyboard.press("Tab"); naam = await gefocust(); }
+  for (let i = 0; i < 5 && !naam; i++) { await page.keyboard.press("Tab"); naam = await gefocust(); }
   assert.equal(naam, "Systeem", "eerste tabstop in de themaknop is niet Systeem");
 
   // focus moet zichtbaar zijn
@@ -332,6 +338,7 @@ for (const breedte of [320, 360]) {
     const { context } = await nieuweContext({ viewport: { width: breedte, height: 780 } });
     const page = await context.newPage();
     await openStart(page);
+    await openMenu(page);
     await page.locator("#theme-seg").scrollIntoViewIfNeeded();
     await page.evaluate(rondAnimatiesAf);
     const vakken = await page.locator("#theme-seg button").evaluateAll(bs => bs.map(b => {

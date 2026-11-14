@@ -300,14 +300,14 @@ test("update midden in een ronde: niet herladen tot het lessenscherm, dan een ke
   await context.close();
 });
 
-test("versie in beeld: de uitleg achter Beta noemt de versie van de app", async () => {
+test("versie in beeld: het menu noemt de versie van de app", async () => {
   zet({ app: "B", sw: "B" });
   const { context, page, fouten } = await nieuweContext();
   await page.goto(server.url + "/");
   await wachtOpScherm(page, "scr-lessons");
-  await page.click("#app-titel .beta");
-  const regel = page.locator("#beta-uitleg .beta-versie");
-  assert.equal(await regel.count(), 1, "geen versieregel in de Beta-uitleg");
+  await page.click("#btn-menu");
+  const regel = page.locator("#menu .menu-versie");
+  assert.equal(await regel.count(), 1, "geen versieregel in het menu");
   assert.equal((await regel.textContent()).trim(), "Versie " + STEMPEL.B);
   assert.ok(await regel.isVisible(), "versieregel niet zichtbaar");
   assert.deepEqual(fouten, []);

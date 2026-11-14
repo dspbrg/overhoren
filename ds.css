@@ -219,6 +219,10 @@
     --pad-stat:         var(--s3) var(--s2);                        /* 12 / 8 */
     --pad-stat-hero:    var(--s5);                                  /* 24, het scorecijfer */
     --pad-spraak:       var(--s3) var(--s4);                        /* 12 / 16, spraakbalk van de kat */
+    --pad-menu:         var(--s3) 0;                                /* 12 / 0, het menu zelf */
+    --pad-menu-item:    var(--s2) var(--s5);                        /*  8 / 24, een regel in het menu */
+    --pad-menu-sectie:  var(--s4) var(--s5) var(--s2);              /* 16 / 24 / 8, thema in het menu */
+    --pad-menu-versie:  var(--s3) var(--s5) var(--s1);              /* 12 / 24 / 4, versie onderaan */
 
     /* --- typografie --- */
     --display: "Chakra Petch","Trebuchet MS",system-ui,sans-serif;
@@ -232,6 +236,8 @@
     --t-section: .8125rem;    /* 13px sectielabel, hoofdletters */
     --t-label:    .875rem;
     --t-label-sm: .6875rem;
+    --t-icon-btn:  1.375rem;  /* 22px icoon in een .icon-btn */
+    --t-icon-menu: 1.25rem;   /* 20px icoon voor een menu-item */
     /* oude namen */
     --t-display: var(--t-word);
     --t-headline: var(--t-page);
@@ -552,11 +558,6 @@
     background: var(--mark); color: var(--ink);
     font-size: var(--t-meta); line-height: var(--lh-spraak);
   }
-  /* de versie van de app, een kleine regel onder de uitleg */
-  .beta-versie {
-    display: block; margin-block-start: var(--s1);
-    font-size: var(--t-label-sm); color: var(--muted); font-variant-numeric: tabular-nums;
-  }
 
   /* --- meter: elke voortgangsbalk in de app. Licht schuin. --- */
   .meter { background: var(--track); clip-path: var(--cut-meter); overflow: hidden; display: flex; height: 8px; }
@@ -786,6 +787,57 @@
   .brand { display: flex; align-items: baseline; justify-content: space-between; gap: var(--gap-inline); flex-wrap: wrap; }
   .brand .tag { color: var(--muted); font-size: var(--t-meta); }
 
+  /* --- kop met menuknop: naam links, knop rechts, de tagline eronder.
+         Het menu hangt onder de hele kop, dus .brand is de ankerplek. --- */
+  .brand:has(> .kop-rij) { position: relative; }
+  .kop-rij { flex: 1 1 100%; display: flex; align-items: center; justify-content: space-between; gap: var(--gap-inline); }
+
+  /* --- icon-btn: vierkante knop met alleen een icoon (UI.IconBtn).
+         Zelfde vlak en schaduw als .btn, minstens --tap groot. Open is
+         hij gevuld, zoals .seg button.on. --- */
+  .icon-btn {
+    --surf: var(--control-surf); --cut: var(--cut-small);
+    --drop: drop-shadow(0 var(--drop-y) 0 var(--control-shadow));
+    position: relative; isolation: isolate; flex: none;
+    background: none; border: 0; border-radius: 0; padding: 0; margin: 0;
+    filter: var(--drop);
+    inline-size: var(--tap); block-size: var(--tap);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: var(--t-icon-btn); color: var(--ink); cursor: pointer;
+  }
+  .icon-btn::before {
+    content: ""; position: absolute; inset: 0; z-index: -1;
+    background: var(--surf); clip-path: var(--cut); transition: background var(--m3-effects);
+  }
+  /* open: boven de dimlaag, zodat hij het menu ook weer sluit */
+  .icon-btn[aria-expanded="true"] {
+    --surf: var(--accent); --drop: drop-shadow(0 var(--drop-y) 0 var(--accent-shadow));
+    color: var(--accent-ink); z-index: 11;
+  }
+  .icon-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+  /* --- menu: een kaart onder de menuknop, rechts uitgelijnd (UI.Menu).
+         De dimlaag erachter vangt een tik buiten het menu. --- */
+  .menu-scrim { position: fixed; inset: 0; z-index: 9; background: color-mix(in srgb, var(--page-1) 78%, transparent); }
+  .menu {
+    position: absolute; z-index: 10; inset-block-start: calc(100% + var(--gap-label)); inset-inline-end: 0;
+    inline-size: min(21rem, calc(100vw - var(--page-x) * 2));
+    isolation: isolate; filter: var(--card-shadow); margin-block-end: var(--drop-y);
+    display: flex; flex-direction: column; padding: var(--pad-menu);
+  }
+  .menu::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--card); clip-path: var(--cut-card); }
+  .menu-item {
+    display: flex; align-items: center; gap: var(--gap-inline); inline-size: 100%; min-block-size: var(--btn-h);
+    padding: var(--pad-menu-item); background: none; border: 0; border-radius: 0;
+    font: inherit; font-weight: 600; color: var(--ink); text-align: start; cursor: pointer;
+  }
+  .menu-item .icon { font-size: var(--t-icon-menu); color: var(--accent-strong); }
+  .menu-item:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .menu-sectie, .menu-versie { border-block-start: 1px solid var(--line); }
+  .menu-sectie { margin-block-start: var(--gap-label); padding: var(--pad-menu-sectie); display: flex; flex-direction: column; gap: var(--gap-label); }
+  .menu-sectie > .seg { margin-inline-start: calc(var(--slant) / -2); }
+  .menu-versie { margin: 0; padding: var(--pad-menu-versie); color: var(--muted); font-size: var(--t-meta); font-variant-numeric: tabular-nums; }
+
   /* --- vak: een map met de lijsten van een schoolvak ---
      De vaknaam is een sectielabel; de kaarten eronder dragen de titels. */
   .vak { display: flex; flex-direction: column; gap: var(--gap-label); }
@@ -931,10 +983,10 @@
    ============================================================= */
 @layer screens {
   /* startscherm: kop en "Wie oefent" horen bij elkaar, de rest staat
-     op sectie-afstand. De footer heeft links en de themakiezer. */
+     op sectie-afstand. Rapport, Over Overhoren en het thema zitten in
+     het menu rechtsboven. */
   #scr-lessons > .app { gap: var(--gap-section); }
   .start-kop { display: flex; flex-direction: column; gap: var(--gap-inline); }
-  .start-foot { display: flex; flex-direction: column; align-items: flex-start; gap: var(--gap-group); }
 
   /* lesscherm */
   .learner-row { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); flex-wrap: wrap; }
@@ -1058,6 +1110,8 @@
     .choice:hover:not(:disabled):not(.on):not(.right):not(.wrong),
     .seg button:hover:not(.on) { --surf: var(--control-hover); }
     .beta:hover[aria-expanded="false"] .beta-chip { background: var(--control-hover); }
+    .icon-btn:hover[aria-expanded="false"] { --surf: var(--control-hover); }
+    .menu-item:hover { background: var(--mark); }
     .btn.primary:hover:not(:disabled), .seg button.on:hover { --surf: color-mix(in srgb, var(--accent) 88%, white); }
     .link:hover { text-decoration-thickness: 3px; }
   }
@@ -1069,8 +1123,6 @@
        knop een kolom breed is en links staat */
     #scr-lessons :is(.vak-lijsten, .start-acties) { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--gap-stack); }
     #scr-lessons .lesson { min-height: 150px; }
-    /* footer op een rij: links de tekstlinks, rechts de themakiezer */
-    .start-foot { flex-direction: row; justify-content: space-between; align-items: flex-end; }
     #report-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: var(--gap-stack); align-items: start; max-width: none; }
   }
   /* Alleen bij echt weinig hoogte de feedback naast de vraag zetten, zodat

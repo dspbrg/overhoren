@@ -36,6 +36,9 @@
     container-type: size; display: grid; place-items: center; background: var(--mark); color: var(--muted); }
   .sg-welkom > p { margin: 0; }
   .sg-welkom .welkom { position: absolute; --gat-max: max(50cqw + 28.9cqh, 57.8cqh); }
+  /* het open menu: in de app dimt de laag het hele scherm, hier alleen het vak */
+  .sg-menu { position: relative; inline-size: 100%; min-block-size: 25rem; }
+  .sg-menu .menu-scrim { position: absolute; }
 }
 </style>
 </head>
@@ -84,6 +87,7 @@
         <li><b>2026-11-13</b> De kat is een maatje, geen beloning. Hij zit de hele ronde rechts op de bovenrand van de vraagkaart, kijkt naar binnen en zegt iets in een spraakbalk. Het oordeel (Goed, Nog niet) staat in de kaart. Aan het eind zegt hij gedag met de naam. Geen beloningskaart, geen beker en geen warm vlak rond het scorecijfer; confetti alleen na een vlekkeloze ronde.</li>
         <li><b>2026-11-13</b> Het welkom gaat weg met een zeshoekig gat: vanuit het midden opent een platte zeshoek die in 500 ms over het hele scherm groeit, terwijl het welkom vervaagt. Wegtikken geeft hetzelfde gat in 250 ms. In het welkom speelt de kat zijn goed-clip in een lus. Bij minder beweging geen lus en geen gat, alleen het eindbeeld en daarna meteen weg.</li>
         <li><b>2026-11-13</b> De kat beweegt met korte clips van zes beelden per seconde, bewust een beetje schokkerig, en blijft daarna in zijn eindstand staan. Per kat rust, een goed-clip en een bijna-clip, allemaal op hetzelfde doek van 400 bij 480 (katten.json). Geen css-beweging bovenop de clips, ook niet in het welkom. Rechts van de inhoud wordt een kat die naar rechts kijkt gespiegeld; een kat die recht vooruit kijkt nooit. Bij minder beweging meteen het eindbeeld.</li>
+        <li><b>2026-11-14</b> Een menuknop rechtsboven op het startscherm, in plaats van de footer onder de lijsten. In het menu: Rapport, Over Overhoren, het thema en de versie. Open wordt de knop een kruis en dimt de pagina erachter. Over Overhoren heeft de wetenschap, de schakelaar voor klaslijsten en het colofon.</li>
       </ul>
       <span class="eyebrow">Rules</span>
       <ul class="sg-decisions">
@@ -273,6 +277,7 @@
 
   $("sg-padding").innerHTML = [
     ["--pad-btn", "Knop, 12 / 28"], ["--pad-btn-big", "Grote knop, 16 / 28"], ["--pad-seg", "Segment, 12 / 20"],
+    ["--pad-menu", "Menu, 12 / 0"], ["--pad-menu-item", "Menu-item, 8 / 24"], ["--pad-menu-sectie", "Thema in het menu, 16 / 24 / 8"], ["--pad-menu-versie", "Versie in het menu, 12 / 24 / 4"],
     ["--pad-choice", "Keuze, 12 / 24"], ["--pad-choice-low", "Keuze bij weinig hoogte, 10 / 20"], ["--pad-chip", "Chip, 4 / 16"],
     ["--pad-card", "Kaart, 24"], ["--pad-card-compact", "Lijstkaart en melding, 16 / 24"], ["--pad-field", "Invoerveld, 12 / 16"],
     ["--pad-stat", "Getal, 12 / 8"], ["--pad-stat-hero", "Scorecijfer, 24"], ["--pad-spraak", "Spraakbalk, 12 / 16"]
@@ -402,13 +407,26 @@
       ['<button class="link" data-icon="chart">', '<button class="link" data-icon="chart" type="button">Rapport</button>']
     ]),
 
-    block("Beta", "Klein chipje naast de naam van de app, in de stijl van de chips: --control-surf, --accent-strong, 11px 600 in hoofdletters. Het is een knop met aria-expanded; tikken, Enter of Spatie opent de uitleg eronder, nog een keer of Escape sluit hem. Onder de uitleg een kleine regel (--t-label-sm, --muted) met de versie: de eerste zeven tekens van de ?v= van ui.js (UI.VERSIE), lokaal dev. Het vlak is klein, het tikdoel 44 px. Open krijgt het chipje het accent. UI.bindBeta(knop) regelt het gedrag.", [
+    block("Beta", "Klein chipje naast de naam van de app, in de stijl van de chips: --control-surf, --accent-strong, 11px 600 in hoofdletters. Het is een knop met aria-expanded; tikken, Enter of Spatie opent de uitleg eronder, nog een keer of Escape sluit hem. Het vlak is klein, het tikdoel 44 px. Open krijgt het chipje het accent. UI.bindBeta(knop) regelt het gedrag. De versie staat in het menu.", [
       ['UI.Beta({ uitlegId }) in de h1 · UI.BetaUitleg({ id })',
         '<div class="start-kop" style="width:100%"><header class="brand"><h1>Overhoren' + UI.Beta({ uitlegId: "sg-beta-uitleg" }) + '</h1></header>' +
         UI.BetaUitleg({ id: "sg-beta-uitleg" }) + '</div>'],
       ['UI.Beta({ uitlegId, open: true }) · UI.BetaUitleg({ id, open: true })',
         '<div class="start-kop" style="width:100%"><header class="brand"><h1>Overhoren' + UI.Beta({ uitlegId: "sg-beta-uitleg-open", open: true }) + '</h1></header>' +
         UI.BetaUitleg({ id: "sg-beta-uitleg-open", open: true }) + '</div>']
+    ], { col: true }),
+
+    block("Menu", "Een icoonknop rechts in de kop (UI.IconBtn, --tap vierkant, zelfde vlak en schaduw als een knop) opent een kaart eronder, rechts uitgelijnd. Menu-items zijn tekst met een icoon in --accent-strong, minstens --btn-h hoog. Daaronder de themakiezer en een regel met de versie: de eerste zeven tekens van de ?v= van ui.js (UI.VERSIE), lokaal dev. Open wordt de knop een kruis met het accent, en dimt een laag (--page-1 op 78%) de pagina erachter. UI.bindMenu(knop) regelt het gedrag: de focus naar het eerste item bij openen, Escape, een tik op de dimlaag of de knop sluit en zet de focus terug op de knop, een item kiezen sluit ook.", [
+      ['UI.IconBtn({ id, icon, label, controls }) · UI.Menu({ id, items, thema }) · UI.bindMenu(knop)',
+        '<header class="brand" style="width:100%"><div class="kop-rij"><h1>Overhoren</h1>' +
+        UI.IconBtn({ id: "sg-menu-knop", icon: "menu", label: "Menu", controls: "sg-menu" }) +
+        UI.Menu({ id: "sg-menu", items: [{ icon: "chart", label: "Rapport" }, { icon: "info", label: "Over Overhoren" }], thema: { id: "sg-menu-thema", labelId: "sg-menu-thema-label" } }) +
+        '</div><p class="tag">Tik op de knop</p></header>'],
+      ['UI.IconBtn({ ..., open: true }) · UI.Menu({ ..., open: true })',
+        '<div class="sg-menu"><header class="brand"><div class="kop-rij"><h1>Overhoren</h1>' +
+        UI.IconBtn({ icon: "close", label: "Menu", controls: "sg-menu-open", open: true }) +
+        UI.Menu({ id: "sg-menu-open", open: true, items: [{ icon: "chart", label: "Rapport" }, { icon: "info", label: "Over Overhoren" }], thema: { id: "sg-menu-open-thema", labelId: "sg-menu-open-thema-label" } }) +
+        '</div><p class="tag">Woordjes leren met slimme herhaling</p></header></div>']
     ], { col: true }),
 
     // De katten: de beelden en namen komen uit celebrate.js en katten.json, net als in de app.
@@ -447,12 +465,13 @@
     ], { col: true }),
 
     block("Card", "Alleen CSS: .card. Hetzelfde vlak als LessonCard, met kaarttitel.", [
-      ['.card > h2', '<div class="card" style="width:100%"><h2>Hoe werkt het?</h2><p>Lopende tekst in een kaart.</p></div>']
+      ['.card > h2', '<div class="card" style="width:100%"><h2>De wetenschap</h2><p>Lopende tekst in een kaart.</p></div>']
     ], { col: true })
   ];
   $("sg-components").innerHTML = html.join("");
   UI.hydrateIcons(document);
   document.querySelectorAll("#sg-components .beta").forEach(UI.bindBeta);
+  UI.bindMenu($("sg-menu-knop"));
   // het welkom: de goed-clip in een lus en de overgang, net als in de app
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const tokenMs = naam => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(naam));
