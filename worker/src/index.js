@@ -1,14 +1,42 @@
 import { mergeSync, HttpFout } from "./merge.js";
+import { FotoTeller, FOTO_PER_TOESTEL_PER_DAG, FOTO_PER_MAAND, MELD_DREMPELS, dagVan } from "./teller.js";
+
+// Foto-import zonder wachtwoord, met twee grenzen (Europe/Amsterdam): per
+// toestel per kalenderdag, en voor iedereen samen per kalendermaand. Ze
+// gelden voor /extract en /enrich elk apart en staan in teller.js. De
+// Durable Object FotoTeller telt atomair en vooraf.
+export { FotoTeller, FOTO_PER_TOESTEL_PER_DAG, FOTO_PER_MAAND, MELD_DREMPELS, dagVan };
 
 const EXTRACT_MODEL = "claude-haiku-5-5";
 const ENRICH_MODEL = "claude-sonnet-5-5";
 const API_URL = "https://api.anthropic.com/v1/messages";
+// Een bladzijde levert hooguit een paar honderd regels JSON op.
+const EXTRACT_MAX_TOKENS = 4096;
+// Per woord ongeveer 60 tot 80 tokens (keys, een voorbeeldzin, accept en
+// het woord zelf). Een gewone bladzijde van 20 tot 40 woorden past in
+// 3000; 8192 laat ruimte voor ruim 100 woorden. Ergste geval per verrijking
+// (Sonnet 5.5, $2 in en $10 uit per miljoen tokens, prijzen van 14-11-2026):
+// 64 KiB invoer is hooguit ongeveer 22.000 tokens ($0,044) plus 8192 tokens
+// uitvoer ($0,082), samen ongeveer $0,13. Een foto (Haiku 5.5) kost in het
+// ergste geval ongeveer $0,003.
+const ENRICH_MAX_TOKENS = 8192;
 const MAX_SYNC_BYTES = 1024 * 1024; // 1 MiB per PUT /sync
 const MAX_RECORD_BYTES = 2 * 1024 * 1024; // 2 MiB voor het samengevoegde record
-const MAX_EXTRACT_BYTES = 8 * 1024 * 1024; // 8 MiB, foto als base64
+// Foto als base64: hooguit 2 MiB. De app stuurt een JPEG van hooguit
+// 1500 px, ruim onder 1 MiB. De body mag daarbovenop 1 KiB aan velden hebben.
+const MAX_IMAGE_CHARS = 2 * 1024 * 1024;
+const MAX_EXTRACT_BYTES = MAX_IMAGE_CHARS + 1024;
 const MAX_ENRICH_BYTES = 64 * 1024; // 64 KiB
-const MAX_ENRICH_ITEMS = 200;
+const MAX_ENRICH_ITEMS = 150;
+const MAX_ENRICH_TEKST = 200; // tekens per word of def
 const MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+// Taal in een hint of vak: alleen letters, hooguit 20.
+const TAAL = /^\p{L}{1,20}$/u;
+// Toestel-id: crypto.randomUUID() uit de app, in kleine letters.
+const TOESTEL_VORM = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+// Een oude app zonder toestel-id, maar met het wachtwoord, telt onder dit id.
+const TOESTEL_WACHTWOORD = "wachtwoord";
 
 // ALLOWED_ORIGIN is een lijst, gescheiden door komma's. Alleen een herkende
 // Origin gaat terug in Access-Control-Allow-Origin; anders geen CORS-kop.
@@ -20,7 +48,7 @@ function cors(env, request) {
   const origin = request ? request.headers.get("Origin") : null;
   const h = {
     "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-api-token",
+    "Access-Control-Allow-Headers": "Content-Type, x-api-token, x-toestel",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
@@ -36,7 +64,15 @@ function json(data, status, env, request) {
 }
 
 // Fout van de Anthropic-API. De details gaan alleen naar console.error.
-class UpstreamFout extends Error {}
+// betaald: false alleen bij een storing aan de kant van Anthropic (429,
+// 500 en hoger, zoals 529). Een 4xx door de invoer of een netwerkfout kan
+// al geld gekost hebben en blijft geteld.
+class UpstreamFout extends Error {
+  constructor(bericht, betaald = true) {
+    super(bericht);
+    this.betaald = betaald;
+  }
+}
 
 // Leest een JSON-body van hooguit max bytes. Groter: 413. Geen geldig
 // JSON-object: 400.
@@ -76,25 +112,31 @@ async function leesJson(request, max) {
   return data;
 }
 
-async function callClaude(model, messages, env) {
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({ model, max_tokens: 8192, messages }),
-  });
+async function callClaude(model, maxTokens, messages, env) {
+  let res;
+  try {
+    res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({ model, max_tokens: maxTokens, messages }),
+    });
+  } catch (e) {
+    throw new UpstreamFout("Claude API onbereikbaar: " + (e && e.message));
+  }
   if (!res.ok) {
-    const err = await res.text();
-    throw new UpstreamFout(`Claude API ${res.status}: ${err}`);
+    const err = await res.text().catch(() => "");
+    const storing = res.status === 429 || res.status >= 500;
+    throw new UpstreamFout(`Claude API ${res.status}: ${err}`, !storing);
   }
   return res.json();
 }
 
 function extractText(response) {
-  const block = response.content.find((b) => b.type === "text");
+  const block = response && Array.isArray(response.content) ? response.content.find((b) => b.type === "text") : null;
   return block ? block.text : "";
 }
 
@@ -172,20 +214,111 @@ function buildHint(subjectHint) {
   return "Bepaal zelf het type op basis van wat je ziet.";
 }
 
+// ---------- foto-import: rand, teller en drempels ----------
+
+// Per IP hooguit een handvol verzoeken per minuut (Cloudflare Rate Limiting,
+// per locatie bij benadering). Dit komt voor de teller en voor het lezen van
+// de body, zodat een stroom verzoeken de teller en /sync niet kan bezetten.
+async function binnenTempo(request, env) {
+  if (!env.FOTO_TEMPO) throw new Error("FOTO_TEMPO ontbreekt");
+  const ip = request.headers.get("CF-Connecting-IP") || "onbekend";
+  const { success } = await env.FOTO_TEMPO.limit({ key: ip });
+  return success;
+}
+
+// Toestel uit x-toestel. Zonder die kop mag een oude app met het juiste
+// wachtwoord nog, onder een vast id. Verder: 400.
+function leesToestel(request, env) {
+  const id = request.headers.get("x-toestel");
+  if (id === null) {
+    const token = request.headers.get("x-api-token");
+    if (token && env.APP_SECRET && token === env.APP_SECRET) return TOESTEL_WACHTWOORD;
+    throw new HttpFout(400, "Ongeldig toestel");
+  }
+  if (id.length !== 36 || !TOESTEL_VORM.test(id)) throw new HttpFout(400, "Ongeldig toestel");
+  return id;
+}
+
+function teller(env) {
+  if (!env.TELLER) throw new Error("TELLER ontbreekt");
+  return env.TELLER.get(env.TELLER.idFromName("foto"));
+}
+
+async function vraagTeller(env, pad, data) {
+  const res = await teller(env).fetch("https://teller" + pad, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Teller gaf " + res.status);
+  return res.json();
+}
+
+// Reserveert vooraf een plek. Bij een volle grens: 429 met de grens.
+async function reserveer(env, soort, toestel) {
+  const r = await vraagTeller(env, "/reserveer", { soort, toestel });
+  if (!r.ok) throw new GrensFout(r.grens === "maand" ? "maand" : "toestel");
+  for (const d of r.drempels || []) {
+    try { await meldDrempel(env, r.maand, d); } catch (e) { console.error("Melding mislukt"); }
+  }
+  return { soort, toestel, dag: r.dag, maand: r.maand };
+}
+
+// Alleen bij een storing aan de kant van Anthropic.
+async function boekTerug(env, plek) {
+  try { await vraagTeller(env, "/terugboeken", plek); } catch (e) { console.error("Terugboeken mislukt"); }
+}
+
+class GrensFout extends Error {
+  constructor(grens) {
+    super("Grens bereikt");
+    this.grens = grens;
+  }
+}
+
+// Haak voor de melding naar het dashboard bij 80 en 100 foto's in een maand.
+// Nog niet gebouwd: doet niets en gaat niet het net op.
+export async function meldDrempel(env, maand, drempel) {
+  return false;
+}
+
+async function metPlek(env, plek, aanroep) {
+  try {
+    return await aanroep();
+  } catch (e) {
+    if (e instanceof UpstreamFout && !e.betaald) await boekTerug(env, plek);
+    throw e;
+  }
+}
+
+function geldigeHint(hint) {
+  if (hint === undefined || hint === null || hint === "") return "";
+  if (hint === "zinnen" || hint === "anders") return hint;
+  if (typeof hint === "string") {
+    const m = hint.match(/^(wd|dw):(.*)$/);
+    if (m && TAAL.test(m[2])) return hint;
+  }
+  throw new HttpFout(400, "Ongeldige hint");
+}
+
 async function handleExtract(request, env) {
+  const toestel = leesToestel(request, env);
   const { image, mediaType, subjectHint } = await leesJson(request, MAX_EXTRACT_BYTES);
   if (typeof image !== "string" || !image) {
     return json({ error: "Geen afbeelding meegegeven" }, 400, env, request);
   }
+  if (image.length > MAX_IMAGE_CHARS) throw new HttpFout(413, "Verzoek te groot");
+  if (!BASE64.test(image)) return json({ error: "Ongeldige afbeelding" }, 400, env, request);
   if (mediaType !== undefined && !MEDIA_TYPES.includes(mediaType)) {
     return json({ error: "Onbekend afbeeldingstype" }, 400, env, request);
   }
-
-  const hint = buildHint(typeof subjectHint === "string" ? subjectHint : "");
+  const hint = buildHint(geldigeHint(subjectHint));
   const prompt = EXTRACT_PROMPT + "\n\nHINT VAN DE GEBRUIKER: " + hint;
 
-  const response = await callClaude(
+  const plek = await reserveer(env, "extract", toestel);
+  const response = await metPlek(env, plek, () => callClaude(
     EXTRACT_MODEL,
+    EXTRACT_MAX_TOKENS,
     [
       {
         role: "user",
@@ -199,10 +332,51 @@ async function handleExtract(request, env) {
       },
     ],
     env
-  );
+  ));
 
-  const text = extractText(response);
-  const result = parseJSON(text);
+  const result = parseJSON(extractText(response));
+  return json(result, 200, env, request);
+}
+
+async function handleEnrich(request, env) {
+  const toestel = leesToestel(request, env);
+  const { items, mode, subject } = await leesJson(request, MAX_ENRICH_BYTES);
+  if (!Array.isArray(items) || !items.length) {
+    return json({ error: "Geen items meegegeven" }, 400, env, request);
+  }
+  if (items.length > MAX_ENRICH_ITEMS) {
+    return json({ error: "Te veel items" }, 400, env, request);
+  }
+  // Alleen word en def, als korte tekst. De rest gaat niet naar de AI.
+  const schoon = [];
+  for (const it of items) {
+    if (!it || typeof it !== "object" || typeof it.word !== "string" || typeof it.def !== "string" ||
+        it.word.length > MAX_ENRICH_TEKST || it.def.length > MAX_ENRICH_TEKST) {
+      return json({ error: "Ongeldig item" }, 400, env, request);
+    }
+    schoon.push({ word: it.word, def: it.def });
+  }
+  // Een vak dat geen korte taalnaam is, wordt een algemene omschrijving.
+  const taal = typeof subject === "string" && TAAL.test(subject) ? subject : "vreemde taal";
+  const context =
+    mode === "translate"
+      ? `Dit zijn ${taal}-items met vertalingen.`
+      : `Dit zijn Engelse vocabulaire-items met Engelse definities.`;
+
+  const plek = await reserveer(env, "enrich", toestel);
+  const response = await metPlek(env, plek, () => callClaude(
+    ENRICH_MODEL,
+    ENRICH_MAX_TOKENS,
+    [
+      {
+        role: "user",
+        content: `${ENRICH_PROMPT}\n\n${context}\n\nItems:\n${JSON.stringify(schoon)}`,
+      },
+    ],
+    env
+  ));
+
+  const result = parseJSON(extractText(response));
   return json(result, 200, env, request);
 }
 
@@ -226,55 +400,29 @@ async function handleSyncPut(learner, request, env) {
   return json(merged, 200, env, request);
 }
 
-async function handleEnrich(request, env) {
-  const { items, mode, subject } = await leesJson(request, MAX_ENRICH_BYTES);
-  if (!Array.isArray(items) || !items.length) {
-    return json({ error: "Geen items meegegeven" }, 400, env, request);
-  }
-  if (items.length > MAX_ENRICH_ITEMS) {
-    return json({ error: "Te veel items" }, 400, env, request);
-  }
-
-  const context =
-    mode === "translate"
-      ? `Dit zijn ${typeof subject === "string" && subject ? subject : "vreemde taal"}-items met vertalingen.`
-      : `Dit zijn Engelse vocabulaire-items met Engelse definities.`;
-
-  const response = await callClaude(
-    ENRICH_MODEL,
-    [
-      {
-        role: "user",
-        content: `${ENRICH_PROMPT}\n\n${context}\n\nItems:\n${JSON.stringify(items, null, 2)}`,
-      },
-    ],
-    env
-  );
-
-  const text = extractText(response);
-  const result = parseJSON(text);
-  return json(result, 200, env, request);
-}
-
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: cors(env, request) });
     }
 
-    const token = request.headers.get("x-api-token");
-    if (!token || token !== env.APP_SECRET) {
-      return json({ error: "Niet geautoriseerd" }, 401, env, request);
-    }
-
     const url = new URL(request.url);
 
     try {
-      if (url.pathname === "/extract" && request.method === "POST") {
-        return await handleExtract(request, env);
+      // Foto-import: open voor iedereen, begrensd per IP, per toestel per dag
+      // en per maand. Een wachtwoord verandert daar niets aan.
+      const foto = request.method === "POST" && (url.pathname === "/extract" || url.pathname === "/enrich");
+      if (foto) {
+        if (!(await binnenTempo(request, env))) {
+          return json({ error: "Te veel verzoeken", grens: "tempo" }, 429, env, request);
+        }
+        return url.pathname === "/extract" ? await handleExtract(request, env) : await handleEnrich(request, env);
       }
-      if (url.pathname === "/enrich" && request.method === "POST") {
-        return await handleEnrich(request, env);
+
+      // Al het andere (de sync) alleen met het wachtwoord.
+      const token = request.headers.get("x-api-token");
+      if (!token || token !== env.APP_SECRET) {
+        return json({ error: "Niet geautoriseerd" }, 401, env, request);
       }
       const syncMatch = url.pathname.match(/^\/sync\/([a-z0-9-]+)$/);
       if (syncMatch) {
@@ -283,6 +431,7 @@ export default {
       }
       return json({ error: "Niet gevonden" }, 404, env, request);
     } catch (e) {
+      if (e instanceof GrensFout) return json({ error: "Grens bereikt", grens: e.grens }, 429, env, request);
       if (e instanceof HttpFout) return json({ error: e.message }, e.status, env, request);
       // Details alleen in de logs, zonder verzoekinhoud.
       console.error(e && e.message ? e.message : e);

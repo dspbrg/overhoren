@@ -352,6 +352,7 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
     </div>
 
     <p class="hint" id="photo-error" hidden></p>
+    <button class="btn" id="btn-photo-typ" hidden>Typ zelf</button>
   </div>
 </section>
 
@@ -1606,6 +1607,7 @@ function photoShowStep(step) {
     $(id).hidden = id !== step;
   });
   $("photo-error").hidden = true;
+  $("btn-photo-typ").hidden = true;
   var labels = { "photo-capture":"Stap 1 van 3", "photo-loading":"Stap 2 van 3", "photo-review":"Stap 3 van 3", "photo-done":"Klaar" };
   $("photo-step").textContent = labels[step] || "";
 }
@@ -1633,13 +1635,53 @@ function photoOnFile(e) {
 }
 
 function photoError(msg) {
+  // eerst de stap, want photoShowStep verbergt de melding
+  photoShowStep("photo-capture");
   $("photo-error").textContent = msg;
   $("photo-error").hidden = false;
-  photoShowStep("photo-capture");
 }
 
 function ensureWorkerUrl() {
-  return !!(WORKER_URL && APP_SECRET);
+  return !!WORKER_URL;
+}
+
+// Eigen id per toestel, een keer gemaakt. De worker telt er de foto's per dag mee.
+const TOESTEL_KEY = "overhoor:toestel";
+function toestelId() {
+  var id = load(TOESTEL_KEY, "");
+  if (typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)) {
+    if (crypto.randomUUID) id = crypto.randomUUID();
+    else {
+      // oudere Safari: zelfde vorm (versie 4) met getRandomValues
+      var b = crypto.getRandomValues(new Uint8Array(16));
+      b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+      var x = Array.from(b, function(n) { return (n + 256).toString(16).slice(1); }).join("");
+      id = x.slice(0, 8) + "-" + x.slice(8, 12) + "-" + x.slice(12, 16) + "-" + x.slice(16, 20) + "-" + x.slice(20);
+    }
+    save(TOESTEL_KEY, id);
+  }
+  return id;
+}
+
+// Koppen voor /extract en /enrich. Het wachtwoord alleen als het er is.
+function fotoKoppen() {
+  var h = { "Content-Type": "application/json", "x-toestel": toestelId() };
+  if (APP_SECRET) h["x-api-token"] = APP_SECRET;
+  return h;
+}
+
+// Daggrens per toestel of maandgrens voor iedereen; de worker zegt welke.
+const FOTO_GRENS_TEKST = {
+  toestel: "Vandaag kunnen er geen foto's meer bij. Morgen weer, of typ de woorden zelf.",
+  maand: "Deze maand kunnen er geen foto's meer bij. Typ de woorden zelf."
+};
+async function photoGrens(res) {
+  var grens = "toestel";
+  try { if ((await res.json()).grens === "maand") grens = "maand"; } catch (e) { /* onleesbaar: daggrens */ }
+  photoShowStep("photo-capture");
+  $("photo-error").textContent = FOTO_GRENS_TEKST[grens];
+  $("photo-error").hidden = false;
+  $("btn-photo-typ").hidden = false;
 }
 
 var photoSubjectHint = "";
@@ -1671,9 +1713,10 @@ async function photoExtract() {
   try {
     var res = await fetch(WORKER_URL + "/extract", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-token": APP_SECRET },
+      headers: fotoKoppen(),
       body: JSON.stringify({ image: photoData.data, mediaType: photoData.mediaType, subjectHint: photoSubjectHint })
     });
+    if (res.status === 429) { await photoGrens(res); return; }
     if (!res.ok) throw new Error("Server gaf fout " + res.status);
     photoResult = await res.json();
     if (photoResult.error) throw new Error(photoResult.error);
@@ -1762,7 +1805,7 @@ async function photoEnrich(listId, items, mode, subject) {
     $("photo-done-text").textContent += " Verrijking loopt...";
     var res = await fetch(WORKER_URL + "/enrich", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-token": APP_SECRET },
+      headers: fotoKoppen(),
       body: JSON.stringify({ items: items, mode: mode, subject: subject })
     });
     if (!res.ok) return;
@@ -1881,6 +1924,7 @@ function bind(){
   });
   // import keuze
   $("btn-type-start").addEventListener("click", ()=>{ $("import-choices").hidden=true; $("import-form").hidden=false; });
+  $("btn-photo-typ").addEventListener("click", ()=>{ show("scr-import"); $("import-choices").hidden=true; $("import-form").hidden=false; });
   $("btn-import-form-back").addEventListener("click", ()=>{ $("import-choices").hidden=false; $("import-form").hidden=true; });
   // foto-import
   $("btn-photo-start").addEventListener("click", ()=>{ photoReset(); show("scr-photo"); });
