@@ -1,5 +1,7 @@
 import { mergeSync, HttpFout } from "./merge.js";
-import { FotoTeller, FOTO_PER_TOESTEL_PER_DAG, FOTO_PER_MAAND, MELD_DREMPELS, dagVan, meldDrempel } from "./teller.js";
+import { FotoTeller, SLUG_VORM, SLUG_MAX, meldDrempel } from "./teller.js";
+import { geldigeCode, codeHash, CODE_MAX } from "./code.js";
+import { ipSleutel } from "./ip.js";
 
 // Foto-import zonder wachtwoord, met twee grenzen (Europe/Amsterdam): per
 // toestel per kalenderdag, en voor iedereen samen per kalendermaand. Ze
@@ -22,8 +24,18 @@ const EXTRACT_MAX_TOKENS = 4096;
 // uitvoer ($0,082), samen ongeveer $0,13. Een foto (Haiku 5.5) kost in het
 // ergste geval ongeveer $0,003.
 const ENRICH_MAX_TOKENS = 8192;
-const MAX_SYNC_BYTES = 1024 * 1024; // 1 MiB per PUT /sync
+// Per PUT /sync. Gemeten (14-11-2026, de vier ingebouwde lijsten met
+// voortgang op elk woord): 20 rondes per lijst en geen eigen lijsten is
+// 45 KiB; 50 rondes en 10 eigen lijsten van 40 woorden 234 KiB; 100 rondes
+// en 30 eigen lijsten (een zwaar schooljaar) 702 KiB. 768 KiB laat drie
+// keer ruimte boven gewoon gebruik.
+const MAX_SYNC_BYTES = 768 * 1024;
+const MAX_MIGREER_BYTES = 1024; // { slug }
 const MAX_RECORD_BYTES = 2 * 1024 * 1024; // 2 MiB voor het samengevoegde record
+// Een nieuw record (de eerste PUT voor een code) hooguit 256 KiB: ruim
+// boven een gewoon begin (45 tot 234 KiB, zie MAX_SYNC_BYTES), en het remt
+// het volschrijven van KV met zelfgemaakte codes.
+const MAX_NIEUW_RECORD_BYTES = 256 * 1024;
 // Foto als base64: hooguit 2 MiB. De app stuurt een JPEG van hooguit
 // 1500 px, ruim onder 1 MiB. De body mag daarbovenop 1 KiB aan velden hebben.
 const MAX_IMAGE_CHARS = 2 * 1024 * 1024;
@@ -50,7 +62,7 @@ function cors(env, request) {
   const origin = request ? request.headers.get("Origin") : null;
   const h = {
     "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-api-token, x-toestel",
+    "Access-Control-Allow-Headers": "Content-Type, x-api-token, x-toestel, x-code",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
@@ -218,14 +230,48 @@ function buildHint(subjectHint) {
 
 // ---------- foto-import: rand, teller en drempels ----------
 
-// Per IP hooguit een handvol verzoeken per minuut (Cloudflare Rate Limiting,
-// per locatie bij benadering). Dit komt voor de teller en voor het lezen van
-// de body, zodat een stroom verzoeken de teller en /sync niet kan bezetten.
-async function binnenTempo(request, env) {
-  if (!env.FOTO_TEMPO) throw new Error("FOTO_TEMPO ontbreekt");
-  const ip = request.headers.get("CF-Connecting-IP") || "onbekend";
-  const { success } = await env.FOTO_TEMPO.limit({ key: ip });
+// Per IP hooguit een aantal verzoeken per minuut (Cloudflare Rate Limiting,
+// per locatie bij benadering). Dit komt voor de teller, de code en het lezen
+// van de body. Twee bindingen met elk een eigen teller: FOTO_TEMPO (20 per
+// minuut, foto-import) en SYNC_TEMPO (120 per minuut, sync en overstap).
+// De sync duwt tijdens een ronde hooguit elke 2 seconden; een gedeelde
+// grens van 20 zou sync en foto-import elkaar laten blokkeren.
+async function binnenTempo(request, binding, naam) {
+  if (!binding) throw new Error(naam + " ontbreekt");
+  const { success } = await binding.limit({ key: ipSleutel(request.headers.get("CF-Connecting-IP")) });
   return success;
+}
+
+// ---------- code per persoon ----------
+
+// Het geheim ONBEPERKT: sha256-hashes van codes, gescheiden door komma's.
+// Wie zo'n code meestuurt, telt niet tegen de maandgrens van de foto-import.
+function onbeperkteHashes(env) {
+  return String(env.ONBEPERKT || "").split(",").map((s) => s.trim().toLowerCase()).filter((s) => /^[0-9a-f]{64}$/.test(s));
+}
+
+// x-code: verplicht (sync) of los (foto-import). Ontbreekt hij waar hij
+// moet: 401. Een andere vorm dan woord-woord-woord-12 uit de lijst: 400.
+// Geeft de sha256 van de code, of null zonder code. De code zelf gaat
+// nergens heen, ook niet naar de logs.
+async function leesCode(request, verplicht) {
+  const code = request.headers.get("x-code");
+  if (code === null) {
+    if (verplicht) throw new HttpFout(401, "Geen code");
+    return null;
+  }
+  if (code.length > CODE_MAX || !geldigeCode(code)) throw new HttpFout(400, "Ongeldige code");
+  return codeHash(code);
+}
+
+// De hash van de meegestuurde code als die in ONBEPERKT staat, anders null.
+// Zolang APP_SECRET bestaat, telt ONBEPERKT niet: dan is Pia's code via
+// /migreer op te vragen voor wie de oude deellink heeft. Zo dwingt de code de
+// volgorde af (eerst APP_SECRET weg, dan ONBEPERKT).
+async function onbeperktHash(request, env) {
+  const hash = await leesCode(request, false);
+  if (env.APP_SECRET) return null;
+  return hash !== null && onbeperkteHashes(env).includes(hash) ? hash : null;
 }
 
 // Toestel uit x-toestel. Zonder die kop mag een oude app met het juiste
@@ -241,13 +287,14 @@ function leesToestel(request, env) {
   return id;
 }
 
-function teller(env) {
+// naam: "foto" voor de teller, "migratie" voor de codes van de overstap.
+function teller(env, naam) {
   if (!env.TELLER) throw new Error("TELLER ontbreekt");
-  return env.TELLER.get(env.TELLER.idFromName("foto"));
+  return env.TELLER.get(env.TELLER.idFromName(naam));
 }
 
-async function vraagTeller(env, pad, data) {
-  const res = await teller(env).fetch("https://teller" + pad, {
+async function vraagTeller(env, pad, data, naam = "foto") {
+  const res = await teller(env, naam).fetch("https://teller" + pad, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -257,13 +304,15 @@ async function vraagTeller(env, pad, data) {
 }
 
 // Reserveert vooraf een plek. Bij een volle grens: 429 met de grens.
-async function reserveer(env, soort, toestel) {
-  const r = await vraagTeller(env, "/reserveer", { soort, toestel });
+// onbeperkt: de hash uit ONBEPERKT of null. Dan geen FOTO_PER_MAAND maar
+// ONBEPERKT_PER_MAAND voor die hash; wel meetellen (en drempels melden).
+async function reserveer(env, soort, toestel, onbeperkt = null) {
+  const r = await vraagTeller(env, "/reserveer", { soort, toestel, onbeperkt });
   if (!r.ok) throw new GrensFout(r.grens === "maand" ? "maand" : "toestel");
   for (const d of r.drempels || []) {
     try { await meldDrempel(env, r.maand, d); } catch (e) { console.error("Melding mislukt"); }
   }
-  return { soort, toestel, dag: r.dag, maand: r.maand };
+  return { soort, toestel, dag: r.dag, maand: r.maand, onbeperkt };
 }
 
 // Alleen bij een storing aan de kant van Anthropic.
@@ -299,6 +348,7 @@ function geldigeHint(hint) {
 
 async function handleExtract(request, env) {
   const toestel = leesToestel(request, env);
+  const onbeperkt = await onbeperktHash(request, env);
   const { image, mediaType, subjectHint } = await leesJson(request, MAX_EXTRACT_BYTES);
   if (typeof image !== "string" || !image) {
     return json({ error: "Geen afbeelding meegegeven" }, 400, env, request);
@@ -311,7 +361,7 @@ async function handleExtract(request, env) {
   const hint = buildHint(geldigeHint(subjectHint));
   const prompt = EXTRACT_PROMPT + "\n\nHINT VAN DE GEBRUIKER: " + hint;
 
-  const plek = await reserveer(env, "extract", toestel);
+  const plek = await reserveer(env, "extract", toestel, onbeperkt);
   const response = await metPlek(env, plek, () => callClaude(
     EXTRACT_MODEL,
     EXTRACT_MAX_TOKENS,
@@ -336,6 +386,7 @@ async function handleExtract(request, env) {
 
 async function handleEnrich(request, env) {
   const toestel = leesToestel(request, env);
+  const onbeperkt = await onbeperktHash(request, env);
   const { items, mode, subject } = await leesJson(request, MAX_ENRICH_BYTES);
   if (!Array.isArray(items) || !items.length) {
     return json({ error: "Geen items meegegeven" }, 400, env, request);
@@ -359,7 +410,7 @@ async function handleEnrich(request, env) {
       ? `Dit zijn ${taal}-items met vertalingen.`
       : `Dit zijn Engelse vocabulaire-items met Engelse definities.`;
 
-  const plek = await reserveer(env, "enrich", toestel);
+  const plek = await reserveer(env, "enrich", toestel, onbeperkt);
   const response = await metPlek(env, plek, () => callClaude(
     ENRICH_MODEL,
     ENRICH_MAX_TOKENS,
@@ -376,24 +427,73 @@ async function handleEnrich(request, env) {
   return json(result, 200, env, request);
 }
 
-async function handleSyncGet(learner, env, request) {
-  const data = await env.SYNC.get("learner:" + learner, "json");
+// sleutel: "learner:<slug>" (oude route, met wachtwoord) of
+// "persoon:<sha256 van de code>" (nieuwe route, met x-code). Een slug heeft
+// geen dubbele punt, dus de oude route kan nooit bij persoon:-data.
+async function handleSyncGet(sleutel, env, request) {
+  const data = await env.SYNC.get(sleutel, "json");
   if (!data) return json({}, 200, env, request);
   // Alleen de bekende velden, gecontroleerd. Oude of onbekende velden in KV
   // (zoals `katten`) gaan niet terug naar de client.
   return json(mergeSync(data, {}), 200, env, request);
 }
 
-async function handleSyncPut(learner, request, env) {
-  const body = await leesJson(request, MAX_SYNC_BYTES);
-  const existing = (await env.SYNC.get("learner:" + learner, "json")) || {};
-  const merged = mergeSync(existing, body);
+// Samenvoegen met wat er staat en opslaan, als het samen niet te groot is.
+// begrensd: een nieuw record telt mee voor NIEUW_PER_DAG (de sync met een
+// code; niet de overstap, die vraagt het wachtwoord).
+// ipSleutel: de tempo-sleutel van de afzender; dan is dit de sync met een
+// code en geldt voor een nieuw record MAX_NIEUW_RECORD_BYTES en de telling
+// in de Durable Object (NIEUW_PER_DAG in totaal, NIEUW_PER_IP_PER_DAG per
+// sleutel). De overstap geeft null: die vraagt het wachtwoord.
+async function voegSamenEnBewaar(sleutel, nieuw, env, ipSleutel = null) {
+  const bestaand = await env.SYNC.get(sleutel, "json");
+  const merged = mergeSync(bestaand || {}, nieuw);
   const tekst = JSON.stringify(merged);
-  if (new TextEncoder().encode(tekst).byteLength > MAX_RECORD_BYTES) {
-    throw new HttpFout(413, "Opgeslagen gegevens te groot");
+  const grootte = new TextEncoder().encode(tekst).byteLength;
+  if (grootte > MAX_RECORD_BYTES) throw new HttpFout(413, "Opgeslagen gegevens te groot");
+  if (!bestaand && ipSleutel !== null) {
+    if (grootte > MAX_NIEUW_RECORD_BYTES) throw new HttpFout(413, "Nieuwe gegevens te groot");
+    const r = await vraagTeller(env, "/nieuw", { sleutel: ipSleutel }, "migratie");
+    if (!r.ok) throw new GrensFout("nieuw");
   }
-  await env.SYNC.put("learner:" + learner, tekst);
-  return json(merged, 200, env, request);
+  await env.SYNC.put(sleutel, tekst);
+  return merged;
+}
+
+async function handleSyncPut(sleutel, request, env) {
+  const body = await leesJson(request, MAX_SYNC_BYTES);
+  const ip = sleutel.startsWith("persoon:") ? ipSleutel(request.headers.get("CF-Connecting-IP")) : null;
+  return json(await voegSamenEnBewaar(sleutel, body, env, ip), 200, env, request);
+}
+
+// Na het weghalen van APP_SECRET: de codes van de overstap in de Durable
+// Object wissen. Kan alleen als APP_SECRET weg is; dan zijn ze nergens meer
+// voor nodig, dus zonder wachtwoord.
+async function handleWisMigratie(env, request) {
+  if (env.APP_SECRET) return json({ error: "Eerst APP_SECRET verwijderen" }, 409, env, request);
+  return json(await vraagTeller(env, "/wis-migratie", {}, "migratie"), 200, env, request);
+}
+
+// Eenmalige overstap van wachtwoord plus naam naar een code. Vraagt het
+// wachtwoord. De Durable Object geeft voor een slug altijd dezelfde code
+// (de eerste keer een nieuwe), ook als twee toestellen tegelijk vragen. De
+// oude voortgang gaat samengevoegd naar persoon:<hash>, bij elke aanroep:
+// zo komt ook mee wat een tweede toestel intussen nog via de oude route
+// stuurde. Geeft { code }.
+async function handleMigreer(request, env) {
+  const token = request.headers.get("x-api-token");
+  if (!token || !env.APP_SECRET || token !== env.APP_SECRET) {
+    return json({ error: "Niet geautoriseerd" }, 401, env, request);
+  }
+  const { slug } = await leesJson(request, MAX_MIGREER_BYTES);
+  if (typeof slug !== "string" || slug.length > SLUG_MAX || !SLUG_VORM.test(slug)) {
+    throw new HttpFout(400, "Ongeldige naam");
+  }
+  const { code } = await vraagTeller(env, "/migreer", { slug }, "migratie");
+  if (!geldigeCode(code)) throw new Error("Migratie gaf geen code");
+  const oud = await env.SYNC.get("learner:" + slug, "json");
+  if (oud) await voegSamenEnBewaar("persoon:" + (await codeHash(code)), oud, env);
+  return json({ code }, 200, env, request);
 }
 
 export default {
@@ -409,21 +509,41 @@ export default {
       // en per maand. Een wachtwoord verandert daar niets aan.
       const foto = request.method === "POST" && (url.pathname === "/extract" || url.pathname === "/enrich");
       if (foto) {
-        if (!(await binnenTempo(request, env))) {
+        if (!(await binnenTempo(request, env.FOTO_TEMPO, "FOTO_TEMPO"))) {
           return json({ error: "Te veel verzoeken", grens: "tempo" }, 429, env, request);
         }
         return url.pathname === "/extract" ? await handleExtract(request, env) : await handleEnrich(request, env);
       }
 
-      // Al het andere (de sync) alleen met het wachtwoord.
+      // Sync per persoon (x-code), de overstap en de oude sync: begrensd per
+      // IP, voor alles anders, ook voor het lezen van de code en de body.
+      // Zo wordt het raden van codes en het volschrijven van KV geremd.
+      const perCode = url.pathname === "/sync" && (request.method === "GET" || request.method === "PUT");
+      const migreer = url.pathname === "/migreer" && request.method === "POST";
+      const wis = url.pathname === "/migreer/wis" && request.method === "POST";
+      const syncMatch = url.pathname.match(/^\/sync\/([a-z0-9-]+)$/);
+      const oudeSync = !!syncMatch && (request.method === "GET" || request.method === "PUT");
+      if (perCode || migreer || wis || oudeSync) {
+        if (!(await binnenTempo(request, env.SYNC_TEMPO, "SYNC_TEMPO"))) {
+          return json({ error: "Te veel verzoeken", grens: "tempo" }, 429, env, request);
+        }
+      }
+      if (perCode) {
+        const sleutel = "persoon:" + (await leesCode(request, true));
+        return request.method === "GET" ? await handleSyncGet(sleutel, env, request) : await handleSyncPut(sleutel, request, env);
+      }
+      if (migreer) return await handleMigreer(request, env);
+      if (wis) return await handleWisMigratie(env, request);
+
+      // De oude sync (/sync/<naam>) alleen met het wachtwoord. Werkt tot
+      // APP_SECRET weg is (zie worker/README.md).
       const token = request.headers.get("x-api-token");
-      if (!token || token !== env.APP_SECRET) {
+      if (!token || !env.APP_SECRET || token !== env.APP_SECRET) {
         return json({ error: "Niet geautoriseerd" }, 401, env, request);
       }
-      const syncMatch = url.pathname.match(/^\/sync\/([a-z0-9-]+)$/);
-      if (syncMatch) {
-        if (request.method === "GET") return await handleSyncGet(syncMatch[1], env, request);
-        if (request.method === "PUT") return await handleSyncPut(syncMatch[1], request, env);
+      if (oudeSync) {
+        if (request.method === "GET") return await handleSyncGet("learner:" + syncMatch[1], env, request);
+        return await handleSyncPut("learner:" + syncMatch[1], request, env);
       }
       return json({ error: "Niet gevonden" }, 404, env, request);
     } catch (e) {

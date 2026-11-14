@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 import { REPO } from "./lib/omgeving.mjs";
 
 const SRC = process.env.WORKER_SRC || join(REPO, "worker", "src");
@@ -92,7 +93,8 @@ const ORIGINS = "https://overhoren.vandaan.net,https://dspbrg.github.io";
 function env(kv = nepKV()) {
   kv.teller = kv.teller || nepTeller();
   kv.tempo = kv.tempo || nepTempo();
-  return { SYNC: kv, TELLER: kv.teller, FOTO_TEMPO: kv.tempo, APP_SECRET: "geheim", ALLOWED_ORIGIN: ORIGINS, ANTHROPIC_API_KEY: "test" };
+  kv.syncTempo = kv.syncTempo || nepTempo();
+  return { SYNC: kv, TELLER: kv.teller, FOTO_TEMPO: kv.tempo, SYNC_TEMPO: kv.syncTempo, APP_SECRET: "geheim", ALLOWED_ORIGIN: ORIGINS, ANTHROPIC_API_KEY: "test" };
 }
 function put(body, { origin = "https://dspbrg.github.io", raw } = {}) {
   return new Request("https://api.test/sync/pia", {
@@ -184,9 +186,9 @@ test("kapotte cats, lists en remote uit KV houden de sync niet tegen", () => {
 
 // ---------- handler: grenzen en foutvorm ----------
 
-test("verzoek boven 1 MB krijgt 413, met en zonder Content-Length", async () => {
+test("verzoek boven 768 KiB krijgt 413, met en zonder Content-Length", async () => {
   const kv = nepKV();
-  const groot = JSON.stringify({ progress: { l1: { pad: "x".repeat(1024 * 1024) } } });
+  const groot = JSON.stringify({ progress: { l1: { pad: "x".repeat(768 * 1024) } } });
   const r1 = await worker.fetch(put(null, { raw: groot }), env(kv));
   assert.equal(r1.status, 413);
   // stream zonder lengte
@@ -201,7 +203,7 @@ test("verzoek boven 1 MB krijgt 413, met en zonder Content-Length", async () => 
   assert.equal(r2.status, 413);
   assert.equal(kv.puts, 0);
   // net onder de grens gaat goed
-  const klein = JSON.stringify({ progress: { l1: { pad: "x".repeat(1000 * 1000) } } });
+  const klein = JSON.stringify({ progress: { l1: { pad: "x".repeat(760 * 1024) } } });
   const r3 = await worker.fetch(put(null, { raw: klein }), env(kv));
   assert.equal(r3.status, 200);
 });
@@ -263,14 +265,14 @@ test("fout van de Anthropic-API: algemene melding naar de client, details alleen
 test("samengevoegd record boven 2 MiB: 413 en niet opslaan", async () => {
   // een geldige eigen lijst van ongeveer `kb` KiB: woorden met een lange definitie
   const grootLijst = (id, kb) => ({ id, title: id, items: Array.from({ length: kb }, () => ({ word: "w", def: "x".repeat(1000) })) });
-  const kv = nepKV({ "learner:pia": { lists: [grootLijst("oud", 1200)] } });
+  const kv = nepKV({ "learner:pia": { lists: [grootLijst("oud", 1500)] } });
   const voor = kv.data.get("learner:pia");
-  const res = await worker.fetch(put({ lists: [grootLijst("nieuw", 900)] }), env(kv));
+  const res = await worker.fetch(put({ lists: [grootLijst("nieuw", 650)] }), env(kv));
   assert.equal(res.status, 413);
   assert.equal(kv.puts, 0);
   assert.equal(kv.data.get("learner:pia"), voor);
   // klein genoeg samen: wel opslaan
-  const res2 = await worker.fetch(put({ lists: [grootLijst("nieuw", 500)] }), env(kv));
+  const res2 = await worker.fetch(put({ lists: [grootLijst("nieuw", 400)] }), env(kv));
   assert.equal(res2.status, 200);
   assert.equal(kv.puts, 1);
 });
@@ -1156,4 +1158,447 @@ test("oude app: zonder x-toestel maar met het wachtwoord mag de foto-import, ond
 test("index.js exporteert alleen de handler en FotoTeller", async () => {
   const mod = await import(pathToFileURL(join(SRC, "index.js")).href);
   assert.deepEqual(Object.keys(mod).sort(), ["FotoTeller", "default"]);
+});
+
+// ---------- sync per persoon met een code ----------
+// GET en PUT /sync met x-code. De data staat onder persoon:<sha256(code)>,
+// nooit onder de code zelf. De naam doet er niet meer toe.
+
+const CODE = await import(pathToFileURL(join(SRC, "code.js")).href);
+const PIA_CODE = "panda-mango-wolk-47";
+const TOM_CODE = "appel-zebra-kous-03";
+const sha = s => createHash("sha256").update(s).digest("hex");
+function metCode(code, { method = "GET", body, ip = "203.0.113.9", extra = {} } = {}) {
+  const h = { Origin: "https://dspbrg.github.io", "CF-Connecting-IP": ip, ...extra };
+  if (code !== null) h["x-code"] = code;
+  if (body !== undefined) h["Content-Type"] = "application/json";
+  return new Request("https://api.test/sync", { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
+}
+function migreer(slug, { token = "geheim", ip = "203.0.113.9", raw } = {}) {
+  const h = { "Content-Type": "application/json", Origin: "https://dspbrg.github.io", "CF-Connecting-IP": ip };
+  if (token !== null) h["x-api-token"] = token;
+  return new Request("https://api.test/migreer", { method: "POST", headers: h, body: raw !== undefined ? raw : JSON.stringify({ slug }) });
+}
+const migratieCode = (kv, slug) => kv.teller.opslag.get("migratie:" + slug);
+
+test("code: woordlijst, vorm en willekeur", () => {
+  const W = CODE.CODE_WOORDEN;
+  assert.ok(W.length >= 1000, "te weinig woorden: " + W.length);
+  assert.equal(new Set(W).size, W.length, "dubbele woorden");
+  for (const w of W) {
+    assert.match(w, /^[a-z]{3,6}$/, w);
+    assert.doesNotMatch(w, /[cqxy]|ij/, "lastige letters in " + w);
+  }
+  assert.ok(W.length ** 3 * 100 >= 1e11, "minder dan 1e11 codes");
+  // 2000 codes: allemaal geldig, geen dubbele, de cijfers en woorden verspreid
+  const codes = Array.from({ length: 2000 }, () => CODE.maakCode());
+  for (const c of codes) assert.ok(CODE.geldigeCode(c), c);
+  assert.equal(new Set(codes).size, codes.length, "dubbele codes");
+  assert.ok(new Set(codes.map(c => c.slice(-2))).size > 80, "de cijfers zijn niet willekeurig");
+  assert.ok(new Set(codes.map(c => c.split("-")[0])).size > 600, "de woorden zijn niet willekeurig");
+  assert.ok(CODE.geldigeCode(PIA_CODE));
+  for (const fout of ["", "panda-mango-wolk-4", "panda-mango-wolk-470", "Panda-mango-wolk-47", "panda mango wolk 47", "panda-mango-wolk-47 ",
+    "panda-mango-47", "panda-mango-wolk-kous-47", "panda-mango-wolk-xx", "qqq-mango-wolk-47", "tijger-mango-wolk-47", "panda--mango-wolk-47",
+    "panda-mango-wolk-47-", "-panda-mango-wolk-47", "panda_mango_wolk_47", "learner:pia", "../persoon", "panda-mango-wolk-٤٧",
+    "a".repeat(5000), null, 47, ["panda-mango-wolk-47"]]) {
+    assert.equal(CODE.geldigeCode(fout), false, String(fout).slice(0, 40));
+  }
+});
+
+test("code: sync met x-code bewaart onder de hash, zonder wachtwoord en zonder naam", async () => {
+  const kv = nepKV();
+  const voortgang = { l1: { items: { 0: staat() }, sessions: [ronde()], updated: 7 } };
+  const res = await worker.fetch(metCode(PIA_CODE, { method: "PUT", body: { progress: voortgang, updated: 7 } }), env(kv));
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("access-control-allow-origin"), "https://dspbrg.github.io");
+  assert.deepEqual([...kv.data.keys()], ["persoon:" + sha(PIA_CODE)]);
+  for (const [k, v] of kv.data) assert.equal((k + v).includes(PIA_CODE), false, "de code staat in KV");
+  const get = await worker.fetch(metCode(PIA_CODE), env(kv));
+  assert.equal(get.status, 200);
+  assert.deepEqual((await get.json()).progress, voortgang);
+  // een andere code ziet niets
+  assert.deepEqual(await (await worker.fetch(metCode(TOM_CODE), env(kv))).json(), {});
+  // tweede toestel duwt iets erbij: samengevoegd
+  await worker.fetch(metCode(PIA_CODE, { method: "PUT", body: { progress: { l2: vg(9) }, updated: 9 } }), env(kv));
+  assert.deepEqual(Object.keys(JSON.parse(kv.data.get("persoon:" + sha(PIA_CODE))).progress).sort(), ["l1", "l2"]);
+  // CORS: x-code mag mee
+  const pre = await worker.fetch(new Request("https://api.test/sync", { method: "OPTIONS",
+    headers: { Origin: "https://overhoren.vandaan.net", "Access-Control-Request-Method": "PUT", "Access-Control-Request-Headers": "content-type,x-code" } }), env(kv));
+  assert.match(pre.headers.get("access-control-allow-headers"), /x-code/);
+});
+
+test("code: zonder code 401, met een kapotte code 400, en niets in KV", async () => {
+  const kv = nepKV();
+  for (const method of ["GET", "PUT"]) {
+    const body = method === "PUT" ? { updated: 1 } : undefined;
+    assert.equal((await worker.fetch(metCode(null, { method, body }), env(kv))).status, 401, method + " zonder code");
+    // met het wachtwoord maar zonder code: ook niet
+    assert.equal((await worker.fetch(metCode(null, { method, body, extra: { "x-api-token": "geheim" } }), env(kv))).status, 401);
+    for (const fout of ["", "panda-mango-47", "Panda-Mango-Wolk-47", "panda-mango-wolk-470", "foo-bar-baz-12", "x".repeat(300), "pia"]) {
+      const res = await worker.fetch(metCode(fout, { method, body }), env(kv));
+      assert.equal(res.status, 400, method + " " + fout.slice(0, 30));
+      assert.deepEqual(await res.json(), { error: "Ongeldige code" });
+    }
+  }
+  assert.equal(kv.puts, 0);
+  assert.equal(kv.data.size, 0);
+});
+
+test("code: persoon-data is niet bereikbaar via de oude route, en andersom", async () => {
+  const h = sha(PIA_CODE);
+  const kv = nepKV({
+    ["persoon:" + h]: { progress: { nieuw: vg(5) }, updated: 5 },
+    "learner:pia": { progress: { oud: vg(3) }, updated: 3 },
+  });
+  // oude route met wachtwoord: alleen learner:
+  const oud = await (await worker.fetch(new Request("https://api.test/sync/pia", { headers: { "x-api-token": "geheim" } }), env(kv))).json();
+  assert.deepEqual(Object.keys(oud.progress), ["oud"]);
+  for (const pad of ["/sync/persoon:" + h, "/sync/persoon%3A" + h, "/sync/" + h, "/sync/" + PIA_CODE, "/sync/../persoon:" + h]) {
+    const res = await worker.fetch(new Request("https://api.test" + pad, { headers: { "x-api-token": "geheim" } }), env(kv));
+    assert.equal((await res.text()).includes("nieuw"), false, pad);
+  }
+  // nieuwe route: alleen persoon:, ook als er een wachtwoord bij staat
+  const nieuw = await (await worker.fetch(metCode(PIA_CODE, { extra: { "x-api-token": "geheim" } }), env(kv))).json();
+  assert.deepEqual(Object.keys(nieuw.progress), ["nieuw"]);
+  const metSlug = await worker.fetch(new Request("https://api.test/sync/pia", { headers: { "x-code": PIA_CODE } }), env(kv));
+  assert.equal(metSlug.status, 401, "een code is geen wachtwoord voor de oude route");
+  // een PUT met code raakt learner:pia niet
+  const voor = kv.data.get("learner:pia");
+  await worker.fetch(metCode(PIA_CODE, { method: "PUT", body: { progress: { x: vg(6) }, updated: 6 } }), env(kv));
+  assert.equal(kv.data.get("learner:pia"), voor);
+});
+
+test("code: een PUT met een andere code kan andermans data niet overschrijven of wijzigen", async () => {
+  const pia = { progress: { l1: vg(5) }, lists: [lijst({ id: "van-pia" })], cats: {}, updated: 5 };
+  const kv = nepKV({ ["persoon:" + sha(PIA_CODE)]: pia, "learner:pia": { progress: { oud: vg(3) }, updated: 3 } });
+  const voor = kv.data.get("persoon:" + sha(PIA_CODE)), voorOud = kv.data.get("learner:pia");
+  // Tom stuurt voortgang voor dezelfde lijst, met een veel latere tijd, en een lijst met dezelfde id
+  const aanval = { progress: { l1: vg(NU), l9: vg(NU) }, lists: [lijst({ id: "van-pia", title: "Overschreven" })], updated: NU };
+  const piaTitel = () => JSON.parse(kv.data.get("persoon:" + sha(PIA_CODE))).lists[0].title;
+  const res = await worker.fetch(metCode(TOM_CODE, { method: "PUT", body: aanval }), env(kv));
+  assert.equal(res.status, 200);
+  assert.equal(kv.data.get("persoon:" + sha(PIA_CODE)), voor, "het record van Pia is veranderd");
+  assert.equal(kv.data.get("learner:pia"), voorOud);
+  assert.deepEqual(Object.keys(JSON.parse(kv.data.get("persoon:" + sha(TOM_CODE))).progress).sort(), ["l1", "l9"]);
+  // wat Tom terugkrijgt is van Tom, niet van Pia
+  const terug = await res.json();
+  assert.deepEqual(terug.lists.map(l => l.title), ["Overschreven"]);
+  assert.notEqual(piaTitel(), "Overschreven");
+  // een code die er bijna op lijkt (hoofdletters, spaties of een tweede code erachter) wordt geweigerd en schrijft nergens.
+  // (Spaties aan de rand haalt Request zelf weg, die zijn dus gewoon de goede code.)
+  const puts = kv.puts;
+  for (const bijna of ["Panda-Mango-Wolk-47", "panda mango wolk 47", "panda-mango-wolk-47 x", "panda-mango-wolk-47,appel-zebra-kous-03", "panda-mango-wolk-47-appel"]) {
+    let status;
+    try { status = (await worker.fetch(metCode(bijna, { method: "PUT", body: aanval }), env(kv))).status; } catch { status = "headerfout"; }
+    assert.ok(status === 400 || status === "headerfout", "status " + status + " voor " + JSON.stringify(bijna));
+  }
+  assert.equal(kv.puts, puts, "een bijna-code schreef toch iets");
+  assert.equal(kv.data.get("persoon:" + sha(PIA_CODE)), voor);
+  // twee x-code-koppen in een: ook geweigerd, niets van Pia veranderd
+  const dubbel = new Request("https://api.test/sync", { method: "PUT", headers: { "x-code": TOM_CODE + ", " + PIA_CODE, "Content-Type": "application/json" }, body: JSON.stringify(aanval) });
+  assert.equal((await worker.fetch(dubbel, env(kv))).status, 400);
+  assert.equal(kv.data.get("persoon:" + sha(PIA_CODE)), voor);
+});
+
+test("migreer: geeft een code, kopieert de oude voortgang en is voor een tweede toestel dezelfde", async () => {
+  const kv = nepKV({ "learner:pia": { progress: { l1: vg(3) }, lists: [lijst({ id: "eigen" })], updated: 3 } });
+  const r1 = await worker.fetch(migreer("pia"), env(kv));
+  assert.equal(r1.status, 200);
+  assert.equal(r1.headers.get("access-control-allow-origin"), "https://dspbrg.github.io");
+  const { code } = await r1.json();
+  assert.ok(CODE.geldigeCode(code), "geen geldige code");
+  assert.equal(migratieCode(kv, "pia"), code, "de code staat niet in de Durable Object");
+  assert.equal([...kv.data.keys()].some(k => k.startsWith("migratie:")), false, "de code staat in KV");
+  const persoon = JSON.parse(kv.data.get("persoon:" + sha(code)));
+  assert.deepEqual(persoon.progress, { l1: vg(3) });
+  assert.deepEqual(persoon.lists.map(l => l.id), ["eigen"]);
+  // via de nieuwe route op te halen
+  assert.deepEqual((await (await worker.fetch(metCode(code), env(kv))).json()).progress, { l1: vg(3) });
+  // het tweede toestel duwde intussen nog via de oude route, en migreert dan
+  await worker.fetch(put({ progress: { l2: vg(4) }, updated: 4 }), env(kv));
+  const r2 = await worker.fetch(migreer("pia"), env(kv));
+  assert.deepEqual(await r2.json(), { code }, "tweede toestel krijgt een andere code");
+  assert.deepEqual(Object.keys(JSON.parse(kv.data.get("persoon:" + sha(code))).progress).sort(), ["l1", "l2"]);
+  // wat via de code al nieuwer is, wordt niet overschreven door de oude data
+  await worker.fetch(metCode(code, { method: "PUT", body: { progress: { l1: vg(8) }, updated: 8 } }), env(kv));
+  await worker.fetch(migreer("pia"), env(kv));
+  assert.equal(JSON.parse(kv.data.get("persoon:" + sha(code))).progress.l1.updated, 8);
+  // een andere naam krijgt een andere code, en zonder oude voortgang geen record
+  const tom = await (await worker.fetch(migreer("tom"), env(kv))).json();
+  assert.notEqual(tom.code, code);
+  assert.equal(kv.data.has("persoon:" + sha(tom.code)), false, "zonder oude voortgang toch een record");
+});
+
+test("migreer: vijf toestellen tegelijk krijgen dezelfde code", async () => {
+  const kv = nepKV({ "learner:pia": { progress: { l1: vg(3) }, updated: 3 } });
+  const antwoorden = await Promise.all(Array.from({ length: 5 }, () => worker.fetch(migreer("pia"), env(kv))));
+  const codes = await Promise.all(antwoorden.map(r => r.json()));
+  assert.equal(new Set(codes.map(c => c.code)).size, 1, "verschillende codes");
+});
+
+test("migreer: zonder of met een fout wachtwoord, of met een kapotte naam, geweigerd", async () => {
+  const kv = nepKV({ "learner:pia": { progress: { l1: vg(3) }, updated: 3 } });
+  for (const token of [null, "", "fout", "geheim2", "GEHEIM"]) {
+    const res = await worker.fetch(migreer("pia", { token }), env(kv));
+    assert.equal(res.status, 401, String(token));
+    assert.equal("code" in (await res.json()), false);
+  }
+  // ook niet als APP_SECRET al weg is
+  const zonder = { ...env(kv) }; delete zonder.APP_SECRET;
+  assert.equal((await worker.fetch(migreer("pia", { token: "undefined" }), zonder)).status, 401);
+  assert.equal((await worker.fetch(migreer("pia", { token: "geheim" }), zonder)).status, 401);
+  // een code is geen wachtwoord
+  const metCodeKop = migreer("pia", { token: null }); metCodeKop.headers.set("x-code", PIA_CODE);
+  assert.equal((await worker.fetch(metCodeKop, env(kv))).status, 401);
+  for (const raw of [JSON.stringify({ slug: "" }), JSON.stringify({ slug: "Pia" }), JSON.stringify({ slug: "pia:x" }),
+    JSON.stringify({ slug: "../pia" }), JSON.stringify({ slug: "-pia" }), JSON.stringify({ slug: "a".repeat(65) }),
+    JSON.stringify({ slug: 5 }), JSON.stringify({}), "{kapot", JSON.stringify({ slug: "x".repeat(2000) })]) {
+    const res = await worker.fetch(migreer(null, { raw }), env(kv));
+    assert.ok(res.status === 400 || res.status === 413, raw.slice(0, 30) + ": " + res.status);
+  }
+  assert.equal(kv.puts, 0, "iets weggeschreven");
+  assert.equal(migratieCode(kv, "pia"), undefined, "toch een code gemaakt");
+  // GET /migreer bestaat niet
+  assert.equal((await worker.fetch(new Request("https://api.test/migreer", { headers: { "x-api-token": "geheim" } }), env(kv))).status, 404);
+});
+
+test("tempo: sync met code, de oude sync en migreer zijn per IP begrensd, voor de code en de body", async (t) => {
+  const kv = nepKV();
+  kv.syncTempo = nepTempo(120);
+  for (let i = 0; i < 60; i++) assert.equal((await worker.fetch(metCode(PIA_CODE), env(kv))).status, 200);
+  for (let i = 0; i < 59; i++) assert.equal((await worker.fetch(metCode(PIA_CODE, { method: "PUT", body: { updated: i } }), env(kv))).status, 200);
+  assert.equal((await worker.fetch(migreer("pia"), env(kv))).status, 200);
+  const puts = kv.puts;
+  // boven de 120: 429, ook met een andere code, zonder code of met een kapotte body
+  for (const req of [metCode(PIA_CODE), metCode("raden-raden-raden-raden-00"), metCode(null), metCode(TOM_CODE, { method: "PUT", body: { updated: 1 } }),
+    new Request("https://api.test/sync", { method: "PUT", headers: { "x-code": PIA_CODE, "CF-Connecting-IP": "203.0.113.9" }, body: "{kapot" }),
+    migreer("pia"), new Request("https://api.test/sync/pia", { headers: { "x-api-token": "geheim", "CF-Connecting-IP": "203.0.113.9" } })]) {
+    const res = await worker.fetch(req, env(kv));
+    assert.equal(res.status, 429, req.method + " " + req.url);
+    assert.equal((await res.json()).grens, "tempo");
+  }
+  assert.equal(kv.puts, puts, "boven het tempo toch in KV geschreven");
+  // een ander IP kan nog; het foto-tempo is er niet door geraakt
+  assert.equal((await worker.fetch(metCode(PIA_CODE, { ip: "198.51.100.2" }), env(kv))).status, 200);
+  assert.equal(kv.tempo.tellers.size, 0, "sync telt mee voor het foto-tempo");
+  assert.deepEqual([...kv.syncTempo.tellers.keys()].sort(), ["198.51.100.2", "203.0.113.9"]);
+  // zonder binding: 500, en de code niet in de logs
+  const logs = [];
+  t.mock.method(console, "error", (...a) => logs.push(a.join(" ")));
+  const e = { ...env(kv) }; delete e.SYNC_TEMPO;
+  assert.equal((await worker.fetch(metCode(PIA_CODE, { ip: "198.51.100.3" }), e)).status, 500);
+  assert.ok(logs.length, "geen log bij een ontbrekende binding");
+  assert.equal(logs.some(l => l.includes(PIA_CODE)), false, "de code staat in de logs");
+});
+
+// ---------- ONBEPERKT: Pia telt niet tegen de maandgrens ----------
+
+test("onbeperkt: een code in ONBEPERKT slaat de maandgrens over, telt wel mee en meldt de drempels", async (t) => {
+  const ai = nepAI(t);
+  const kv = nepKV();
+  const e = () => ({ ...env(kv), APP_SECRET: "", ONBEPERKT: " " + sha("appel-zebra-kous-04") + " ,  " + sha(PIA_CODE).toUpperCase() + ",kapot" });
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 100, gemeld: [80, 100] });
+  zaaiStand(kv, "enrich", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 100, gemeld: [] });
+  await metTijd(MIDDAG, async () => {
+    // zonder code, met een andere geldige code, of met de code maar zonder ONBEPERKT: vol
+    assert.equal((await worker.fetch(open("/extract", FOTO), e())).status, 429);
+    assert.equal((await worker.fetch(open("/extract", FOTO, TOESTEL, { "x-code": TOM_CODE }), e())).status, 429);
+    const zonderLijst = await worker.fetch(open("/extract", FOTO, TOESTEL, { "x-code": PIA_CODE }), env(kv));
+    assert.equal((await zonderLijst.json()).grens, "maand");
+    // met de code: door, en geteld
+    assert.equal((await worker.fetch(open("/extract", FOTO, TOESTEL, { "x-code": PIA_CODE }), e())).status, 200);
+    assert.equal((await worker.fetch(open("/enrich", WOORDEN, TOESTEL, { "x-code": PIA_CODE }), e())).status, 200);
+    // een kapotte code: 400, zonder AI en zonder teller
+    const voor = kv.teller.aanroepen;
+    assert.equal((await worker.fetch(open("/extract", FOTO, TOESTEL, { "x-code": "Panda-Mango-Wolk-47" }), e())).status, 400);
+    assert.equal(kv.teller.aanroepen, voor);
+  });
+  assert.equal(maandStand(kv, "extract"), 101, "niet meegeteld voor de stand");
+  assert.equal(maandStand(kv, "enrich"), 101);
+  assert.equal(ai.n, 2);
+  // de toestelgrens blijft: 10 per dag
+  const kv2 = nepKV();
+  const e2 = { ...env(kv2), APP_SECRET: "", ONBEPERKT: sha(PIA_CODE) };
+  await metTijd(MIDDAG, async () => {
+    for (let i = 0; i < 10; i++) assert.equal((await worker.fetch(open("/extract", FOTO, TOESTEL, { "x-code": PIA_CODE }), e2)).status, 200);
+    const res = await worker.fetch(open("/extract", FOTO, TOESTEL, { "x-code": PIA_CODE }), e2);
+    assert.equal(res.status, 429);
+    assert.equal((await res.json()).grens, "toestel");
+  });
+  // drempels: wie met de code 80 of 100 haalt, meldt die net als ieder ander
+  const kv3 = nepKV();
+  const e3 = { ...env(kv3), APP_SECRET: "", ONBEPERKT: sha(PIA_CODE) };
+  zaaiStand(kv3, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 79, gemeld: [] });
+  await metTijd(MIDDAG, async () => {
+    for (let i = 0; i < 25; i++) await worker.fetch(open("/extract", FOTO, toestel(i), { "x-code": PIA_CODE }), e3);
+  });
+  assert.deepEqual(kv3.teller.antwoorden.flatMap(a => a.drempels || []), [80, 100]);
+  assert.equal(maandStand(kv3, "extract"), 104);
+});
+
+test("onbeperkt: zonder ONBEPERKT of met een kapotte lijst geldt de maandgrens voor iedereen", async (t) => {
+  nepAI(t);
+  for (const waarde of [undefined, "", " , ", "geen-hash", sha(PIA_CODE).slice(0, 63)]) {
+    const kv = nepKV();
+    zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 100 });
+    const e = { ...env(kv) };
+    if (waarde !== undefined) e.ONBEPERKT = waarde;
+    const res = await metTijd(MIDDAG, () => worker.fetch(open("/extract", FOTO, TOESTEL, { "x-code": PIA_CODE }), e));
+    assert.equal(res.status, 429, String(waarde));
+  }
+});
+
+// ---------- herstelronde: plafond voor ONBEPERKT, nieuwe records, IPv6, wissen ----------
+
+test("onbeperkt: per hash hooguit 300 per maand, wel geteld; een storing boekt ook die teller terug", async (t) => {
+  const { ONBEPERKT_PER_MAAND } = await import(pathToFileURL(join(SRC, "teller.js")).href);
+  assert.equal(ONBEPERKT_PER_MAAND, 300);
+  const ai = nepAI(t);
+  const kv = nepKV();
+  const ANDER = "appel-zebra-kous-04";
+  const e = () => ({ ...env(kv), APP_SECRET: "", ONBEPERKT: sha(PIA_CODE) + "," + sha(ANDER) });
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 350, gemeld: [80, 100] });
+  kv.teller.opslag.put("onbeperkt:extract", { maand: "2026-11", per: { [sha(PIA_CODE)]: 299 } });
+  await metTijd(MIDDAG, async () => {
+    assert.equal((await worker.fetch(open("/extract", FOTO, toestel(1), { "x-code": PIA_CODE }), e())).status, 200, "de 300e");
+    const vol = await worker.fetch(open("/extract", FOTO, toestel(2), { "x-code": PIA_CODE }), e());
+    assert.equal(vol.status, 429, "de 301e");
+    assert.equal((await vol.json()).grens, "maand");
+    // een andere hash heeft een eigen teller
+    assert.equal((await worker.fetch(open("/extract", FOTO, toestel(3), { "x-code": ANDER }), e())).status, 200);
+  });
+  assert.equal(maandStand(kv, "extract"), 352, "niet meegeteld in de stand");
+  assert.equal(ai.n, 2);
+  // nieuwe maand: weer ruimte
+  await metTijd(Date.UTC(2026, 11, 2, 11, 0), async () => {
+    assert.equal((await worker.fetch(open("/extract", FOTO, toestel(4), { "x-code": PIA_CODE }), e())).status, 200);
+  });
+  // storing aan Anthropic-kant: ook de onbeperkt-teller terug
+  const kv2 = nepKV();
+  t.mock.method(console, "error", () => {});
+  t.mock.method(globalThis, "fetch", async () => new Response("overbelast", { status: 529 }));
+  await metTijd(MIDDAG, async () => {
+    assert.equal((await worker.fetch(open("/extract", FOTO, TOESTEL, { "x-code": PIA_CODE }), { ...env(kv2), APP_SECRET: "", ONBEPERKT: sha(PIA_CODE) })).status, 502);
+  });
+  assert.equal(kv2.teller.opslag.get("onbeperkt:extract").per[sha(PIA_CODE)], 0);
+});
+
+test("nieuwe codes: hooguit 30 nieuwe persoon-records per dag, daarboven 429 'nieuw' zonder schrijven", async () => {
+  const { NIEUW_PER_DAG } = await import(pathToFileURL(join(SRC, "teller.js")).href);
+  assert.equal(NIEUW_PER_DAG, 30);
+  const kv = nepKV({ "learner:pia": { progress: { l1: vg(3) }, updated: 3 } });
+  const codes = Array.from({ length: 32 }, (_, i) => `appel-zebra-kous-${String(i).padStart(2, "0")}`);
+  await metTijd(MIDDAG, async () => {
+    // de overstap telt niet mee
+    assert.equal((await worker.fetch(migreer("pia"), env(kv))).status, 200);
+    for (let i = 0; i < 30; i++) {
+      assert.equal((await worker.fetch(metCode(codes[i], { method: "PUT", body: { updated: i }, ip: "198.51.100." + i }), env(kv))).status, 200, "nieuw " + i);
+    }
+    const puts = kv.puts;
+    const vol = await worker.fetch(metCode(codes[30], { method: "PUT", body: { updated: 1 }, ip: "198.51.100.200" }), env(kv));
+    assert.equal(vol.status, 429);
+    assert.deepEqual(await vol.json(), { error: "Grens bereikt", grens: "nieuw" });
+    assert.equal(kv.puts, puts, "toch geschreven");
+    assert.equal(kv.data.has("persoon:" + sha(codes[30])), false);
+    // een bestaand record bijwerken en lezen kan gewoon
+    assert.equal((await worker.fetch(metCode(codes[0], { method: "PUT", body: { updated: 99 } }), env(kv))).status, 200);
+    assert.equal((await worker.fetch(metCode(codes[31]), env(kv))).status, 200, "lezen telt niet");
+  });
+  // de volgende dag weer
+  await metTijd(MIDDAG + 86400000, async () => {
+    assert.equal((await worker.fetch(metCode(codes[30], { method: "PUT", body: { updated: 1 } }), env(kv))).status, 200);
+  });
+});
+
+test("tempo: de sleutel is het IPv4-adres of het IPv6-/64-prefix", async () => {
+  const { ipSleutel } = await import(pathToFileURL(join(SRC, "ip.js")).href);
+  assert.equal(ipSleutel("203.0.113.7"), "203.0.113.7");
+  assert.equal(ipSleutel("2001:db8:1:2:aaaa:bbbb:cccc:dddd"), "2001:db8:1:2::/64");
+  assert.equal(ipSleutel("2001:0DB8:0001:0002:0:0:0:1"), "2001:db8:1:2::/64");
+  assert.equal(ipSleutel("2001:db8:1:2::1"), "2001:db8:1:2::/64");
+  assert.equal(ipSleutel("2001:db8::1"), "2001:db8:0:0::/64");
+  assert.equal(ipSleutel("::1"), "0:0:0:0::/64");
+  assert.equal(ipSleutel("::ffff:198.51.100.4"), "198.51.100.4");
+  assert.equal(ipSleutel("fe80::1%en0"), "fe80:0:0:0::/64");
+  assert.equal(ipSleutel(null), "onbekend");
+  assert.equal(ipSleutel("zz::"), "ongeldig");
+  // via de handler: twee adressen in hetzelfde /64 delen een teller, ook voor foto's
+  const kv = nepKV();
+  kv.syncTempo = nepTempo(3);
+  for (const ip of ["2001:db8:1:2::1", "2001:db8:1:2::2", "2001:db8:1:2:ffff::9"]) {
+    assert.equal((await worker.fetch(metCode(PIA_CODE, { ip }), env(kv))).status, 200);
+  }
+  assert.equal((await worker.fetch(metCode(PIA_CODE, { ip: "2001:db8:1:2::abcd" }), env(kv))).status, 429, "een ander adres in hetzelfde /64");
+  assert.equal((await worker.fetch(metCode(PIA_CODE, { ip: "2001:db8:1:3::1" }), env(kv))).status, 200, "een ander /64");
+  assert.deepEqual([...kv.syncTempo.tellers.keys()].sort(), ["2001:db8:1:2::/64", "2001:db8:1:3::/64"]);
+  const kv2 = nepKV(); kv2.tempo = nepTempo(1);
+  const r = ip => new Request("https://api.test/extract", { method: "POST", headers: { "CF-Connecting-IP": ip, "x-toestel": TOESTEL }, body: "{kapot" });
+  assert.equal((await worker.fetch(r("2001:db8:9:9::1"), env(kv2))).status, 400);
+  assert.equal((await worker.fetch(r("2001:db8:9:9::2"), env(kv2))).status, 429);
+});
+
+test("migreer/wis: wist de codes van de overstap, maar alleen als APP_SECRET weg is", async () => {
+  const kv = nepKV({ "learner:pia": { progress: { l1: vg(3) }, updated: 3 } });
+  const { code } = await (await worker.fetch(migreer("pia"), env(kv))).json();
+  await worker.fetch(migreer("tom"), env(kv));
+  assert.equal(migratieCode(kv, "pia"), code);
+  const wis = () => new Request("https://api.test/migreer/wis", { method: "POST", headers: { "CF-Connecting-IP": "203.0.113.9" } });
+  const nog = await worker.fetch(wis(), env(kv));
+  assert.equal(nog.status, 409, "wissen terwijl APP_SECRET er nog is");
+  assert.equal(migratieCode(kv, "pia"), code);
+  const zonder = { ...env(kv) }; delete zonder.APP_SECRET;
+  const res = await worker.fetch(wis(), zonder);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { gewist: 2 });
+  assert.equal(migratieCode(kv, "pia"), undefined);
+  assert.equal(migratieCode(kv, "tom"), undefined);
+  // de voortgang zelf blijft
+  assert.ok(kv.data.has("persoon:" + sha(code)));
+});
+
+// ---------- herstelronde 2 ----------
+
+test("nieuwe codes: hooguit 5 per IP-sleutel per dag (IPv6 per /64), en een nieuw record hooguit 256 KiB", async () => {
+  const { NIEUW_PER_IP_PER_DAG } = await import(pathToFileURL(join(SRC, "teller.js")).href);
+  assert.equal(NIEUW_PER_IP_PER_DAG, 5);
+  const kv = nepKV();
+  const codes = Array.from({ length: 12 }, (_, i) => `appel-zebra-kous-${String(i).padStart(2, "0")}`);
+  await metTijd(MIDDAG, async () => {
+    for (let i = 0; i < 5; i++) {
+      assert.equal((await worker.fetch(metCode(codes[i], { method: "PUT", body: { updated: i }, ip: "2001:db8:7:7::" + (i + 1) }), env(kv))).status, 200, "nieuw " + i);
+    }
+    // de zesde uit hetzelfde /64, met een ander adres: geweigerd
+    const vol = await worker.fetch(metCode(codes[5], { method: "PUT", body: { updated: 1 }, ip: "2001:db8:7:7:ffff::1" }), env(kv));
+    assert.equal(vol.status, 429);
+    assert.equal((await vol.json()).grens, "nieuw");
+    assert.equal(kv.data.has("persoon:" + sha(codes[5])), false);
+    // een ander IP kan nog
+    assert.equal((await worker.fetch(metCode(codes[6], { method: "PUT", body: { updated: 1 }, ip: "198.51.100.77" }), env(kv))).status, 200);
+    // bestaande records bijwerken vanaf het volle /64 kan wel
+    assert.equal((await worker.fetch(metCode(codes[0], { method: "PUT", body: { updated: 50 }, ip: "2001:db8:7:7::9" }), env(kv))).status, 200);
+    // een nieuw record groter dan 256 KiB: 413, niets geteld en niets geschreven
+    const groot = { lists: [{ id: "g", title: "g", items: Array.from({ length: 300 }, () => ({ word: "w", def: "x".repeat(1000) })) }] };
+    const puts = kv.puts;
+    const r = await worker.fetch(metCode(codes[7], { method: "PUT", body: groot, ip: "198.51.100.78" }), env(kv));
+    assert.equal(r.status, 413);
+    assert.deepEqual(await r.json(), { error: "Nieuwe gegevens te groot" });
+    assert.equal(kv.puts, puts);
+    // net onder de 256 KiB mag, en daarna mag het record groeien
+    const klein = { lists: [{ id: "g", title: "g", items: Array.from({ length: 200 }, () => ({ word: "w", def: "x".repeat(1000) })) }] };
+    assert.equal((await worker.fetch(metCode(codes[7], { method: "PUT", body: klein, ip: "198.51.100.78" }), env(kv))).status, 200);
+    assert.equal((await worker.fetch(metCode(codes[7], { method: "PUT", body: groot, ip: "198.51.100.78" }), env(kv))).status, 200, "een bestaand record mag groter worden");
+  });
+});
+
+test("onbeperkt: telt niet zolang APP_SECRET gezet is (eerst het wachtwoord weg)", async (t) => {
+  nepAI(t);
+  const kv = nepKV();
+  zaaiStand(kv, "extract", { dag: "2026-11-14", toestellen: {}, maand: "2026-11", maandStand: 100 });
+  await metTijd(MIDDAG, async () => {
+    const met = await worker.fetch(open("/extract", FOTO, TOESTEL, { "x-code": PIA_CODE }), { ...env(kv), ONBEPERKT: sha(PIA_CODE) });
+    assert.equal(met.status, 429, "ONBEPERKT werkt terwijl APP_SECRET er nog is");
+    assert.equal((await met.json()).grens, "maand");
+    const zonder = { ...env(kv), ONBEPERKT: sha(PIA_CODE) }; delete zonder.APP_SECRET;
+    assert.equal((await worker.fetch(open("/extract", FOTO, TOESTEL, { "x-code": PIA_CODE }), zonder)).status, 200);
+  });
 });

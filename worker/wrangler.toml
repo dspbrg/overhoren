@@ -26,6 +26,19 @@ namespace_id = "1001"
   limit = 20
   period = 60
 
+# Per IP hooguit 120 sync-verzoeken per minuut (GET en PUT /sync, de oude
+# /sync/<naam> en POST /migreer). Een eigen teller, los van de foto's: de
+# app duwt tijdens een ronde hooguit elke 2 seconden, en een paar kinderen
+# achter hetzelfde IP moeten samen kunnen syncen. Remt het raden van codes
+# en het volschrijven van KV.
+[[ratelimits]]
+name = "SYNC_TEMPO"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
 [vars]
 # Allowlist, gescheiden door komma's. Alleen deze origins krijgen CORS-koppen.
 ALLOWED_ORIGIN = "https://overhoren.vandaan.net,https://dspbrg.github.io"

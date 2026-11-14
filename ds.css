@@ -584,6 +584,29 @@
   .notice.row-between > * { min-width: 0; }
   .notice.row-between > :first-child { flex: 1 1 14rem; }
 
+  /* --- code-paneel: je sync-code, de link en een veld voor een code ---
+     Zelfde vlak en schuine hoek als de melding, met een accentkantlijn:
+     het is geen waarschuwing. De code en de link zijn in een keer te
+     selecteren en breken af in plaats van over de rand te gaan. */
+  .code-paneel {
+    background: var(--card-1); border-left: 4px solid var(--accent);
+    clip-path: polygon(0 0, calc(100% - var(--point)) 0, 100% var(--point), 100% 100%, 0 100%);
+    padding: var(--pad-card-compact);
+    display: flex; flex-direction: column; align-items: flex-start; gap: var(--gap-inline);
+  }
+  .code-groot {
+    font-family: var(--display); font-size: var(--t-card); font-weight: 700; line-height: 1.2;
+    overflow-wrap: anywhere; -webkit-user-select: all; user-select: all;
+  }
+  .code-link { font-size: var(--t-meta); overflow-wrap: anywhere; -webkit-user-select: all; user-select: all; }
+  .code-vorig { font-weight: 600; color: var(--ink); overflow-wrap: anywhere; -webkit-user-select: all; user-select: all; }
+  /* de vraag of je overstapt: tekst en twee knoppen, samen een groep */
+  .code-vraag { display: flex; flex-direction: column; gap: var(--gap-inline); align-self: stretch; }
+  .code-paneel .row { align-items: center; align-self: stretch; }
+  .code-paneel .row > .btn { flex: 0 1 auto; }
+  .code-paneel .row > input { flex: 1 1 12rem; min-width: 0; }
+  .code-paneel label { font-weight: 600; margin-top: var(--gap-inline); }
+
   /* --- choice: woordsoortknop, parallellogram ---
      Elke knop zo breed als zijn tekst: nooit afbreken, dus nooit hoger.
      "Phrasal verb" brak anders af in een vaste kolom (Chromebook). */
@@ -922,6 +945,12 @@
   .naam-vraag { display: flex; flex-direction: column; gap: var(--gap-inline); flex-basis: 100%; }
   /* twee lange knoppen: op smal scherm onder elkaar in plaats van over de rand */
   .naam-vraag .row > .btn { flex: 1 1 auto; }
+  /* "Op een ander toestel verder" op een eigen regel onder de naam, alleen
+     zolang de naam zelf in beeld is; het paneel eronder over de hele breedte */
+  .ander-toestel { flex-basis: 100%; justify-content: flex-start; }
+  #learner-view[hidden] ~ .ander-toestel { display: none; }
+  .code-plek { flex-basis: 100%; }
+  .learner-row .code-paneel input { max-width: none; }
 
   /* quiz */
   .q-card { gap: var(--gap-group); }
