@@ -203,6 +203,51 @@
       '<div>' + (o.html || esc(o.text)) + '</div></div>';
   }
 
+  // --- CodePaneel: verder op een ander toestel -----------------
+  //   code     de sync-code, zoals panda-mango-wolk-47 (gaat door esc());
+  //            leeg: geen code in beeld, alleen de vraag of de melding
+  //   link     dezelfde code als link (gaat door esc())
+  //   vorige   de code van voor de laatste overstap, om terug te kunnen
+  //   vraag    { ander, leeg }: een code van een ander toestel waarover we
+  //            eerst iets vragen; knoppen Overstappen en Mijn code houden
+  //   opgeslagen  false: de code staat nog niet op de server; dan geen
+  //            kopieerknoppen en geen link
+  //   melding  korte tekst (role=status), bijvoorbeeld na kopieren
+  //   voorvoegsel  voor alle ids, als er meer dan een op een pagina staat
+  //            (alleen het design system; de app heeft er een)
+  // Het veld "Heb je al een code?" staat er altijd, ook zonder eigen code.
+  // De code is een geheim: dit paneel is de enige plek waar hij staat.
+  function CodePaneel(o) {
+    o = o || {};
+    const v = o.vraag;
+    const id = function (n) { return (o.voorvoegsel || "") + n; };
+    let html = '<div class="code-paneel" role="group" aria-label="Verder op een ander toestel">';
+    if (o.code) {
+      html += '<p class="eyebrow">Jouw code</p>' +
+        '<p class="code-groot" id="' + id("code-tekst") + '">' + esc(o.code) + '</p>';
+      if (!v && o.opgeslagen !== false) html += '<div class="row">' + Button({ id: id("btn-code-kopieer"), label: "Kopieer code" }) +
+          Button({ id: id("btn-link-kopieer"), label: "Kopieer link" }) + '</div>' +
+        '<p class="code-link" id="' + id("code-link") + '">' + esc(o.link) + '</p>' +
+        '<p class="hint">Open de link of typ de code op je andere toestel. Houd hem voor jezelf: met deze code kan iemand je voortgang zien.</p>';
+    }
+    if (o.vorige) html += '<p class="hint">Vorige code: <span class="code-vorig" id="' + id("code-vorige") + '">' + esc(o.vorige) + '</span></p>';
+    if (v) {
+      const zinnen = [];
+      if (v.ander) zinnen.push("Deze code hoort bij iemand anders of bij een ander toestel. Wil je overstappen?");
+      if (v.leeg) zinnen.push("Geen voortgang gevonden bij deze code." + (v.ander ? "" : " Wil je hem toch gebruiken?"));
+      html += '<div class="code-vraag" id="' + id("code-vraag") + '">' + zinnen.map(function (z) { return '<p>' + esc(z) + '</p>'; }).join("") +
+        '<div class="row">' + Button({ id: id("btn-code-over"), label: "Overstappen", variant: "primary" }) +
+        Button({ id: id("btn-code-houden"), label: o.code ? "Mijn code houden" : "Niet overstappen" }) + '</div></div>';
+    }
+    html += '<label for="' + id("code-invoer") + '">Heb je al een code?</label>' +
+      '<div class="row"><input type="text" id="' + id("code-invoer") + '" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="200"' +
+        ' placeholder="woord-woord-woord-12" aria-describedby="' + id("code-uitleg") + " " + id("code-melding") + '">' + Button({ id: id("btn-code-gebruik"), label: "Gebruik code" }) + '</div>' +
+      '<p class="hint" id="' + id("code-uitleg") + '">Je voortgang wordt per lijst samengevoegd: het nieuwste telt.</p>';
+    html += '<p class="hint" id="' + id("code-melding") + '" role="status"' + (o.melding ? "" : " hidden") + '>' + esc(o.melding || "") + '</p>' +
+      Link({ id: id("btn-code-sluit"), label: "Sluiten" }) + '</div>';
+    return html;
+  }
+
   // --- Empty: lege staat --------------------------------------
   function Empty(o) {
     o = o || {};
@@ -331,5 +376,5 @@
   }
 
   root.UI = { esc, cls, pct, Icon, ICONS, Button, Link, TopBar, Stat, StatsRow, Meter, Ring, Chip,
-              Beta, BetaUitleg, BETA_UITLEG, VERSIE, bindBeta, Choice, Choices, Notice, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, Welkom, hydrateIcons };
+              Beta, BetaUitleg, BETA_UITLEG, VERSIE, bindBeta, Choice, Choices, Notice, CodePaneel, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, Welkom, hydrateIcons };
 })(typeof window === "object" ? window : globalThis);

@@ -6,6 +6,39 @@ compatibility_date = "2024-09-23"
 binding = "SYNC"
 id = "1eb8d2473fb947da974dcb358d1dcca0"
 
+# Foto-teller: een Durable Object met SQLite-opslag (ook op het gratis plan).
+# Telt atomair per toestel per dag en per maand, zie src/teller.js.
+[[durable_objects.bindings]]
+name = "TELLER"
+class_name = "FotoTeller"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FotoTeller"]
+
+# Per IP hooguit 20 foto-verzoeken per minuut (/extract en /enrich samen),
+# per Cloudflare-locatie bij benadering. namespace_id is uniek binnen het account.
+[[ratelimits]]
+name = "FOTO_TEMPO"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+# Per IP hooguit 120 sync-verzoeken per minuut (GET en PUT /sync, de oude
+# /sync/<naam> en POST /migreer). Een eigen teller, los van de foto's: de
+# app duwt tijdens een ronde hooguit elke 2 seconden, en een paar kinderen
+# achter hetzelfde IP moeten samen kunnen syncen. Remt het raden van codes
+# en het volschrijven van KV.
+[[ratelimits]]
+name = "SYNC_TEMPO"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
 [vars]
 # Allowlist, gescheiden door komma's. Alleen deze origins krijgen CORS-koppen.
 ALLOWED_ORIGIN = "https://overhoren.vandaan.net,https://dspbrg.github.io"

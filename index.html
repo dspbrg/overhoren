@@ -53,6 +53,8 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
           <p id="klas-vraag-tekst"></p>
           <div class="row"><button class="btn" id="btn-klas-ja">Ja, geef me de klaslijsten</button><button class="btn" id="btn-klas-nee">Nee, ik maak eigen lijsten</button></div>
         </div>
+        <button class="link ander-toestel" id="btn-ander-toestel" aria-expanded="false" aria-controls="code-plek"><span>Op een ander toestel verder</span></button>
+        <div class="code-plek" id="code-plek" hidden></div>
         <span class="sync" id="sync-state"></span>
       </div>
     </div>
@@ -365,6 +367,7 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
     </div>
 
     <p class="hint" id="photo-error" hidden></p>
+    <button class="btn" id="btn-photo-typ" hidden>Typ zelf</button>
   </div>
 </section>
 
@@ -381,9 +384,12 @@ const E = window.Engine;
 const $ = id => document.getElementById(id);
 const MIN = 60000, DAY = 86400000;
 const WORKER_URL = "https://overhoren-api.y8n876dtrq.workers.dev";
-const APP_SECRET = load("overhoor:app-secret", "");
+// Het oude gedeelde wachtwoord. Een toestel dat het nog heeft, stapt een
+// keer over op een code per persoon (migreer) en gooit het daarna weg.
+let APP_SECRET = load("overhoor:app-secret", "");
 
-// Deellink: #sync=wachtwoord zet sync automatisch aan
+// Oude deellink: #sync=wachtwoord. Blijft werken, zodat een nieuw toestel na
+// het typen van de naam via de overstap de bestaande code krijgt.
 function checkSyncHash(){
   var h = location.hash.match(/^#sync=(.+)$/);
   if(h){ save("overhoor:app-secret", decodeURIComponent(h[1])); history.replaceState(null,"",location.pathname); location.reload(); }
@@ -681,15 +687,342 @@ function setLearner(name){
   const names = load(LEARNERS_KEY, []); if(!names.includes(learner)){ names.push(learner); save(LEARNERS_KEY, names); }
 }
 
+// ---------- code per persoon ----------
+// Sync gaat met een eigen code per persoon, zoals panda-mango-wolk-47: drie
+// woorden uit deze lijst en twee cijfers. De app maakt hem zelf, pas als
+// iemand op "Op een ander toestel verder" tikt. Zonder code geen sync.
+// De code is een geheim: hij staat alleen in het codepaneel in beeld en
+// gaat nooit naar de console.
+// Dezelfde lijst staat in worker/src/code.js. Pas ze samen aan; een
+// pariteitstest (tests/code.test.mjs) vergelijkt ze.
+const CODE_WOORDEN = (
+  "aap aarde adder adem agent akker alarm alpen amber angel anker appel april arend ark arm aster " +
+  "atlas augurk auto avond baai baal baan baard bad badge badjas bagel bak baken bakker bal balk " +
+  "balkon ballon balsem bamboe banaan band banjo bank bar baret baron basalt basis bazaar bed beek " +
+  "beeld beer beest beet beige beitel beker bel bende berg berk berm bes beuk beurs bever bezem " +
+  "bezoek bidon bies biet binnen bizon blaas blad blauw blauwe blazer bliep blik bloem bloes blok " +
+  "blos bobbel bodem boei boek boeket boer bok bokaal boks bolder boleet bon bonbon bonk bonte boog " +
+  "boom boon boor boot bord bos bosbes bosje bot boter bout bouw boven braaf braam brem brief bries " +
+  "bril broed broek broer brok bron brons brood brouw brug bruid bruin brul bubbel buffel buffet " +
+  "bui buidel buis bult bus buur buurt dadel dag dahlia dak dal dam damp dans das dauw deeg deken " +
+  "delta dennen derde deuk deur diep dier dimmer dingo dino diva dobber dok dokter dol domino " +
+  "donder dons donut dooi doorn doos dop dorp dorst dot draad draai draak draf dragon drank drie " +
+  "droom drop druif drup dubbel duet duif duik duim duin dukaat duo dweil dwerg eend eer egel eik " +
+  "eiland eind ekster eland elf elfje emmer emoe engel enkel erwt ezel fabel fagot fakkel fazant " +
+  "fee feest feniks fiets film fjord flap fles flits floep flora fluit foef folder fondue fonkel " +
+  "fooi forel fort foto frank frase fregat fret fris fruit fuut gaai gaas galop gamba gang gans " +
+  "garen gast gat gazon gebak geest geit gel geld gelei geluk gember geraas gerst gesp getal geur " +
+  "gewei gids gier gilde gips giraf gitaar glans glas glimp globe gloed gloei gnoe golf gondel gong " +
+  "gort goud gouden graaf graan grap gras gravel greep griep gril grind groen groep groet grond " +
+  "grot guit gulden gum haag haai haak haan haar haard haas hagel hak hal halm halte hamer hand " +
+  "haring harnas harp hart haven haver havik hazel heelal heer heg heide hek held helm hemd hemel " +
+  "hen hengel herder herfst hert heuvel hiel hinde hoed hoef hoek hoepel hoera hoes hok hol hommel " +
+  "homp hond honing honk hoofd hooi hoop hoorn hop horde horen hotel hout huis hulp hulst humor " +
+  "humus hut ibis idee iglo imker impala inkt iris ivoor jaar jade jager jaguar jam jas jazz jeep " +
+  "jet jeugd jodel jojo joker jolig jong juf juli jumbo juni junior jurk juweel kaai kaak kaap " +
+  "kaars kaart kaas kabaal kabel kade kaft kajak kalf kalk kam kameel kamer kamp kan kanaal kaneel " +
+  "kano kant kap kapel kapok kapper kar karaf karate karper karton kas kassa kast kat katoen kauw " +
+  "keel kei keizer kelder kennel kermis kers kerst ketel kever kiekje kievit kiezel kikker kimono " +
+  "kind kiosk kip klant klap klaver klei klepel kleur klimop klok klomp kluis knaap knal knie knol " +
+  "knoop knop koala koe koek koekje koepel koets koffer kok kolder kom komeet komma kompas koning " +
+  "kooi kool koor koord kop koper kopje koraal korf korrel korset korst kotter kous kraag kraai " +
+  "kraan krab kralen krant krat kreeft kreek krekel krent kring kroon kruid kruik kruk krul kubus " +
+  "kudde kuiken kuil kuip kunst kurk kust kwal kwart kwast kwiek laag laan laars ladder lading lak " +
+  "laken lam lama lamp land lap lasso lat later lava leder leem leeuw lelie lente lepel leraar les " +
+  "letter lezer libel lied liefde lier limoen linde links linnen lint linze lippen liter lobbes " +
+  "loep lof lok loods loop loper lotus luik luis lus luwte maan maand maart maat mais mama mand " +
+  "manege mangel mango mantel markt marmer marmot mars marter masker mast mat matras meer mees " +
+  "meeuw melk meloen mentor menu merel merk mes metaal meter middag mier minuut mist modder moeras " +
+  "mok mokka mol molen mond moot morgen mos mossel mot motor mousse mug muis munt mus museum muts " +
+  "muur muziek naald naam nagel nar narwal natuur neef nerts nest net neus nevel nimf noord noot " +
+  "nougat nul oase ober oehoe oever ogen okapi oktaaf olie oma omelet oog oogst oor oost opa opaal " +
+  "opera oranje orgel orka orkest otter ouder ovaal oven paal paard paars pad pagina pak pakje " +
+  "pakket paleis palet paling pallet palm pampa pan panda panter pap papa papier parel parfum park " +
+  "parka parket pas pasen pasta pastei pastel patat patio pauw pauze pedaal peen peer pen peper " +
+  "perzik pet piano piek pier piloot pimpel pinda pioen pion piraat pit pizza plaid plank plant " +
+  "plas plein ploeg pluim pluk poeder poef poema poes polder polka pollen pols pomp pond poort poot " +
+  "pop post poster pot praam prei prent presto pret prik prins proef prooi pruik pruim puree put " +
+  "puzzel raad raaf raam rad radar radio rail raket rakker rand reep regen reiger reis rente reus " +
+  "ribbel ridder riem riet rietje rif ring rit rivier rob robot rodeo roer rok rol rond ronde room " +
+  "roos roosje rotan rots rover roze rubber rug rugzak ruimte ruit ruiter rumba rund rups rust " +
+  "salade salie salto samba sap saus sein sering sesam sinas sirene sjaal slaap slak slang slee " +
+  "slot sluis slurf smaak smid smurf snaar snavel snee sneeuw snert snoek snoep snoet snor soep " +
+  "sofa sok solo sonnet sorbet spade spar spek spel speld spin spits spons spoor sport sprei sprint " +
+  "sprong staart stad stal stam stapel ster stier stip stoel stoep stof stok stoom storm stout " +
+  "straat strand streep strik stro stroom stuur suiker taart tafel tak talent tand tang tango tapir " +
+  "tarwe tas team teen tegel tekst tempo tennis tent thee tiara timmer toast toekan toets tomaat " +
+  "ton toon top topaas toren touw tram trap trein trofee trom trui tuba tube tuin tulp tunnel turf " +
+  "uil unie uur vaas vader vak valk valkje van vanger varken vat veder veer veld velg ven verf vest " +
+  "veter veulen video vin vinger viool vis visser vizier vla vlaai vlag vlam vlek vlieg vloot vlot " +
+  "voet vogel volk vonk vork vos vrede vriend vuist vuur waaier wafel wagen wal walrus wand wandel " +
+  "wang want warmte water web weg wei weide wereld werk wesp wezel wiebel wieg wiek wiel wier " +
+  "wigwam wild wilg wind winter wol wolf wolk wombat woning woord worm worst wortel woud wrak zaad " +
+  "zaag zadel zak zalm zand zebra zee zeef zeep zegel zeil zeker zeven zilver zoemer zoet zomer zon " +
+  "zondag zonnig zool zout zuivel zus zuster zwaan zwaluw zwam"
+).split(" ");
+const CODE_WOORDSET = new Set(CODE_WOORDEN);
+const CODE_VORM = /^([a-z]{3,6})-([a-z]{3,6})-([a-z]{3,6})-([0-9]{2})$/;
+function geldigeCode(c){
+  const m = typeof c === "string" && c.length <= 23 ? CODE_VORM.exec(c) : null;
+  return !!m && CODE_WOORDSET.has(m[1]) && CODE_WOORDSET.has(m[2]) && CODE_WOORDSET.has(m[3]);
+}
+// Wat iemand intypt of plakt (ook de hele link) naar de vaste vorm:
+// kleine letters, zonder accenten, met streepjes. "Panda Mango Wolk47"
+// wordt panda-mango-wolk-47. Geen geldige code: "".
+function schoneCode(s){
+  let t = String(s == null ? "" : s).slice(0, 200);
+  const i = t.indexOf("#code=");
+  if(i >= 0) t = t.slice(i + 6);
+  try{ t = decodeURIComponent(t); }catch(e){}
+  t = t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/([a-z])([0-9])/g, "$1-$2").split(/[^a-z0-9]+/).filter(Boolean).join("-");
+  return geldigeCode(t) ? t : "";
+}
+// Gelijk verdeeld van 0 tot n (wat boven het laatste veelvoud valt, telt niet).
+function willekeurig(n){
+  const grens = Math.floor(0x100000000 / n) * n, buf = new Uint32Array(1);
+  for(;;){ crypto.getRandomValues(buf); if(buf[0] < grens) return buf[0] % n; }
+}
+function maakCode(){
+  const w = () => CODE_WOORDEN[willekeurig(CODE_WOORDEN.length)];
+  return w() + "-" + w() + "-" + w() + "-" + String(willekeurig(100)).padStart(2, "0");
+}
+// Een code per oefenaar op dit toestel, zodat broer en zus elk hun eigen
+// voortgang houden.
+// CODE_NIEUW: een code uit een #code=-link die nog wacht op een naam of op
+// een antwoord. CODE_ONGEBRUIKT: deze code is hier gemaakt en is nog nooit
+// naar de worker gegaan; een andere code invullen hoeft dan niet bevestigd.
+// CODE_VORIGE: de code van voor de laatste overstap, zodat je terug kunt.
+const CODE_KEY = s => "overhoor:code:" + s, CODE_NIEUW = "overhoor:code-nieuw";
+const CODE_VORIGE = s => "overhoor:code-vorige:" + s, CODE_ONGEBRUIKT = s => "overhoor:code-ongebruikt:" + s;
+// Namen waarvan iemand op dit toestel zei: dat ben ik niet ("Ben jij Pia?" Nee).
+// Een afgewezen naam stapt nooit over (zie migreerHuidig); kiest of bevestigt
+// iemand hem later toch, dan gaat hij van de lijst.
+const AFGEWEZEN_KEY = "overhoor:naam-afgewezen";
+const NIEUW_TEKST = "Er kunnen vandaag geen nieuwe codes bij. Probeer het morgen.";
+// Een naam die hier weer gekozen of bevestigd wordt, is niet meer afgewezen.
+function nietMeerAfgewezen(){
+  const af = load(AFGEWEZEN_KEY, []);
+  if(Array.isArray(af) && af.includes(slug(learner))) save(AFGEWEZEN_KEY, af.filter(x => x !== slug(learner)));
+}
+function codeVan(s){ const c = load(CODE_KEY(s), ""); return geldigeCode(c) ? c : ""; }
+function mijnCode(){ return heeftNaam() ? codeVan(slug(learner)) : ""; }
+// De code van deze oefenaar, als die al ergens bij hoort (er ging iets mee
+// naar de worker of er kwam iets van terug).
+function gebruikteCode(){
+  const c = mijnCode();
+  return c && load(CODE_ONGEBRUIKT(slug(learner)), "") !== c ? c : "";
+}
+function codeLink(c){ return location.origin + location.pathname + "#code=" + c; }
+
+// Link #code=...: de code bewaren en de link uit de adresbalk halen. Hij
+// wordt pas gebruikt als er een (bevestigde) naam is; zie codeUitLink.
+function checkCodeHash(){
+  const m = location.hash.match(/^#code=(.{1,200})$/);
+  if(!m) return false;
+  history.replaceState(null, "", location.pathname + location.search);
+  const c = schoneCode(m[1]);
+  if(!c) return false;
+  save(CODE_NIEUW, c);
+  return true;
+}
+function codeUitLink(){
+  const c = load(CODE_NIEUW, "");
+  if(!geldigeCode(c)){ if(c) save(CODE_NIEUW, null); return ""; }
+  return heeftNaam() && !moetBevestigen() ? c : "";
+}
+
 // ---------- cloud-sync via Worker KV ----------
+// Met een code: /sync met x-code. Zonder code maar met het oude wachtwoord:
+// eerst de overstap (migreerHuidig), en lukt die niet, dan nog de oude route.
 let syncTimer = null;
-function canSync(){ return WORKER_URL && APP_SECRET && heeftNaam() && !moetBevestigen(); }
+function canSync(){ return WORKER_URL && heeftNaam() && !moetBevestigen() && !!(mijnCode() || APP_SECRET); }
 function setSyncState(txt, on){ const el=$("sync-state"); el.textContent = txt; el.classList.toggle("on", !!on); }
+function syncVerzoek(extra){
+  const c = mijnCode();
+  const h = Object.assign({}, extra);
+  if(c) h["x-code"] = c; else h["x-api-token"] = APP_SECRET;
+  return { url: WORKER_URL + (c ? "/sync" : "/sync/" + slug(learner)), headers: h, wie: slug(learner) + "|" + c };
+}
+
+// Eenmalig: wachtwoord plus naam inruilen voor een code. Een tweede toestel
+// met dezelfde naam krijgt dezelfde code. Geeft { code } of { fout }: 401
+// (het wachtwoord geldt niet meer) of "even niet" (geen net, 429, 5xx).
+async function migreerEen(s){
+  try{
+    const res = await fetch(WORKER_URL + "/migreer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-token": APP_SECRET },
+      body: JSON.stringify({ slug: s })
+    });
+    if(res.status === 401) return { fout: 401 };
+    if(!res.ok) return { fout: "even niet" };
+    const d = await res.json();
+    return isObject(d) && geldigeCode(d.code) ? { code: d.code } : { fout: "even niet" };
+  }catch(e){ return { fout: "even niet" }; }
+}
+function heeftVoortgang(s){
+  const voor = "overhoor:progress:" + s + ":";
+  try{ for(let i=0; i<localStorage.length; i++){ const k = localStorage.key(i); if(k && k.startsWith(voor)) return true; } }catch(e){}
+  return false;
+}
+function vergeetWachtwoord(){ APP_SECRET = ""; save("overhoor:app-secret", null); }
+// De overstap, alleen voor de huidige, bevestigde oefenaar; nooit stil voor
+// andere namen in de lijst. Oude versies van de app bewaarden "Pia" als
+// standaardnaam, met voortgang onder pia, ook op toestellen van
+// klasgenoten: die zouden anders Pia's code krijgen. Een andere naam stapt
+// over zodra hij zelf gekozen of bevestigd is (initDb na wisselen of Ja).
+// Het wachtwoord gaat weg als elke bekende naam met voortgang hier een code
+// heeft, of zodra de worker het weigert (401: APP_SECRET is weg).
+// Geeft "ok", "401" of "even niet".
+async function migreerHuidig(){
+  if(!APP_SECRET) return "ok";
+  if(!heeftNaam() || moetBevestigen()) return "even niet";
+  const s = slug(learner);
+  // Ook met al een code vragen we het, zolang het wachtwoord er staat: zo
+  // merkt de app het als APP_SECRET weg is (401). Een bestaande code wordt
+  // nooit overschreven (iemand kan bewust zijn overgestapt).
+  const r = await migreerEen(s);
+  if(r.fout === 401){ vergeetWachtwoord(); return "401"; }
+  if(r.fout && !codeVan(s)) return "even niet";
+  if(r.code && s === slug(learner) && !codeVan(s)) save(CODE_KEY(s), r.code);
+  const namen = load(LEARNERS_KEY, []);
+  const nogNiet = (Array.isArray(namen) ? namen : []).map(slug).filter(x => x && heeftVoortgang(x) && !codeVan(x));
+  if(!nogNiet.length) vergeetWachtwoord();
+  return "ok";
+}
 
 async function initDb(){
-  if(!canSync()) return;
-  try{ await cloudPull(); setSyncState("", true); }
-  catch(e){ setSyncState("", false); }
+  if(!WORKER_URL || !heeftNaam() || moetBevestigen()) return;
+  if(APP_SECRET) await migreerHuidig();
+  if(canSync()){
+    try{ await cloudPull(); setSyncState("", true); }
+    catch(e){ setSyncState("", false); }
+  }
+  const link = codeUitLink();
+  if(link) await probeerCode(link, "link");
+}
+
+// ---------- verder op een ander toestel ----------
+// kandidaat: een code van een ander toestel waarover we eerst iets vragen.
+let kandidaat = null;   // { code, remote, slug, ander, leeg }
+function sluitCodePaneel(){
+  const plek = $("code-plek");
+  if(plek.hidden) return;
+  plek.hidden = true; plek.innerHTML = "";
+  $("btn-ander-toestel").setAttribute("aria-expanded", "false");
+}
+function codeMelding(tekst){
+  const el = $("code-melding"); if(!el) return;
+  el.textContent = tekst; el.hidden = !tekst;
+}
+// Staat de code al op de server? Een hier gemaakte code die nog niet
+// verstuurd is, terwijl er wel iets te versturen is: nee.
+function lokaalLeeg(){
+  const b = gatherLocal();
+  return !Object.keys(b.progress).length && !b.lists.length && !Object.keys(b.cats).length;
+}
+function codeOpgeslagen(code){ return !!code && (load(CODE_ONGEBRUIKT(slug(learner)), "") !== code || lokaalLeeg()); }
+const NIET_OPGESLAGEN = "Je code is nog niet opgeslagen. Probeer het straks nog eens.";
+function tekenPaneel(code, melding){
+  const s = slug(learner);
+  const vorige = load(CODE_VORIGE(s), "");
+  const plek = $("code-plek");
+  plek.innerHTML = UI.CodePaneel({
+    code, link: code ? codeLink(code) : "", melding: melding || "", opgeslagen: codeOpgeslagen(code),
+    vorige: geldigeCode(vorige) && vorige !== code ? vorige : "",
+    vraag: kandidaat ? { ander: kandidaat.ander, leeg: kandidaat.leeg } : null
+  });
+  plek.hidden = false;
+  $("btn-ander-toestel").setAttribute("aria-expanded", "true");
+  const knop = (id, fn) => { const el = $(id); if(el) el.addEventListener("click", fn); };
+  knop("btn-code-kopieer", () => kopieer(code));
+  knop("btn-link-kopieer", () => kopieer(codeLink(code)));
+  knop("btn-code-gebruik", gebruikCode);
+  knop("btn-code-over", () => { const k = kandidaat; if(k && k.slug === slug(learner)) stapOver(k.code, k.remote); });
+  knop("btn-code-houden", () => { kandidaat = null; save(CODE_NIEUW, null); toonCodePaneel(code ? "Je houdt je eigen code." : ""); });
+  const veld = $("code-invoer");
+  if(veld) veld.addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); gebruikCode(); } });
+  knop("btn-code-sluit", () => { sluitCodePaneel(); $("btn-ander-toestel").focus(); });
+}
+// Het paneel met de code van deze oefenaar. Is er nog geen code, dan komt
+// die er nu en gaat wat er lokaal is meteen naar de worker, zodat het andere
+// toestel het vindt. Staat het oude wachtwoord er nog, dan eerst de
+// overstap; lukt die niet, dan geen losse code (anders raakt de voortgang op
+// de server zoek) en de volgende keer opnieuw.
+async function toonCodePaneel(melding){
+  if(!heeftNaam()){ vraagNaam(true); return; }
+  if(moetBevestigen()){ toonNaamVraag(); return; }
+  if(kandidaat && kandidaat.slug !== slug(learner)) kandidaat = null;
+  let code = mijnCode();
+  if(!kandidaat && APP_SECRET && !code){
+    // 401: het wachtwoord is weg en de app gaat verder zoals zonder wachtwoord
+    if(await migreerHuidig() === "even niet" && !mijnCode()){ tekenPaneel("", "Dat lukt nu niet. Probeer het straks nog eens."); return; }
+    code = mijnCode();
+  }
+  if(!kandidaat && !code){
+    const s = slug(learner);
+    code = maakCode();
+    save(CODE_KEY(s), code); save(CODE_ONGEBRUIKT(s), code);
+  }
+  // een hier gemaakte code met iets te versturen: nu versturen
+  if(!kandidaat && !codeOpgeslagen(code)){
+    let r = "fout";
+    try{ r = await duwNu(); }catch(e){}
+    if(r === "nieuw") melding = NIEUW_TEKST;
+    else if(r !== "ok") melding = NIET_OPGESLAGEN;
+  }
+  tekenPaneel(code, melding);
+}
+async function kopieer(tekst){
+  try{ await navigator.clipboard.writeText(tekst); codeMelding("Gekopieerd."); }
+  catch(e){ codeMelding("Kopiëren lukt niet. Houd je vinger op de code en kies Kopieer."); }
+}
+async function gebruikCode(){
+  const c = schoneCode($("code-invoer").value);
+  if(!c){ codeMelding("Deze code klopt niet. Kijk of je hem goed hebt overgetypt."); $("code-invoer").focus(); return; }
+  if(c === mijnCode()){ codeMelding("Dit is al je code."); return; }
+  await probeerCode(c, "veld");
+}
+// Een code van een ander toestel (link of invulveld). Eerst alleen kijken
+// wat er bij die code staat; er gaat niets heen. Hoort er voor deze
+// oefenaar al een andere code bij, of staat er niets bij de nieuwe, dan
+// eerst vragen. Anders meteen overstappen.
+async function probeerCode(c, bron){
+  const s = slug(learner);
+  if(c === mijnCode()){ if(bron === "link") save(CODE_NIEUW, null); else codeMelding("Dit is al je code."); return; }
+  let remote;
+  try{
+    const res = await fetch(WORKER_URL + "/sync", { headers: { "x-code": c } });
+    if(!res.ok) throw new Error("ophalen " + res.status);
+    remote = await res.json();
+  }catch(e){
+    toonCodePaneel("Ophalen lukt nu niet. Probeer het straks nog eens.");
+    return;
+  }
+  if(s !== slug(learner)) return;
+  const leeg = !(isObject(remote) && remote.updated);
+  // ook vragen als hier al voortgang of eigen lijsten staan, zonder code
+  const ander = !!gebruikteCode() || !lokaalLeeg();
+  if(ander || leeg){ kandidaat = { code: c, remote, slug: s, ander, leeg }; await toonCodePaneel(); if($("btn-code-over")) $("btn-code-over").focus(); return; }
+  await stapOver(c, remote);
+}
+// Overstappen: de vorige code onthouden (als die ergens bij hoorde), de
+// voortgang van de nieuwe code samenvoegen met wat hier is (per lijst, het
+// nieuwste telt) en het samengevoegde terugsturen.
+async function stapOver(c, remote){
+  const s = slug(learner);
+  const oud = mijnCode();
+  if(oud && oud !== c && load(CODE_ONGEBRUIKT(s), "") !== oud) save(CODE_VORIGE(s), oud);
+  save(CODE_KEY(s), c); save(CODE_ONGEBRUIKT(s), null); save(CODE_NIEUW, null);
+  kandidaat = null;
+  const gevonden = isObject(remote) && !!remote.updated;
+  if(gevonden) applyRemote(remote, s);
+  setSyncState("", true);
+  let melding = gevonden ? "Je voortgang is opgehaald." : "Je gebruikt nu deze code.";
+  try{ if(await duwNu() === "nieuw") melding = NIEUW_TEKST; }catch(e){}
+  renderLessons();
+  toonCodePaneel(melding);
 }
 
 function gatherLocal(){
@@ -915,34 +1248,50 @@ function applyRemote(remote, s){
   }
 }
 
-// De slug gaat mee: wisselt ze van oefenaar terwijl het antwoord nog
-// onderweg is, dan hoort het niet bij de nieuwe oefenaar en slaan we het over.
+// De slug en de code gaan mee: wisselt ze van oefenaar of van code terwijl
+// het antwoord nog onderweg is, dan hoort het er niet meer bij en slaan we
+// het over.
 async function cloudPull(){
   if(!canSync()) return;
   var voor = slug(learner);
-  var res = await fetch(WORKER_URL + "/sync/" + voor, {
-    headers: { "x-api-token": APP_SECRET }
-  });
+  var v = syncVerzoek({});
+  var res = await fetch(v.url, { headers: v.headers });
   if(!res.ok) throw new Error("sync pull " + res.status);
   var remote = await res.json();
-  if(voor !== slug(learner)) return;
-  if(isObject(remote) && remote.updated) applyRemote(remote, voor);
+  if(v.wie !== syncVerzoek({}).wie) return;
+  if(isObject(remote) && remote.updated){
+    applyRemote(remote, voor);
+    var c = mijnCode();
+    if(c && load(CODE_ONGEBRUIKT(voor), "") === c) save(CODE_ONGEBRUIKT(voor), null);
+  }
 }
 
-function cloudPush(){
+// Nu duwen. Geeft "ok", "nieuw" (de worker neemt vandaag geen nieuwe codes
+// meer aan) of "fout". Een geslaagde push maakt een hier gemaakte code
+// "gebruikt".
+async function duwNu(){
+  if(!canSync()) return "fout";
+  var s = slug(learner), c = mijnCode();
+  var v = syncVerzoek({ "Content-Type": "application/json" });
+  var res = await fetch(v.url, { method: "PUT", headers: v.headers, body: JSON.stringify(gatherLocal()) });
+  if(res.ok){
+    setSyncState("", true);
+    if(c && load(CODE_ONGEBRUIKT(s), "") === c) save(CODE_ONGEBRUIKT(s), null);
+    return "ok";
+  }
+  if(res.status === 429){
+    var grens = "";
+    try{ grens = (await res.json()).grens; }catch(e){}
+    if(grens === "nieuw"){ codeMelding(NIEUW_TEKST); return "nieuw"; }
+  }
+  return "fout";
+}
+// wacht: hoe lang eerst gewacht wordt (standaard 2 s, zodat een reeks
+// antwoorden een verzoek wordt).
+function cloudPush(wacht){
   if(!canSync()) return;
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(async function(){
-    try{
-      var body = gatherLocal();
-      var res = await fetch(WORKER_URL + "/sync/" + slug(learner), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "x-api-token": APP_SECRET },
-        body: JSON.stringify(body)
-      });
-      if(res.ok) setSyncState("", true);
-    } catch(e){}
-  }, 2000);
+  syncTimer = setTimeout(function(){ duwNu().catch(function(){}); }, wacht === undefined ? 2000 : wacht);
 }
 
 function pushProgress(){ cloudPush(); }
@@ -1064,6 +1413,7 @@ function bewaakPauze(){
 // het startscherm, dus daar gaan we eerst heen.
 function vraagNaam(hint, tekst){
   if($("scr-lessons").hidden) show("scr-lessons");
+  sluitCodePaneel();
   $("naam-vraag").hidden = true;
   $("learner-view").hidden = true; $("learner-form").hidden = false;
   if(hint){ $("learner-hint").textContent = tekst || "Typ eerst je naam."; $("learner-hint").hidden = false; }
@@ -1071,6 +1421,7 @@ function vraagNaam(hint, tekst){
 }
 // "Ben jij Pia?" in plaats van de regel "Wie oefent".
 function toonNaamVraag(){
+  sluitCodePaneel();
   $("naam-vraag-naam").textContent = learner; $("btn-naam-ja").textContent = "Ja, ik ben " + learner;
   $("learner-view").hidden = true; $("learner-form").hidden = true; $("naam-vraag").hidden = false;
 }
@@ -1685,6 +2036,7 @@ function photoShowStep(step) {
     $(id).hidden = id !== step;
   });
   $("photo-error").hidden = true;
+  $("btn-photo-typ").hidden = true;
   var labels = { "photo-capture":"Stap 1 van 3", "photo-loading":"Stap 2 van 3", "photo-review":"Stap 3 van 3", "photo-done":"Klaar" };
   $("photo-step").textContent = labels[step] || "";
 }
@@ -1712,13 +2064,56 @@ function photoOnFile(e) {
 }
 
 function photoError(msg) {
+  // eerst de stap, want photoShowStep verbergt de melding
+  photoShowStep("photo-capture");
   $("photo-error").textContent = msg;
   $("photo-error").hidden = false;
-  photoShowStep("photo-capture");
 }
 
 function ensureWorkerUrl() {
-  return !!(WORKER_URL && APP_SECRET);
+  return !!WORKER_URL;
+}
+
+// Eigen id per toestel, een keer gemaakt. De worker telt er de foto's per dag mee.
+const TOESTEL_KEY = "overhoor:toestel";
+function toestelId() {
+  var id = load(TOESTEL_KEY, "");
+  if (typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)) {
+    if (crypto.randomUUID) id = crypto.randomUUID();
+    else {
+      // oudere Safari: zelfde vorm (versie 4) met getRandomValues
+      var b = crypto.getRandomValues(new Uint8Array(16));
+      b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+      var x = Array.from(b, function(n) { return (n + 256).toString(16).slice(1); }).join("");
+      id = x.slice(0, 8) + "-" + x.slice(8, 12) + "-" + x.slice(12, 16) + "-" + x.slice(16, 20) + "-" + x.slice(20);
+    }
+    save(TOESTEL_KEY, id);
+  }
+  return id;
+}
+
+// Koppen voor /extract en /enrich. Het wachtwoord alleen als het er is.
+function fotoKoppen() {
+  var h = { "Content-Type": "application/json", "x-toestel": toestelId() };
+  if (APP_SECRET) h["x-api-token"] = APP_SECRET;
+  // met een code: de worker kijkt of deze persoon buiten de maandgrens valt
+  var c = mijnCode();
+  if (c) h["x-code"] = c;
+  return h;
+}
+
+// Daggrens per toestel of maandgrens voor iedereen; de worker zegt welke.
+const FOTO_GRENS_TEKST = {
+  toestel: "Vandaag kunnen er geen foto's meer bij. Morgen weer, of typ de woorden zelf.",
+  maand: "Deze maand kunnen er geen foto's meer bij. Typ de woorden zelf."
+};
+async function photoGrens(res) {
+  var grens = "toestel";
+  try { if ((await res.json()).grens === "maand") grens = "maand"; } catch (e) { /* onleesbaar: daggrens */ }
+  photoShowStep("photo-capture");
+  $("photo-error").textContent = FOTO_GRENS_TEKST[grens];
+  $("photo-error").hidden = false;
+  $("btn-photo-typ").hidden = false;
 }
 
 var photoSubjectHint = "";
@@ -1750,9 +2145,10 @@ async function photoExtract() {
   try {
     var res = await fetch(WORKER_URL + "/extract", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-token": APP_SECRET },
+      headers: fotoKoppen(),
       body: JSON.stringify({ image: photoData.data, mediaType: photoData.mediaType, subjectHint: photoSubjectHint })
     });
+    if (res.status === 429) { await photoGrens(res); return; }
     if (!res.ok) throw new Error("Server gaf fout " + res.status);
     photoResult = await res.json();
     if (photoResult.error) throw new Error(photoResult.error);
@@ -1841,7 +2237,7 @@ async function photoEnrich(listId, items, mode, subject) {
     $("photo-done-text").textContent += " Verrijking loopt...";
     var res = await fetch(WORKER_URL + "/enrich", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-token": APP_SECRET },
+      headers: fotoKoppen(),
       body: JSON.stringify({ items: items, mode: mode, subject: subject })
     });
     if (!res.ok) return;
@@ -1926,14 +2322,15 @@ function bind(){
   $("btn-report").addEventListener("click", ()=>{ show("scr-report"); renderReport(); });
   $("btn-report-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); });
   $("btn-report-copy").addEventListener("click", copyReport);
-  $("btn-learner").addEventListener("click", ()=>{ $("learner-form").hidden=false; $("learner-view").hidden=true; $("learner-name").value=learner; $("learner-name").focus(); });
+  $("btn-ander-toestel").addEventListener("click", ()=>{ if($("code-plek").hidden) toonCodePaneel(); else sluitCodePaneel(); });
+  $("btn-learner").addEventListener("click", ()=>{ sluitCodePaneel(); $("learner-form").hidden=false; $("learner-view").hidden=true; $("learner-name").value=learner; $("learner-name").focus(); });
   const saveLearner = ()=>{
     const naam = $("learner-name").value.trim();
     if(naam && !slug(naam)){ vraagNaam(true, "Gebruik letters of cijfers in je naam."); return; }
     // langer past niet in het welkom en de spraakbalk; maxlength op het veld, en hier voor plakken
     if(Array.from(naam).length > NAAM_MAX){ vraagNaam(true, "Je naam mag hooguit "+NAAM_MAX+" tekens zijn."); return; }
     if(!naam && !heeftNaam()){ vraagNaam(true); return; }   // zonder naam blijft het veld open
-    if(naam){ setLearner(naam); save(BEVESTIGD_KEY, true); } // zelf getypt, dus bevestigd; leeg bij wisselen: de naam blijft
+    if(naam){ setLearner(naam); save(BEVESTIGD_KEY, true); nietMeerAfgewezen(); } // zelf getypt, dus bevestigd; leeg bij wisselen: de naam blijft
     $("learner-form").hidden=true; $("learner-view").hidden=false; $("learner-hint").hidden=true;
     selectList(list ? list.id : null); renderLessons(); initDb();
     // de klasvraag staat nog open: daar verder
@@ -1978,6 +2375,7 @@ function bind(){
   });
   // import keuze
   $("btn-type-start").addEventListener("click", ()=>{ $("import-choices").hidden=true; $("import-form").hidden=false; });
+  $("btn-photo-typ").addEventListener("click", ()=>{ show("scr-import"); $("import-choices").hidden=true; $("import-form").hidden=false; });
   $("btn-import-form-back").addEventListener("click", ()=>{ $("import-choices").hidden=false; $("import-form").hidden=true; });
   // foto-import
   $("btn-photo-start").addEventListener("click", ()=>{ photoReset(); show("scr-photo"); });
@@ -1993,12 +2391,15 @@ function bind(){
   $("btn-photo-go").addEventListener("click", ()=>{ if(!heeftNaam()){ vraagNaam(true); return; } renderHome(); show("scr-home"); });
   $("btn-naam-ja").addEventListener("click", ()=>{
     save(BEVESTIGD_KEY, true);
+    nietMeerAfgewezen();
     $("naam-vraag").hidden = true; $("learner-view").hidden = false;
     $("btn-learner").focus();
     initDb();
   });
   $("btn-naam-nee").addEventListener("click", ()=>{
     // de voortgang onder deze naam blijft op dit toestel, maar hoort niet bij de nieuwe naam
+    const af = load(AFGEWEZEN_KEY, []);
+    if(Array.isArray(af) && !af.includes(slug(learner))) save(AFGEWEZEN_KEY, af.concat([slug(learner)]));
     learner = ""; save(LEARNER_KEY, null);
     $("learner-name").value = ""; vraagNaam(false);
   });
@@ -2191,6 +2592,8 @@ function init(){
   lists = allLists();
   if(!lists.length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
   if(heeftNaam()) setLearner(learner);
+  checkCodeHash();
+  window.addEventListener("hashchange", ()=>{ if(checkCodeHash()) initDb(); });
   selectList(load(CKEY, null));
   bind(); renderLessons(); show("scr-lessons");
   if(!heeftNaam()) vraagNaam(false);
