@@ -222,8 +222,11 @@
   // Tikken op de knop opent en sluit. Open: de focus naar het eerste item,
   // de knop wordt een kruis. Escape, een tik op de dimlaag of de knop
   // sluiten en zetten de focus terug op de knop. Een menu-item kiezen
-  // sluit het menu ook; de focus gaat dan mee naar waar het item heen
-  // gaat. Gaat de focus met Tab uit het menu, dan sluit het stil.
+  // sluit het menu ook, zonder de focus te verplaatsen: het item is dan
+  // verborgen, dus de click-handler van het item zet de focus zelf op het
+  // scherm dat het opent (in index.html: de Terug-knop, en Terug zet hem
+  // weer op de menuknop). Gaat de focus met Tab uit het menu, dan sluit
+  // het stil.
   function bindMenu(knop) {
     if (!knop || knop.dataset.menuDone) return;
     const menu = document.getElementById(knop.getAttribute("aria-controls"));

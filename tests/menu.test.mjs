@@ -5,7 +5,8 @@
 // Escape en een tik buiten het menu sluiten het en zetten de focus terug
 // op de knop; Tab uit het menu sluit het stil. Het thema werkt vanuit het
 // menu en blijft bewaard. Over Overhoren toont de wetenschap, de schakelaar
-// voor klaslijsten en het colofon, zonder "Pia" en zonder mailadres.
+// voor klaslijsten en het colofon met een link naar dspbrg.com, zonder
+// "Pia", zonder achternaam en zonder mailadres.
 // Contrast en overloop met het menu open, licht en donker, 360 en 1280 px.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -201,7 +202,7 @@ test("menu: Rapport opent het rapport en sluit het menu", async () => {
   await context.close();
 });
 
-test("Over Overhoren: opent uit het menu, met de wetenschap, klaslijsten en het colofon, zonder Pia en zonder mailadres", async () => {
+test("Over Overhoren: opent uit het menu, met de wetenschap, klaslijsten en het colofon, met een link naar dspbrg.com, zonder Pia, achternaam of mailadres", async () => {
   const { context, page, fouten } = await open();
   await openMenu(page);
   await page.click("#btn-info"); await wachtOpScherm(page, "scr-info");
@@ -214,6 +215,7 @@ test("Over Overhoren: opent uit het menu, met de wetenschap, klaslijsten en het 
       tekst: s.innerText, html: s.outerHTML,
       klas: !!s.querySelector("#klas-seg"),
       colofon: document.getElementById("colofon")?.innerText || "",
+      link: (a => a && { href: a.getAttribute("href"), rel: a.getAttribute("rel"), tekst: a.textContent.trim(), cls: a.className, maker: a.closest("p")?.textContent.trim() })(document.querySelector('#colofon a[href="https://dspbrg.com"]')),
       katten: Celebrate.KATTEN.map(k => k.naam)
     };
   });
@@ -221,15 +223,41 @@ test("Over Overhoren: opent uit het menu, met de wetenschap, klaslijsten en het 
   assert.deepEqual(r.h2, ["De wetenschap", "Klaslijsten", "Colofon"]);
   assert.ok(r.klas, "de schakelaar voor klaslijsten ontbreekt");
   assert.match(r.tekst, /Ophalen werkt beter dan herlezen/);
-  assert.match(r.colofon, /Gemaakt door Daan Spangenberg/);
+  assert.ok(r.link, "geen link naar https://dspbrg.com in het colofon");
+  assert.equal(r.link.maker, "Gemaakt door dspbrg.com");
+  assert.equal(r.link.tekst, "dspbrg.com");
+  assert.equal(r.link.rel, "noopener");
+  assert.equal(r.link.cls, "link", "de link heeft niet de linkstijl van de app");
   assert.match(r.colofon, /Chakra Petch/); assert.match(r.colofon, /Inter/);
   for (const naam of r.katten) assert.ok(r.colofon.includes(naam), "kat " + naam + " ontbreekt in het colofon");
   assert.match(r.colofon, /met AI gemaakt/);
   assert.doesNotMatch(r.html, /Pia/i, "Over Overhoren noemt Pia");
+  assert.doesNotMatch(r.html, /Spangenberg/i, "Over Overhoren noemt de achternaam");
   assert.doesNotMatch(r.html, /@/, "Over Overhoren bevat een @");
   assert.doesNotMatch(r.html, /mailto:/i);
   // terug naar het startscherm
   await page.click("#btn-info-back"); await wachtOpScherm(page, "scr-lessons");
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("menu: na Rapport of Over Overhoren staat de focus op Terug, en na Terug weer op de menuknop", async () => {
+  const { context, page, fouten } = await open();
+  const focus = () => page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName);
+  for (const [item, scherm, terug] of [["#btn-report", "scr-report", "btn-report-back"], ["#btn-info", "scr-info", "btn-info-back"]]) {
+    // met de muis
+    await openMenu(page);
+    await page.click(item); await wachtOpScherm(page, scherm);
+    assert.equal(await focus(), terug, item + ": de focus staat niet op Terug");
+    await page.click("#" + terug); await wachtOpScherm(page, "scr-lessons");
+    assert.equal(await focus(), "btn-menu", item + ": na Terug staat de focus niet op de menuknop");
+    // met het toetsenbord: Enter op het item, Enter op Terug
+    await page.locator("#btn-menu").focus(); await page.keyboard.press("Enter");
+    await page.locator(item).focus(); await page.keyboard.press("Enter"); await wachtOpScherm(page, scherm);
+    assert.equal(await focus(), terug, item + " met Enter: de focus staat niet op Terug");
+    await page.keyboard.press("Enter"); await wachtOpScherm(page, "scr-lessons");
+    assert.equal(await focus(), "btn-menu", item + " met Enter: na Terug staat de focus niet op de menuknop");
+  }
   assert.deepEqual(fouten, []);
   await context.close();
 });
