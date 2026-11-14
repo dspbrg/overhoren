@@ -363,7 +363,12 @@
     ], { col: true }),
 
     block("Empty", "Lege staat met karakter, zonder illustratie.", [
-      ['UI.Empty({ glyph, title, body })', '<div style="width:100%">' + UI.Empty({ glyph: "?", title: "Nog niets te rapporteren.", body: "Doe eerst een ronde." }) + '</div>']
+      ['UI.Empty({ glyph, title, body })', '<div style="width:100%">' + UI.Empty({ glyph: "?", title: "Nog niets te rapporteren.", body: "Doe eerst een ronde." }) + '</div>'],
+      ['Startscherm zonder lijsten: UI.Empty met .btn.primary.big eronder', '<div style="width:100%;display:grid;gap:var(--gap-stack)">' + UI.Empty({ glyph: "+", title: "Nog geen lijsten.", body: "Maak een foto van je boek of typ de woorden zelf." }) + '<button type="button" class="btn primary big">+ Nieuwe lijst</button></div>']
+    ], { col: true }),
+
+    block("Vraag op het startscherm", "Onder Wie oefent: een korte vraag met twee knoppen. Voor Ben jij Pia en voor de klasvraag.", [
+      ['.naam-vraag > p + .row > .btn', '<div class="naam-vraag" style="width:100%"><p>Zit je in Mendel 1EHA2?</p><div class="row"><button type="button" class="btn">Ja, geef me de klaslijsten</button><button type="button" class="btn">Nee, ik maak eigen lijsten</button></div></div>']
     ], { col: true }),
 
     block("Mark and feedback list", "Het oordeel per onderdeel. De titel erboven is .verdict.", [

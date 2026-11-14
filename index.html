@@ -48,6 +48,11 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
           <p>Ben jij <span id="naam-vraag-naam"></span>?</p>
           <div class="row"><button class="btn" id="btn-naam-ja">Ja</button><button class="btn" id="btn-naam-nee">Nee, ik ben iemand anders</button></div>
         </div>
+        <!-- alleen bij een nieuw toestel; de klasnaam komt uit KLAS (zie zetKlasTeksten) -->
+        <div class="naam-vraag" id="klas-vraag" hidden>
+          <p id="klas-vraag-tekst"></p>
+          <div class="row"><button class="btn" id="btn-klas-ja">Ja, geef me de klaslijsten</button><button class="btn" id="btn-klas-nee">Nee, ik maak eigen lijsten</button></div>
+        </div>
         <span class="sync" id="sync-state"></span>
       </div>
     </div>
@@ -256,6 +261,14 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
         <li>Engelse definities hoeven niet letterlijk: als de kernwoorden erin zitten is het goed. Een vertaling moet kloppen, maar lidwoorden en kleine typo's tellen niet. Bij twijfel beslis je zelf.</li>
         <li>Een Engels woord (bij definitie naar woord) moet goed gespeld zijn, zoals op de toets. Eén letter fout heet "bijna" en telt als fout.</li>
       </ul>
+      <h3>Klaslijsten</h3>
+      <div class="theme-row" role="group" aria-labelledby="klas-label">
+        <span class="eyebrow" id="klas-label"></span>
+        <div class="seg" id="klas-seg">
+          <button type="button" data-klas="ja" aria-pressed="true" class="on">Ja</button>
+          <button type="button" data-klas="nee" aria-pressed="false">Nee</button>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -512,12 +525,67 @@ const NAAM_MAX = 20;   // ook maxlength op #learner-name
 const BEVESTIGD_KEY = "overhoor:naam-bevestigd", OUDE_STANDAARD = "Pia";
 const moetBevestigen = () => learner === OUDE_STANDAARD && load(BEVESTIGD_KEY, false) !== true;
 
+// ---------- klaslijsten ----------
+// De lijsten uit lists.js zijn van een klas. Wie daar niet in zit, ziet
+// alleen eigen lijsten. KLAS_KEY: true (ja), false (nee) of "vraag" (nog
+// niet gekozen). Alleen op dit toestel, gaat niet mee in de sync.
+const KLAS = "Mendel 1EHA2", KLAS_KEY = "overhoor:klas";
+// Een toestel waar al iemand mee oefende, telt als ja: een naam, eigen
+// lijsten, voortgang of iets anders dat bij een oefenaar hoort. Thema,
+// welkom, laatste lijst en sync-geheim niet: die staan er ook bij een
+// nieuw toestel dat alleen geopend is.
+function bestaandeGebruiker(){
+  const sporen = /^overhoor:(learner|learners|naam-bevestigd|progress:|session:|cats:|alts:|grens:|deadline:|tijd:)/;
+  try{
+    for(let i=0; i<localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k || !sporen.test(k)) continue;
+      const v = load(k, null);
+      if(v === null || (Array.isArray(v) && !v.length)) continue;
+      return true;
+    }
+    const eigen = load(LKEY, []);
+    return Array.isArray(eigen) && eigen.length > 0;
+  }catch(e){ return true; }   // zonder opslag niets vragen: dan zoals altijd
+}
+// Een keer bepalen, en meteen bewaren. Zo telt iemand die alleen een naam
+// typte en de vraag liet staan, na herladen niet ineens als bestaand.
+function klasStart(){
+  const k = load(KLAS_KEY, null);
+  if(k === true || k === false || k === "vraag") return;
+  save(KLAS_KEY, bestaandeGebruiker() ? true : "vraag");
+}
+const klasLijstenTonen = () => load(KLAS_KEY, true) !== false;
+const klasOnbeslist = () => load(KLAS_KEY, null) === "vraag";
+function zetKlasTeksten(){
+  $("klas-vraag-tekst").textContent = "Zit je in " + KLAS + "?";
+  $("klas-label").textContent = "Klaslijsten van " + KLAS + " tonen";
+}
+// ja: klaslijsten tonen. Bewaren, en het startscherm opnieuw opbouwen.
+function kiesKlas(ja){
+  save(KLAS_KEY, !!ja);
+  lists = allLists();
+  selectList(list ? list.id : load(CKEY, null));
+  renderLessons();
+}
+function markKlas(){
+  const ja = klasLijstenTonen();
+  $("klas-seg").querySelectorAll("button").forEach(b=>{ const on = (b.dataset.klas === "ja") === ja; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
+}
+
 // ---------- state ----------
 let lists = [], list = null, progress = null, session = null, sizeChoice = 15, timer = null;
 const ui = { pick:null, checked:false, verdictDef:null, clsOk:false, firstBlank:false, pauseShown:false };
 
 // eigen lijsten uit opslag alleen in de goede vorm (zie schoneLijst)
 function allLists(){ return (window.WORDLISTS||[]).concat(schoneLijsten(load(LKEY, []))); }
+// Wat op het startscherm staat. lists blijft alles: voortgang, sync en het
+// rapport houden zo ook de verborgen klaslijsten.
+function zichtbareLijsten(){
+  if(klasLijstenTonen()) return lists;
+  const klas = window.WORDLISTS || [];
+  return lists.filter(l => !klas.includes(l));
+}
 
 // --- gemengde lijst per vak -------------------------------------------
 // Per vak een extra "lijst" met alle woorden van dat vak door elkaar. Dat is
@@ -532,7 +600,7 @@ let bronProgress = null;     // alleen gevuld bij een gemengde lijst
 
 function mixLijsten(){
   const perVak = {};
-  for(const l of lists){
+  for(const l of zichtbareLijsten()){
     if(String(l.id).startsWith(MIX)) continue;
     // alleen mengen wat dezelfde vorm heeft, anders klopt de vraagstelling niet.
     // Grammatica (vertaalvorm) naast woordenlijsten blijft dus apart.
@@ -568,9 +636,12 @@ function mixDeadline(l){
   }
   return beste;
 }
+// Zonder zichtbare lijst (geen klaslijsten en geen eigen) is list null.
 function selectList(id){
-  list = lists.concat(mixLijsten()).find(l=>l.id===id) || lists[0];
+  const keus = zichtbareLijsten().concat(mixLijsten());
+  list = keus.find(l=>l.id===id) || keus[0] || null;
   bronProgress = null;
+  if(!list){ progress = null; learnedAlts = {}; return; }
   if(list.mix){
     // voortgang per referentie ophalen uit de bronlijsten
     bronProgress = {};
@@ -1033,12 +1104,20 @@ function renderLessons(){
   }
   // per vak een map, met de gemengde ronde onderaan die map
   const mixen = mixLijsten();
-  const vakken = [];
-  for(const l of lists){
+  const vakken = [], zichtbaar = zichtbareLijsten();
+  for(const l of zichtbaar){
     const v = l.subject || "Overig";
     let g = vakken.find(x=>x.vak===v);
     if(!g){ g = { vak:v, lijsten:[] }; vakken.push(g); }
     g.lijsten.push(l);
+  }
+  // geen lijsten: een lege staat, en de knop voor een nieuwe lijst valt op
+  const leeg = !zichtbaar.length;
+  $("btn-import").className = leeg ? "btn primary big" : "btn add-list-btn";
+  $("klas-vraag").hidden = !klasOnbeslist();
+  if(leeg){
+    $("lessons").innerHTML = UI.Empty({ glyph:"+", title:"Nog geen lijsten.", body:"Maak een foto van je boek of typ de woorden zelf." });
+    return;
   }
   $("lessons").innerHTML = vakken.map(g=>{
     const mix = mixen.find(m=>m.subject===g.vak);
@@ -1571,7 +1650,7 @@ function deleteList(){
   if(!confirm("Lijst '"+list.title+"' en de voortgang ervan verwijderen?")) return;
   // rauwe opslag: alleen de lijst met dit id gaat eruit, de rest blijft zoals hij is
   save(LKEY, load(LKEY, []).filter(l=>!isObject(l) || l.id!==list.id)); save(PKEY(list.id), null); save(SKEY(list.id), null);
-  lists = allLists(); selectList(lists[0].id); renderLessons(); show("scr-lessons");
+  lists = allLists(); selectList(null); renderLessons(); show("scr-lessons");
 }
 
 // ---------- foto-import ----------
@@ -1803,7 +1882,22 @@ function bind(){
   $("btn-progress").addEventListener("click", ()=>{ renderProgress(); show("scr-progress"); });
   $("btn-progress-back").addEventListener("click", ()=>{ renderHome(); show("scr-home"); });
   $("btn-reset").addEventListener("click", ()=>{ if(confirm("Alle voortgang van '"+list.title+"' wissen?")){ progress={items:{},sessions:[]}; saveProgress(); save(SKEY(list.id),null); renderProgress(); } });
-  $("btn-info").addEventListener("click", ()=>show("scr-info"));
+  $("btn-info").addEventListener("click", ()=>{ markKlas(); show("scr-info"); });
+  // klaslijsten tonen: Ja of Nee, net als het thema een .seg met aria-pressed
+  $("klas-seg").addEventListener("click", e=>{
+    const b = e.target.closest("button"); if(!b) return;
+    kiesKlas(b.dataset.klas === "ja");
+    markKlas();
+  });
+  // de klasvraag beantwoorden bewaart ook de getypte naam; zonder naam niet
+  const beantwoordKlas = ja => {
+    if(!$("learner-form").hidden && !saveLearner()) return;
+    if(!heeftNaam()){ vraagNaam(true); return; }
+    kiesKlas(ja);
+    (ja ? $("btn-learner") : $("btn-import")).focus();
+  };
+  $("btn-klas-ja").addEventListener("click", ()=>beantwoordKlas(true));
+  $("btn-klas-nee").addEventListener("click", ()=>beantwoordKlas(false));
   $("break-skip").addEventListener("click", ()=>{
     const t = tijdVandaag(); t.pauzeTot = 0; t.blok = 0; bewaarTijd(t);
     bewaakPauze(); renderHome();
@@ -1841,7 +1935,10 @@ function bind(){
     if(!naam && !heeftNaam()){ vraagNaam(true); return; }   // zonder naam blijft het veld open
     if(naam){ setLearner(naam); save(BEVESTIGD_KEY, true); } // zelf getypt, dus bevestigd; leeg bij wisselen: de naam blijft
     $("learner-form").hidden=true; $("learner-view").hidden=false; $("learner-hint").hidden=true;
-    selectList(list.id); renderLessons(); initDb();
+    selectList(list ? list.id : null); renderLessons(); initDb();
+    // de klasvraag staat nog open: daar verder
+    if(klasOnbeslist()) $("btn-klas-ja").focus();
+    return true;
   };
   $("btn-learner-save").addEventListener("click", saveLearner);
   $("learner-name").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); saveLearner(); } });
@@ -2089,10 +2186,12 @@ function init(){
   Celebrate.laadCatalogus();   // katten.json: klein, en dan staat de kat meteen klaar
   zetBeta();
   UI.hydrateIcons(document);
+  klasStart();   // voor er iets in opslag komt, zoals de laatste lijst
+  zetKlasTeksten();
   lists = allLists();
   if(!lists.length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
   if(heeftNaam()) setLearner(learner);
-  selectList(load(CKEY, lists[0].id));
+  selectList(load(CKEY, null));
   bind(); renderLessons(); show("scr-lessons");
   if(!heeftNaam()) vraagNaam(false);
   else if(moetBevestigen()) toonNaamVraag();
