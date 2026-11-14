@@ -19,7 +19,8 @@ Volledige overdracht in Outline: Projecten › Overhoren › Overdracht. PRD, bo
 - Live op https://overhoren.vandaan.net (Cloudflare Worker `overhoren`, alleen statische bestanden, `wrangler.jsonc`) en https://dspbrg.github.io/overhoren/ (GitHub Pages).
 - Wat online komt staat in `.assetsignore`. Dat is een allowlist: een nieuw app-bestand moet daar ook in, en in `SCHIL` in `sw.js` als het offline moet werken.
 - Sync-worker `overhoren-api` in `worker/` (Cloudflare KV). Uitrollen alleen vanuit `worker/` met `-c wrangler.toml`, anders pakt wrangler de app-config.
-- Bij elke deploy de versie stempelen (`?v=` in `index.html` en `designsystem.html`, `VERSIE` in `sw.js`), anders blijft een oude versie hangen. Zie Overdracht › Deployen.
+- De versie stempelt Cloudflare zelf bij elke build: het build command zet de eerste 12 tekens van de commit-sha in `?v=` (`index.html`, `designsystem.html`) en in `VERSIE` (`sw.js`). In de repo blijft alles ongestempeld; met de hand stempelen laat de tests falen. GitHub Pages stempelt niet en draait network-first.
+- Na het samenvoegen controleren of `VERSIE` in https://overhoren.vandaan.net/sw.js de sha van main is. Tot 14-11-2026 bouwde Cloudflare nooit (Git-koppeling kapot); toen is die opnieuw gekoppeld. Zie Overdracht › Deployen.
 - Sleutels nooit tonen, loggen of committen.
 
 ## Werkwijze
