@@ -102,10 +102,10 @@ async function open({ thema = "light", reduced = false, zaai = {}, sw = false } 
 // de kat van de laatst begonnen ronde
 const vorige = page => page.evaluate(() => JSON.parse(localStorage.getItem("overhoor:kat:vorige")));
 const MAP = "katten/clips/";
-// de kat op de rand en welk beeld hij toont (de speler zet data-kat en data-beeld)
+// de kat op de rand en welk beeld hij toont (Celebrate.toon zet data-kat en data-beeld)
 const katOp = async (page, sel) => ({ kat: await page.locator(sel).getAttribute("data-kat"), beeld: await page.locator(sel).getAttribute("data-beeld") });
-// stand goed of bijna: de clip of al het eindbeeld
-const inStand = (b, stand) => b.beeld === stand || b.beeld === stand + "-eind";
+// stand goed of bijna: de kat staat stil, dus meteen het eindbeeld
+const inStand = (b, stand) => b.beeld === stand + "-eind";
 const alleSleutels = page => page.evaluate(() => Object.fromEntries(Object.keys(localStorage).map(k => [k, localStorage.getItem(k)])));
 
 // het goede antwoord en een sleutel per woord, zodat een herhaling herkend wordt
@@ -331,9 +331,9 @@ test("oude voortgang van woorden, lijsten en oefenaars blijft na de update staan
   await context.close();
 });
 
-test("offline: alle dertig kattenbeelden en katten.json staan in de cache van de service worker en laden zonder netwerk", async () => {
+test("offline: alle dertig kattenbeelden (per kat drie stilstaande, de welkomclip en zijn eerste beeld) en katten.json staan in de cache van de service worker en laden zonder netwerk", async () => {
   const { context, page, fouten } = await open({ sw: true });
-  const urls = ALLE.flatMap(id => ["rust", "goed", "goed-eind", "bijna", "bijna-eind"].map(s => `${MAP}${id}-${s}.webp`));
+  const urls = ALLE.flatMap(id => [...["rust", "goed-eind", "bijna-eind"].map(s => `${MAP}${id}-${s}.webp`), `${MAP}welkom-${id}.webp`, `${MAP}welkom-${id}-stil.webp`]);
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await page.waitForFunction(async urls => {
     for (const u of urls) if (!(await caches.match(u))) return false;
@@ -351,14 +351,14 @@ test("offline: alle dertig kattenbeelden en katten.json staan in de cache van de
   for (const x of r) { assert.ok(x.w > 0, x.u + " laadt niet offline"); assert.equal(x.h, 480, x.u); }
   const types = await page.evaluate(async urls => Promise.all(urls.map(async u => { const res = await fetch(u); return res.status + " " + res.headers.get("content-type"); })), urls);
   for (const t of types) assert.equal(t, "200 image/webp");
-  assert.equal(await page.evaluate(async u => (await (await fetch(u)).json()).fps, MAP + "katten.json"), 6, "katten.json niet offline");
+  assert.equal(await page.evaluate(async u => (await (await fetch(u)).json()).welkom.fps, MAP + "katten.json"), 12, "katten.json niet offline");
   // en in de app: een ronde offline, de kat op de rand van de vraag en van de samenvatting
   await speelRonde(page);
   await page.waitForFunction(() => { const i = document.querySelector("#sum-kat .kat"); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 5000 });
   const b = await katOp(page, "#sum-kat .kat");
   assert.ok(b.kat === await vorige(page) && inStand(b, "goed"), JSON.stringify(b));
-  // de clip speelde ook offline, en eindigt op het eindbeeld
-  await page.waitForFunction(() => document.querySelector("#sum-kat .kat").dataset.beeld === "goed-eind", null, { timeout: 4000 });
+  // ook offline meteen het stilstaande eindbeeld
+  assert.equal(await page.locator("#sum-kat .kat").getAttribute("data-beeld"), "goed-eind");
   assert.deepEqual(fouten, []);
   await context.close();
 });

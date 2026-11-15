@@ -6,7 +6,7 @@
 // wisselen, teksten, markup), daarna elk moment in de levende app: wacht,
 // goed, fout, lastige ronde, vlekkeloze ronde, hervatten, sync en reduced
 // motion. Contrast en overloop tellen op elk kattenscherm mee. De beelden
-// zelf (clips, eindbeelden, spiegelen, verspringen) test kattenclips.test.mjs.
+// zelf (stilstaande beelden, welkomclip, spiegelen, verspringen) test kattenclips.test.mjs.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
@@ -110,7 +110,11 @@ test("oude katten en het verzamelen zijn weg; service worker en allowlist kennen
   assert.doesNotMatch(lees("scripts/deploy.sh"), /maak-catalogus|cats\.js|\bcats\b/);
   const sw = lees("sw.js");
   const schil = [...sw.matchAll(/"\.\/([^"]+)"/g)].map(m => m[1]);
-  for (const id of ALLE) for (const s of ["rust", "goed", "goed-eind", "bijna", "bijna-eind"]) assert.ok(schil.includes(`${MAP}${id}-${s}.webp`), `${MAP}${id}-${s}.webp niet in SCHIL`);
+  for (const id of ALLE) {
+    for (const s of ["rust", "goed-eind", "bijna-eind"]) assert.ok(schil.includes(`${MAP}${id}-${s}.webp`), `${MAP}${id}-${s}.webp niet in SCHIL`);
+    for (const s of ["goed", "bijna"]) assert.ok(!schil.includes(`${MAP}${id}-${s}.webp`), `${MAP}${id}-${s}.webp (oude clip) nog in SCHIL`);
+    for (const f of [`welkom-${id}.webp`, `welkom-${id}-stil.webp`]) assert.ok(schil.includes(MAP + f), MAP + f + " niet in SCHIL");
+  }
   const allow = lees(".assetsignore").split("\n").map(r => r.trim());
   assert.ok(allow.includes("!/katten/") && allow.includes("!/katten/clips/"), "katten/clips/ niet goed in .assetsignore");
   assert.ok(!allow.some(r => /cats/.test(r) && !r.startsWith("#")), "oude cats-regels staan nog in .assetsignore");
@@ -311,11 +315,11 @@ async function meetRand(page, rand, kaart) {
       kaartTop: Math.round(rk.top + scrollY), randTop: r.getBoundingClientRect().top, randOnder: r.getBoundingClientRect().bottom };
   }, [rand, kaart]);
 }
-// stand: rust, of goed of bijna (dan de clip of al het eindbeeld)
+// stand: rust, of goed of bijna (dan meteen het eindbeeld: de kat staat stil)
 function keurRand(r, kat, stand, tekst, naam) {
   assert.equal(r.kat, kat, naam + ": niet de kat van de ronde");
-  assert.ok(stand === "rust" ? r.beeld === "rust" : [stand, stand + "-eind"].includes(r.beeld), naam + `: ${r.beeld} in plaats van ${stand}`);
-  assert.ok(stand === "rust" ? r.src === `${MAP}${kat}-rust.webp` : (/^blob:/.test(r.src) || r.src === `${MAP}${kat}-${stand}-eind.webp`), naam + ": beeld " + r.src);
+  assert.equal(r.beeld, stand === "rust" ? "rust" : stand + "-eind", naam + `: ${r.beeld} in plaats van ${stand}`);
+  assert.equal(r.src, stand === "rust" ? `${MAP}${kat}-rust.webp` : `${MAP}${kat}-${stand}-eind.webp`, naam + ": beeld " + r.src);
   assert.equal(r.alt, "", naam + ": de kat op de rand is versiering");
   assert.equal(r.hoogte, 104, naam);
   assert.ok(Math.abs(r.oor - 30) <= 1, naam + ": de kat zit " + r.oor + "px over de kaart, verwacht 30");
@@ -582,13 +586,14 @@ test("reduced motion: geen confetti en de kat komt zonder beweging", async () =>
   await context.close();
 });
 
-test("zonder reduced motion: geen css-beweging op de kat, alleen zijn clip", async () => {
+test("zonder reduced motion: de kat in de ronde staat stil, geen css-beweging en geen clip", async () => {
   const { context, page, fouten } = await open("light");
   await frans(page);
   assert.equal(await page.locator("#q-kat .kat").evaluate(e => e.getAnimations().length), 0, "css-beweging op de kat in rust");
   await beantwoord(page, true);
-  assert.equal(await page.locator("#q-kat .kat").evaluate(e => e.getAnimations().length), 0, "css-beweging bovenop de clip");
-  assert.match(await page.locator("#q-kat .kat").getAttribute("data-beeld"), /^goed/);
+  assert.equal(await page.locator("#q-kat .kat").evaluate(e => e.getAnimations().length), 0, "css-beweging op de kat na goed");
+  assert.equal(await page.locator("#q-kat .kat").getAttribute("data-beeld"), "goed-eind");
+  assert.doesNotMatch(await page.locator("#q-kat .kat").getAttribute("src"), /^blob:/, "er speelt een clip");
   assert.doesNotMatch(lees("ds.css"), /kat-in|welkom-hop|welkom-wiebel/, "de oude entree, sprong of wiebel staat nog in ds.css");
   assert.deepEqual(fouten, []);
   await context.close();

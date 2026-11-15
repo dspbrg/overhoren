@@ -1,14 +1,15 @@
 // Het welkom bij het openen (variant A uit de opzet van Dieter): heel
-// scherm, de naam van de app, de goed-clip van de kat van de eerstvolgende
-// ronde in een lus (geen css-sprong of wiebel), dan "Hoi <naam>". Na
-// --welkom-duur min --welkom-overgang opent vanuit het midden een plat
-// zeshoekig gat dat in --welkom-overgang groeit tot over het hele scherm,
-// terwijl het welkom vervaagt (de lus zelf: kattenclips.test.mjs). Tik of
+// scherm, de naam van de app, de kat van de eerstvolgende ronde in een
+// lichte staande zeshoek met zijn welkomclip (geen css-sprong of wiebel),
+// dan "Hoi <naam>". Na --welkom-duur min --welkom-overgang opent vanuit het
+// midden een plat zeshoekig gat dat in --welkom-overgang groeit tot over
+// het hele scherm, terwijl het welkom vervaagt (de clip en de zeshoek zelf:
+// kattenclips.test.mjs). Tik of
 // toets start dezelfde overgang in --welkom-overgang-snel; de app eronder
 // is inert tot het welkom helemaal weg is. Bij elke keer openen (nieuw tabblad, nieuwe sessie), maar niet
 // opnieuw binnen dezelfde sessie en niet als er een ronde openstaat. Alleen als het beeld
-// binnen 300 ms klaar is. Reduced motion: een stilstaand eindbeeld, geen
-// zeshoek, na --welkom-duur meteen weg.
+// binnen 300 ms klaar is. Reduced motion: het eerste beeld van de clip
+// staat stil, geen gat, na --welkom-duur meteen weg.
 //
 // Alle andere tests zetten de sessievlag van het welkom al (zie
 // tests/lib/omgeving.mjs); hier opent elke context met { welkom: true }.
@@ -93,16 +94,16 @@ test("UI.Welkom: de naam gaat door esc(), zonder naam geen Hoi, de kat is versie
   assert.equal(typeof UI.Welkom, "function", "UI.Welkom ontbreekt");
   await C.laadCatalogus();
   const b = C.welkomBeeld("tuxedo");
-  // eerst rust (het eerste beeld van de goed-clip), stil is het eindbeeld
-  assert.equal(b.src, "katten/clips/tuxedo-rust.webp");
-  assert.equal(b.stil, "katten/clips/tuxedo-goed-eind.webp");
-  assert.equal(b.duurMs, KAT.katten.tuxedo.goed.duurMs);
-  assert.equal(b.width, C.beeld("tuxedo", "goed").width);
-  assert.match(UI.Welkom({ beeld: b, stil: true }), /<img class="welkom-kat" src="katten\/clips\/tuxedo-goed-eind\.webp" width="400" height="480" alt="" data-kat="tuxedo" data-beeld="goed-eind"/);
+  // eerst het stilstaande eerste beeld van de welkomclip; de speler zet daarna de clip
+  assert.equal(b.src, "katten/clips/welkom-tuxedo-stil.webp");
+  assert.equal(b.anim, "katten/clips/welkom-tuxedo.webp");
+  assert.equal(b.duurMs, KAT.katten.tuxedo.welkom.duurMs);
+  assert.deepEqual([b.width, b.height], [KAT.welkom.breedte, KAT.welkom.hoogte]);
+  // de kat staat in het podium, na een lege zeshoek die versiering is
+  assert.match(UI.Welkom({ beeld: b }), /<div class="welkom-podium"><span class="welkom-zeshoek" aria-hidden="true"><\/span><img class="welkom-kat" src="katten\/clips\/welkom-tuxedo-stil\.webp" width="480" height="480" alt="" data-kat="tuxedo" data-beeld="welkom-stil"/);
   const html = UI.Welkom({ beeld: b, naam: '<img src=x onerror="alert(1)">' });
   assert.doesNotMatch(html, /<img src=x/, "naam niet ontsnapt");
   assert.match(html, /Hoi &lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
-  assert.match(html, /<img class="welkom-kat" src="katten\/clips\/tuxedo-rust\.webp" width="400" height="480" alt="" data-kat="tuxedo" data-beeld="rust"/);
   for (const naam of ["", "   ", null, undefined]) assert.doesNotMatch(UI.Welkom({ beeld: b, naam }), /Hoi/, `"Hoi" bij naam ${JSON.stringify(naam)}`);
   assert.match(UI.Welkom({ beeld: b, naam: " Pia " }), /<p class="welkom-groet">Hoi Pia<\/p>/);
   assert.equal(UI.Welkom({ naam: "Pia" }), "", "zonder beeld geen welkom");
@@ -373,7 +374,7 @@ test("welkom wegtikken: een tik of een toets start de snelle overgang (250 ms) e
   }
 });
 
-test("welkom bij reduced motion: een stilstaand eindbeeld, geen zeshoek, en op dezelfde tijd weg", async () => {
+test("welkom bij reduced motion: een stilstaand beeld, geen zeshoekig gat, en op dezelfde tijd weg", async () => {
   const { context } = await nieuweContext({ reduced: true });
   const { page, fouten } = await openPagina(context);
   await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
@@ -394,7 +395,7 @@ test("welkom bij reduced motion: een stilstaand eindbeeld, geen zeshoek, en op d
   assert.deepEqual(r.opacity, [], "niet alles is helemaal zichtbaar");
   assert.deepEqual(r.beweging, [], "de kat staat niet in zijn eindstand");
   assert.equal(r.groet, "Hoi Pia");
-  assert.equal(await page.locator("body > .welkom img.welkom-kat").getAttribute("data-beeld"), "goed-eind", "niet meteen het eindbeeld");
+  assert.equal(await page.locator("body > .welkom img.welkom-kat").getAttribute("data-beeld"), "welkom-stil", "niet meteen het stilstaande beeld");
   await welkomEl(page).waitFor({ state: "detached", timeout: 5000 });
   const w = await page.evaluate(() => window.__welkom);
   const duur = w.weg - w.gezien;
@@ -422,7 +423,7 @@ test("welkom bij reduced motion wegtikken: meteen weg, geen zeshoek", async () =
 
 test("welkom: komt het beeld niet binnen 300 ms, dan stil overslaan", async () => {
   const { context } = await nieuweContext();
-  await context.route(/\/katten\/clips\/\w+-goed\.webp/, async route => { await new Promise(r => setTimeout(r, 900)); await route.continue(); });
+  await context.route(/\/katten\/clips\/welkom-\w+\.webp/, async route => { await new Promise(r => setTimeout(r, 900)); await route.continue(); });
   const { page, fouten } = await openPagina(context);
   const r = await geenWelkom(page);
   assert.equal(r.gezien, 0, "welkom ondanks een traag beeld");

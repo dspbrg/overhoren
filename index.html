@@ -1343,32 +1343,29 @@ function fmtRel(ms){
 
 // ---------- schermen ----------
 // De kat van de ronde op de rand van de kaart, op de plek van element id.
-// z: { stand, tekst } uit Celebrate.zegt() of Celebrate.gedag(). Staat
-// de kat er al, dan wisselen alleen beeld en zin: het <img> blijft staan,
-// met dezelfde maat, dus niets verspringt. Celebrate.speler speelt per
-// moment rust, of de clip en daarna het eindbeeld; een nieuw moment breekt
-// een lopende clip af. Alles gaat door esc() of textContent.
-// De beelden staan in katten.json. Is die er nog niet, dan eerst die;
-// een later moment voor hetzelfde element wint.
-const katSpelers = {}, katBeurt = {};
+// z: { stand, tekst } uit Celebrate.zegt() of Celebrate.gedag(). De kat
+// staat stil: elk moment zet meteen het beeld van zijn stand (rust,
+// goed-eind of bijna-eind), er speelt geen clip. Staat de kat er al, dan
+// wisselen alleen beeld en zin (Celebrate.toon): het <img> blijft staan,
+// met dezelfde maat, dus niets verspringt. Alles gaat door esc() of
+// textContent. De beelden staan in katten.json. Is die er nog niet, dan
+// eerst die; een later moment voor hetzelfde element wint.
+const katBeurt = {};
 function toonKat(id, z, kat){
   kat = kat || (session && session.kat);
   const beurt = katBeurt[id] = (katBeurt[id] || 0) + 1;
   const doe = () => {
     if(katBeurt[id] !== beurt) return;
     const b = Celebrate.beeld(kat, z.stand);
-    let el = $(id);
-    if(!b){ if(katSpelers[id]) katSpelers[id].stop(); el.hidden = true; return; }
+    const el = $(id);
+    if(!b){ el.hidden = true; return; }
     const img = el.querySelector(".kat"), zin = el.querySelector(".spraak");
-    if(img && zin && !el.hidden && katSpelers[id]){
+    if(img && zin && !el.hidden){
       zin.textContent = z.tekst;
+      Celebrate.toon(img, kat, z.stand, "rechts");
     } else {
-      if(katSpelers[id]) katSpelers[id].stop();
       el.outerHTML = UI.KatRand({ id, beeld: b, text: z.tekst });
-      el = $(id);
-      katSpelers[id] = Celebrate.speler(el.querySelector(".kat"), { plaats: "rechts" });
     }
-    katSpelers[id].speel(kat, z.stand);
   };
   if(Celebrate.catalogus()) doe(); else Celebrate.laadCatalogus().then(doe);
 }
@@ -2502,18 +2499,18 @@ function zetBeta(){
 }
 
 // ---------- welkom ----------
-// Bij het openen een kort welkom met de goed-clip van de kat van de
-// eerstvolgende ronde (UI.Welkom, ds.css .welkom). Bij elke keer openen,
+// Bij het openen een kort welkom met de welkomclip van de kat van de
+// eerstvolgende ronde, in een lichte zeshoek (UI.Welkom, ds.css .welkom). Bij elke keer openen,
 // een keer per sessie: niet opnieuw bij herladen of terugkeren naar
 // hetzelfde tabblad. Niet als er een ronde openstaat die je kunt hervatten:
 // die heeft al een eigen kat. De beelden van die kat moeten binnen 300 ms
 // klaar zijn (uit de cache, ook offline); anders slaat het welkom stil
-// over. De goed-clip speelt in een lus. Na --welkom-duur min
+// over. De clip (3 s) speelt een keer vanaf het eerste beeld. Na --welkom-duur min
 // --welkom-overgang opent een zeshoekig gat (ds.css .welkom.opent), en na
 // --welkom-overgang is het weg. Tik of toets start hetzelfde gat in
 // --welkom-overgang-snel. De app blijft inert tot het welkom weg is. Bij
-// reduced motion geen lus en geen gat: na --welkom-duur, of na een tik,
-// meteen weg.
+// reduced motion geen clip en geen gat: het eerste beeld staat stil, en
+// na --welkom-duur, of na een tik, is het meteen weg.
 //
 // Hoe vaak: WELKOM_PER_DAG. Op false (nu, keuze van Daan) elke sessie.
 // Op true komt het hooguit een keer per kalenderdag per apparaat; dan
@@ -2545,7 +2542,7 @@ function welkom(){
   const stil = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   new Promise((klaar, mis) => {
     setTimeout(mis, WELKOM_WACHT);
-    Celebrate.laadKat(id).then(g => (g.volledig ? klaar() : mis()));
+    Celebrate.laadWelkom(id).then(g => (g.volledig ? klaar() : mis()));
   }).then(() => toonWelkom(Celebrate.welkomBeeld(id), stil), () => { /* te traag of kapot: stil overslaan */ });
 }
 function toonWelkom(beeld, stil){
@@ -2553,7 +2550,7 @@ function toonWelkom(beeld, stil){
   // al verder getikt, of er staat er al een
   if(!beeld || !app || document.querySelector(".welkom") || $("scr-lessons").hidden) return;
   if(WELKOM_PER_DAG) try{ localStorage.setItem(WELKOM_DAG, dagVan(new Date())); }catch(e){}
-  document.body.insertAdjacentHTML("beforeend", UI.Welkom({ beeld, naam: moetBevestigen() ? "" : learner, stil }));
+  document.body.insertAdjacentHTML("beforeend", UI.Welkom({ beeld, naam: moetBevestigen() ? "" : learner }));
   const el = document.body.lastElementChild;
   app.inert = true;
   // de tijden staan in ds.css, in ms
@@ -2562,7 +2559,7 @@ function toonWelkom(beeld, stil){
   const duur = ms("--welkom-duur") || 3500;
   const overgang = stil ? 0 : (ms("--welkom-overgang") || 500);
   const snel = stil ? 0 : (ms("--welkom-overgang-snel") || 250);
-  const speler = Celebrate.speler(el.querySelector(".welkom-kat"), { plaats: "midden" });
+  const speler = Celebrate.welkomSpeler(el.querySelector(".welkom-kat"));
   let klok = null, opent = false, weg = false;
   function sluit(){
     if(weg) return;
@@ -2575,14 +2572,12 @@ function toonWelkom(beeld, stil){
     app.inert = false;
     if(!heeftNaam()) $("learner-name").focus();   // de focus ging weg door inert
   }
-  // het zeshoekige gat; de lus maakt zijn ronde af en stopt dan. Bij
-  // reduced motion (tijd 0) meteen weg.
+  // het zeshoekige gat; bij reduced motion (tijd 0) meteen weg
   function open(tijd, kort){
     if(opent || weg) return;
     opent = true;
     clearTimeout(klok);
     if(!tijd){ sluit(); return; }
-    speler.uitlopen();
     el.classList.toggle("snel", kort);
     el.classList.add("opent");
     klok = setTimeout(sluit, tijd);
@@ -2593,7 +2588,7 @@ function toonWelkom(beeld, stil){
     e.preventDefault(); e.stopPropagation();
     open(snel, true);
   }
-  speler.speel(beeld.id, "goed", { lus: true });
+  speler.speel(beeld.id);
   klok = setTimeout(() => open(overgang, false), Math.max(0, duur - overgang));
   el.addEventListener("click", tik);
   document.addEventListener("keydown", tik, true);
