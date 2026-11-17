@@ -2532,18 +2532,23 @@ function heeftOpenRonde(){
   }catch(e){}
   return false;
 }
-// Na het welkom (of als het overgeslagen wordt) haalt de app in rustige
-// tijd de welkomclip op van de kat die het volgende welkom toont, zodat
-// die al in de cache van de service worker staat. Welke kat dat wordt, ligt
-// nu nog niet vast (een nieuwe sessie kiest opnieuw, nooit de vorige);
-// daarom de kat van de eerstvolgende ronde zoals die nu bepaald wordt
-// (Celebrate.volgende). Niet bij reduced motion en niet bij saveData
+// Na het welkom (of als het overgeslagen wordt) staat de kat van het
+// volgende welkom vast (Celebrate.planWelkom, bewaard op dit apparaat), en
+// haalt de app in rustige tijd zijn clip op, zodat die bij het volgende
+// openen al in de cache van de service worker staat. Na een getoond welkom
+// altijd een nieuwe kat, nooit die van nu. Overgeslagen: de bewaarde kat
+// blijft als die nog mag (geldig, niet de vorige, niet die van nu), anders
+// een nieuwe. Ophalen niet bij reduced motion, saveData of offline
 // (Celebrate.welkomVooruit). Een keer per pagina.
-let welkomclipGevraagd = false;
-function welkomclipVooruit(){
-  if(welkomclipGevraagd) return;
-  welkomclipGevraagd = true;
-  const doe = () => { Celebrate.welkomVooruit(Celebrate.volgende()); };
+let welkomGepland = false;
+function planVolgendWelkom(getoond){
+  if(welkomGepland) return;
+  welkomGepland = true;
+  const doe = () => {
+    const bewaard = Celebrate.welkomGepland();
+    const mag = !getoond && bewaard && bewaard !== Celebrate.vorige() && bewaard !== Celebrate.volgende();
+    Celebrate.welkomVooruit(mag ? bewaard : Celebrate.planWelkom());
+  };
   if(window.requestIdleCallback) requestIdleCallback(doe, { timeout: 5000 });
   else setTimeout(doe, 2000);
 }
@@ -2552,21 +2557,21 @@ function welkom(){
   try{
     terug = sessionStorage.getItem(WELKOM_SESSIE);
     sessionStorage.setItem(WELKOM_SESSIE, "1");
-    if(WELKOM_PER_DAG && localStorage.getItem(WELKOM_DAG) === dagVan(new Date())){ welkomclipVooruit(); return; }
-  }catch(e){ welkomclipVooruit(); return; }   // zonder opslag kunnen we "een keer per sessie" niet waarmaken
-  if(terug || heeftOpenRonde()){ welkomclipVooruit(); return; }
-  const id = Celebrate.volgende();
+    if(WELKOM_PER_DAG && localStorage.getItem(WELKOM_DAG) === dagVan(new Date())){ planVolgendWelkom(false); return; }
+  }catch(e){ planVolgendWelkom(false); return; }   // zonder opslag kunnen we "een keer per sessie" niet waarmaken
+  if(terug || heeftOpenRonde()){ planVolgendWelkom(false); return; }
+  const id = Celebrate.welkomKat();   // de geplande kat, of een nieuwe
   const stil = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   new Promise((klaar, mis) => {
     setTimeout(mis, WELKOM_WACHT);
     // de clip mag tot vlak voor de grens; daarna telt alleen het stilstaande beeld
     Celebrate.laadWelkom(id, WELKOM_WACHT - 60).then(g => (g.stil ? klaar() : mis()));
-  }).then(() => toonWelkom(Celebrate.welkomBeeld(id), stil), () => { welkomclipVooruit(); /* te traag of kapot: stil overslaan */ });
+  }).then(() => toonWelkom(Celebrate.welkomBeeld(id), stil), () => { planVolgendWelkom(false); /* te traag of kapot: stil overslaan */ });
 }
 function toonWelkom(beeld, stil){
   const app = document.querySelector("body > .app");
   // al verder getikt, of er staat er al een
-  if(!beeld || !app || document.querySelector(".welkom") || $("scr-lessons").hidden){ welkomclipVooruit(); return; }
+  if(!beeld || !app || document.querySelector(".welkom") || $("scr-lessons").hidden){ planVolgendWelkom(false); return; }
   if(WELKOM_PER_DAG) try{ localStorage.setItem(WELKOM_DAG, dagVan(new Date())); }catch(e){}
   document.body.insertAdjacentHTML("beforeend", UI.Welkom({ beeld, naam: moetBevestigen() ? "" : learner }));
   const el = document.body.lastElementChild;
@@ -2589,7 +2594,7 @@ function toonWelkom(beeld, stil){
     el.remove();
     app.inert = false;
     if(!heeftNaam()) $("learner-name").focus();   // de focus ging weg door inert
-    welkomclipVooruit();
+    planVolgendWelkom(true);
   }
   // het zeshoekige gat; bij reduced motion (tijd 0) meteen weg
   function open(tijd, kort){

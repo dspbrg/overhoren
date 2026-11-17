@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
 import { REPO, startBrowser, startServer, schermNetwerkAf, volgFouten, THEMAS, BREEDTES, WELKOM_DAG } from "./lib/omgeving.mjs";
+const WELKOM_VOLGENDE = "overhoor:kat:welkom-volgende";
 import { contrastMeting, overloopMeting } from "./lib/meten.mjs";
 import { wachtOpScherm } from "./lib/schermen.mjs";
 
@@ -86,6 +87,38 @@ test("volgende kat: 300 willekeurige reeksen, nooit twee keer dezelfde kat na el
         laatste = id;
       }
     }
+  }
+});
+
+test("geplande welkomkat: welkomKat neemt de bewaarde kat als die geldig is en niet de vorige; planWelkom kiest nooit de kat van nu of de vorige en schrijft alleen die ene sleutel", () => {
+  // geldig en niet de vorige: die kat, en de ronde krijgt hem ook
+  {
+    const { C, store } = laad({ opslag: { [VORIGE]: JSON.stringify("sokjes"), [WELKOM_VOLGENDE]: JSON.stringify("stippen") } });
+    assert.equal(C.welkomKat(), "stippen");
+    assert.equal(C.nieuweRonde(), "stippen", "de ronde krijgt niet de kat van het welkom");
+    assert.equal(JSON.parse(store[VORIGE]), "stippen");
+  }
+  // ongeldig, kapot of de vorige: willekeurig zoals volgende(), nooit de vorige
+  for (const waarde of [JSON.stringify("sokjes"), JSON.stringify("../geheim"), JSON.stringify({ id: "stippen" }), "{kapot", JSON.stringify(null)]) {
+    for (let zaad = 1; zaad <= 30; zaad++) {
+      const { C, ctx } = laad({ opslag: { [VORIGE]: JSON.stringify("sokjes"), [WELKOM_VOLGENDE]: waarde } });
+      ctx.__r = lcg(zaad);
+      const id = C.welkomKat();
+      assert.ok(ALLE.includes(id) && id !== "sokjes", `${waarde}: ${id}`);
+    }
+  }
+  assert.equal(laad({ opslag: { [WELKOM_VOLGENDE]: JSON.stringify("hond") } }).C.welkomGepland(), null);
+  // planWelkom: 300 keer, nooit de kat van nu of de vorige, alleen die sleutel erbij
+  for (let zaad = 1; zaad <= 300; zaad++) {
+    const { C, ctx, store } = laad({ opslag: { [VORIGE]: JSON.stringify("tuxedo") } });
+    ctx.__r = lcg(zaad);
+    const nu = C.welkomKat();
+    const voor = Object.keys(store);
+    const plan = C.planWelkom();
+    assert.ok(ALLE.includes(plan) && plan !== nu && plan !== "tuxedo", `zaad ${zaad}: ${plan} (nu ${nu})`);
+    assert.deepEqual(Object.keys(store).filter(k => !voor.includes(k)), [WELKOM_VOLGENDE]);
+    assert.equal(store[WELKOM_VOLGENDE], JSON.stringify(plan));
+    assert.equal(C.volgende(), nu, "plannen verandert de kat van de eerstvolgende ronde");
   }
 });
 
@@ -446,9 +479,10 @@ test("welkom: komt de clip niet binnen 300 ms (de eerste keer, of offline), dan 
   }
 });
 
-test("welkom vooruit: na een overgeslagen of getoond welkom haalt de app in rustige tijd een welkomclip op; niet bij reduced motion, saveData of offline", async () => {
+test("welkom vooruit: na een overgeslagen of getoond welkom ligt de kat van het volgende welkom vast en haalt de app zijn clip in rustige tijd op; niet bij reduced motion, saveData of offline", async () => {
   const clipsVan = page => { const lijst = []; page.on("request", r => { const m = r.url().match(/\/katten\/clips\/(welkom-\w+\.webp)$/); if (m) lijst.push(m[1]); }); return lijst; };
-  // overgeslagen (al eerder in deze sessie): de clip van de kat van de eerstvolgende ronde
+  const gepland = page => page.evaluate(k => JSON.parse(localStorage.getItem(k)), WELKOM_VOLGENDE);
+  // overgeslagen (al eerder in deze sessie): een geplande kat, niet die van de eerstvolgende ronde, en zijn clip
   {
     const context = await browser.newContext({ viewport: { width: 360, height: 780 }, serviceWorkers: "block", locale: "nl-NL" });
     await schermNetwerkAf(context);
@@ -456,23 +490,32 @@ test("welkom vooruit: na een overgeslagen of getoond welkom haalt de app in rust
     const fouten = volgFouten(page), clips = clipsVan(page);
     await page.goto(server.url + "/index.html"); await wachtOpScherm(page, "scr-lessons");
     await page.waitForFunction(() => performance.getEntriesByType("resource").some(e => /welkom-\w+\.webp$/.test(e.name)), null, { timeout: 8000 });
-    const volgende = await page.evaluate(() => Celebrate.volgende());
-    assert.deepEqual(clips, [`welkom-${volgende}.webp`], "niet de clip van de volgende kat");
+    const plan = await gepland(page);
+    assert.ok(ALLE.includes(plan), "geen geplande kat bewaard");
+    assert.notEqual(plan, await page.evaluate(() => Celebrate.volgende()), "de geplande kat is die van de eerstvolgende ronde");
+    assert.deepEqual(clips, [`welkom-${plan}.webp`], "niet de clip van de geplande kat");
     assert.deepEqual(fouten, []);
     await context.close();
   }
-  // getoond: de clip van die kat is er al, er komt er geen tweede bij
+  // getoond: daarna een nieuwe geplande kat (nooit die van nu), zijn clip vooruit, en het volgende welkom toont hem
   {
     const { context } = await nieuweContext();
     const { page, fouten } = await openPagina(context);
+    const clips = clipsVan(page);
     await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
     const kat = await page.locator("body > .welkom img.welkom-kat").getAttribute("data-kat");
     await welkomEl(page).waitFor({ state: "detached", timeout: 6000 });
-    const clips = clipsVan(page);
-    await page.waitForTimeout(2500);
+    await page.waitForFunction(() => performance.getEntriesByType("resource").filter(e => /welkom-\w+\.webp$/.test(e.name)).length >= 2, null, { timeout: 8000 });
+    const plan = await gepland(page);
+    assert.ok(ALLE.includes(plan));
+    assert.notEqual(plan, kat, "het volgende welkom is dezelfde kat als nu");
     assert.equal(await page.evaluate(() => Celebrate.volgende()), kat, "de eerstvolgende ronde heeft niet de kat van het welkom");
-    assert.deepEqual(clips, [], "na het welkom dezelfde clip nog een keer opgehaald");
-    assert.deepEqual(fouten, []);
+    assert.deepEqual(clips.filter(c => c !== `welkom-${kat}.webp`), [`welkom-${plan}.webp`], "niet (alleen) de clip van de geplande kat vooruit opgehaald");
+    // een nieuw tabblad (nieuwe sessie, zelfde opslag): het welkom toont de geplande kat
+    const twee = await openPagina(context);
+    await welkomEl(twee.page).waitFor({ state: "attached", timeout: 1500 });
+    assert.equal(await twee.page.locator("body > .welkom img.welkom-kat").getAttribute("data-kat"), plan, "het volgende welkom toont niet de geplande kat");
+    assert.deepEqual([...fouten, ...twee.fouten], []);
     await context.close();
   }
   // reduced motion, saveData en offline: niets

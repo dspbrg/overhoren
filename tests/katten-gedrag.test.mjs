@@ -185,7 +185,7 @@ const FRANS_ID = (() => { const c = vm.createContext({}); c.window = c; vm.runIn
 const OUD = JSON.stringify({ "cats/gewoon-sok.svg": { aantal: 3, eerst: 1, laatst: 2 }, "cats/bijzonder-cool.svg": { aantal: 1, eerst: 2, laatst: 2 } });
 const OUD_KATTEN = JSON.stringify({ verdiend: ["strepen", "tuxedo", "lapjes"], huidig: "lapjes", start: "strepen", bijgewerkt: 1 });
 // na een ronde: niets per oefenaar geschreven
-const geenPerOefenaar = async page => assert.deepEqual(await page.evaluate(() => Object.keys(localStorage).filter(k => /^overhoor:katten?:(?!vorige$)/.test(k))), [], "katten per oefenaar opgeslagen");
+const geenPerOefenaar = async page => assert.deepEqual(await page.evaluate(() => Object.keys(localStorage).filter(k => /^overhoor:katten?:(?!(vorige|welkom-volgende)$)/.test(k))), [], "katten per oefenaar opgeslagen");
 
 test("vlekkeloos achter elkaar: elke ronde confetti en de kat van die ronde zegt gedag, nooit twee keer dezelfde", async () => {
   const { context, page, fouten } = await open();
@@ -257,7 +257,7 @@ test("oefenaar wisselen: geen katten per oefenaar, de volgende ronde heeft gewoo
   assert.notEqual(tom, pia, "na het wisselen dezelfde kat als de ronde ervoor");
   assert.equal(await vorige(page), tom);
   assert.equal(await page.evaluate(() => localStorage.getItem("overhoor:katten:pia")), OUD_KATTEN, "oude kattendata van Pia is aangeraakt");
-  assert.equal(await page.evaluate(() => Object.keys(localStorage).filter(k => /^overhoor:katten?:(?!vorige$)/.test(k)).join()), "overhoor:katten:pia");
+  assert.equal(await page.evaluate(() => Object.keys(localStorage).filter(k => /^overhoor:katten?:(?!(vorige|welkom-volgende)$)/.test(k)).join()), "overhoor:katten:pia");
   assert.deepEqual(fouten, []);
   await context.close();
 });

@@ -284,7 +284,8 @@
   }
   // De kat van de eerstvolgende ronde, alvast gekozen maar nog niet
   // onthouden (het welkom laat hem zien). Alleen in het geheugen: na
-  // herladen wordt er opnieuw gekozen. Willekeurig, maar nooit de vorige.
+  // herladen wordt er opnieuw gekozen (het welkom neemt dan de geplande
+  // kat, zie welkomKat). Willekeurig, maar nooit de vorige.
   // Twee keer vragen geeft dezelfde kat.
   let gepland = null;
   function volgende() {
@@ -302,6 +303,39 @@
     onthoud(id);
     return id;
   }
+  // --- de kat van het volgende welkom ---------------------------------
+  // Na een welkom kiest de app alvast de kat van het volgende welkom en
+  // haalt zijn clip in rustige tijd op (welkomVooruit), zodat die bij het
+  // volgende openen al in de cache staat. Die keuze staat in een eigen
+  // sleutel, alleen op dit apparaat (niet in de sync): alleen een kat-id,
+  // dat bij lezen tegen KATTEN gecontroleerd wordt.
+  //   welkomKat()   de kat voor het welkom van nu: de geplande als die
+  //                 geldig is en niet de vorige, anders zoals volgende().
+  //                 Hij wordt ook de kat van de eerstvolgende ronde.
+  //   planWelkom()  kiest de kat voor het volgende welkom: willekeurig,
+  //                 nooit de kat van nu (volgende()) en nooit de vorige.
+  //                 Schrijft hem weg en geeft het id.
+  //   welkomGepland()  de bewaarde keuze, of null als die niet (meer) geldig is.
+  const WELKOM_VOLGENDE = "overhoor:kat:welkom-volgende";
+  function welkomGepland() {
+    try {
+      const v = JSON.parse(localStorage.getItem(WELKOM_VOLGENDE));
+      if (bestaat(v)) return v;
+    } catch (e) { /* geen opslag of kapotte data */ }
+    return null;
+  }
+  function welkomKat() {
+    const p = welkomGepland();
+    if (p && p !== vorige() && !bestaat(gepland)) gepland = p;
+    return volgende();
+  }
+  function planWelkom() {
+    const nu = volgende(), v = vorige();
+    const id = pick(KATTEN.filter(k => k.id !== nu && k.id !== v)).id;
+    try { localStorage.setItem(WELKOM_VOLGENDE, JSON.stringify(id)); } catch (e) {}
+    return id;
+  }
+
   // Een hervatte ronde houdt zijn kat; die telt dan als de laatst getoonde.
   function onthoud(id) {
     if (!bestaat(id)) return;
@@ -440,5 +474,5 @@
   }
 
   root.Celebrate = { celebrate, confetti, KATTEN, STANDEN, HOUDING, MAP, laadCatalogus, catalogus: () => catalogus, beeld, welkomBeeld, kijkt, spiegel,
-    laadKat, laadWelkom, welkomVooruit, toon, welkomSpeler, bestaat, nieuweRonde, volgende, onthoud, vorige, zegt, gedag, ZEGT, GEDAG, VORIGE };
+    laadKat, laadWelkom, welkomVooruit, toon, welkomSpeler, bestaat, nieuweRonde, volgende, welkomKat, planWelkom, welkomGepland, WELKOM_VOLGENDE, onthoud, vorige, zegt, gedag, ZEGT, GEDAG, VORIGE };
 })(typeof window === "object" ? window : globalThis);
