@@ -421,9 +421,34 @@ test("welkom bij reduced motion wegtikken: meteen weg, geen zeshoek", async () =
   await context.close();
 });
 
-test("welkom: komt het beeld niet binnen 300 ms, dan stil overslaan", async () => {
+test("welkom: komt de clip niet binnen 300 ms (de eerste keer, of offline), dan staat het eerste beeld stil in de zeshoek; de clip start niet alsnog", async () => {
+  for (const soort of ["traag", "offline"]) {
+    const { context } = await nieuweContext();
+    await context.route(/\/katten\/clips\/welkom-\w+\.webp/, async route => {
+      if (soort === "offline") return route.abort("internetdisconnected");
+      await new Promise(r => setTimeout(r, 900)); await route.continue();
+    });
+    const { page, fouten } = await openPagina(context);
+    await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
+    const kat = page.locator("body > .welkom .welkom-podium > img.welkom-kat");
+    const id = await kat.getAttribute("data-kat");
+    assert.equal(await kat.getAttribute("data-beeld"), "welkom-stil", soort + ": niet het stilstaande beeld");
+    assert.equal(await kat.getAttribute("src"), `katten/clips/welkom-${id}-stil.webp`);
+    assert.ok(await kat.evaluate(i => i.complete && i.naturalWidth > 0), soort + ": het stilstaande beeld staat er niet");
+    assert.equal(await page.locator("body > .welkom .welkom-zeshoek").count(), 1, soort + ": geen zeshoek");
+    await page.waitForTimeout(1000);
+    assert.equal(await kat.getAttribute("data-beeld"), "welkom-stil", soort + ": de clip start alsnog");
+    await welkomEl(page).waitFor({ state: "detached", timeout: 6000 });
+    assert.equal(await page.evaluate(() => document.querySelector("body > .app").inert), false);
+    // een afgebroken clip is de test, geen fout
+    assert.deepEqual(fouten.filter(f => !/welkom-\w+\.webp \(net::ERR_INTERNET_DISCONNECTED\)|Failed to load resource: net::ERR_INTERNET_DISCONNECTED/.test(f)), []);
+    await context.close();
+  }
+});
+
+test("welkom: komt ook het stilstaande beeld niet binnen 300 ms, dan stil overslaan", async () => {
   const { context } = await nieuweContext();
-  await context.route(/\/katten\/clips\/welkom-\w+\.webp/, async route => { await new Promise(r => setTimeout(r, 900)); await route.continue(); });
+  await context.route(/\/katten\/clips\/welkom-\w+(-stil)?\.webp/, async route => { await new Promise(r => setTimeout(r, 900)); await route.continue(); });
   const { page, fouten } = await openPagina(context);
   const r = await geenWelkom(page);
   assert.equal(r.gezien, 0, "welkom ondanks een traag beeld");

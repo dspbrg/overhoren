@@ -55,7 +55,7 @@ function webp(buf) {
   return { maat, beelden: beelden || 1, lus, alpha, duur };
 }
 
-test("katten.json klopt met de bestanden: 18 stilstaande beelden, per kat een welkomclip (36 beelden, 12 per seconde, 3 s, alpha) en zijn eerste beeld stil", () => {
+test("katten.json klopt met de bestanden: 18 stilstaande beelden, per kat een welkomclip (36 beelden, 12 per seconde, 3 s, alpha, speelt een keer) en zijn eerste beeld stil", () => {
   assert.deepEqual([KAT.breedte, KAT.hoogte], [400, 480]);
   assert.deepEqual(KAT.welkom, { fps: 12, breedte: 480, hoogte: 480 });
   assert.deepEqual(Object.keys(KAT.katten).sort(), [...ALLE].sort());
@@ -76,6 +76,7 @@ test("katten.json klopt met de bestanden: 18 stilstaande beelden, per kat een we
     assert.deepEqual(clip.maat, [480, 480], w.anim + ": niet 480 x 480");
     assert.equal(clip.alpha, true, w.anim + ": zonder alpha");
     assert.equal(clip.beelden, 36, w.anim + ": " + clip.beelden + " beelden");
+    assert.equal(clip.lus, 1, w.anim + ": speelt niet precies een keer (loop-telling " + clip.lus + ")");
     assert.ok(clip.duur.every(d => Math.abs(d - 1000 / KAT.welkom.fps) <= 1), w.anim + ": niet 12 beelden per seconde");
     assert.ok(Math.abs(clip.duur.reduce((a, b) => a + b, 0) - w.duurMs) <= 20, w.anim + ": niet 3 s");
     const eerste = webp(readFileSync(join(REPO, MAP, w.stil)));
@@ -90,14 +91,17 @@ test("katten.json klopt met de bestanden: 18 stilstaande beelden, per kat een we
   assert.deepEqual(readdirSync(join(REPO, MAP)).sort(), [...stil, ...welkom, "katten.json"].sort());
 });
 
-test("de oude goed- en bijna-clips staan in het archief; service worker en allowlist hebben de stilstaande beelden en het welkom", () => {
+test("de oude goed- en bijna-clips staan in het archief; de schil heeft de stilstaande beelden, de welkomclips niet; alles gaat online", () => {
   for (const id of ALLE) for (const m of EIND) {
     assert.ok(!existsSync(join(REPO, MAP, `${id}-${m}.webp`)), `${MAP}${id}-${m}.webp staat er nog`);
     assert.ok(existsSync(join(REPO, "archief/katten-clips-v3", `${id}-${m}.webp`)), `archief/katten-clips-v3/${id}-${m}.webp ontbreekt`);
   }
   const schil = [...lees("sw.js").matchAll(/"\.\/([^"]+)"/g)].map(m => m[1]);
   const bestanden = readdirSync(join(REPO, MAP)).map(f => MAP + f);
-  for (const f of bestanden) assert.ok(schil.includes(f), f + " niet in SCHIL");
+  for (const f of bestanden) {
+    const clip = /\/welkom-[a-z]+\.webp$/.test(f);
+    assert.equal(schil.includes(f), !clip, clip ? f + " (welkomclip) staat in SCHIL" : f + " niet in SCHIL");
+  }
   assert.deepEqual(schil.filter(f => RONDECLIP.test(f)), [], "een oude clip staat nog in SCHIL");
   assert.deepEqual(schil.filter(f => /^katten\//.test(f) && !f.startsWith(MAP)), [], "oude kattenbeelden staan nog in SCHIL");
   // .assetsignore met de regels van git uitgevoerd: wat online gaat en wat niet
@@ -115,7 +119,8 @@ test("de oude goed- en bijna-clips staan in het archief; service worker en allow
 // ---------- zonder browser ----------
 // celebrate.js in een eigen context met een nep-klok, nep-URL's, een
 // nep-Image en een fetch die de bestanden uit de repo leest.
-function laad({ reduced = false, kapot = [], metImage = true } = {}) {
+function laad({ reduced = false, kapot = [], metImage = true, houd = [] } = {}) {
+  const vast = [];   // opgehouden ophalingen: { pad, los }
   let volg = 1;
   const timers = new Map();
   const urls = { gemaakt: [], weg: [] };
@@ -131,6 +136,7 @@ function laad({ reduced = false, kapot = [], metImage = true } = {}) {
     fetch: async pad => {
       opgehaald.push(pad);
       if (kapot.some(k => pad.includes(k))) throw new TypeError("offline");
+      if (houd.some(k => pad.includes(k))) await new Promise(los => vast.push({ pad, los }));
       const buf = readFileSync(join(REPO, pad));
       return { ok: true, json: async () => JSON.parse(buf.toString("utf8")), blob: async () => ({ pad, size: buf.length }) };
     }
@@ -139,8 +145,12 @@ function laad({ reduced = false, kapot = [], metImage = true } = {}) {
   ctx.matchMedia = () => ({ matches: reduced });
   if (metImage) ctx.Image = function () { const o = { decode: async () => {} }; Object.defineProperty(o, "src", { set: v => plaatjes.push(v) }); return o; };
   vm.runInContext(lees("celebrate.js"), ctx);
-  return { C: ctx.Celebrate, urls, opgehaald, plaatjes, timers };
+  // alle timers die er nu staan laten aflopen
+  const tik = () => { for (const [id, t] of [...timers]) { timers.delete(id); t.f(); } };
+  const laatLos = deel => { for (const v of vast.filter(x => x.pad.includes(deel))) v.los(); };
+  return { C: ctx.Celebrate, urls, opgehaald, plaatjes, timers, tik, laatLos };
 }
+const nogEven = () => new Promise(r => setImmediate(r));
 // een nep-<img> die bijhoudt welk beeld er stond
 function nepImg() {
   const klassen = new Set(), attr = {}, log = [];
@@ -239,6 +249,36 @@ test("welkom: laadWelkom haalt de welkomclip als Blob en het eerste beeld; de sp
     assert.equal(urls.weg.length, 2, "twee keer stop() ruimt twee keer op");
     assert.equal(timers.size, 0);
   }
+});
+
+test("welkom met wacht: is de clip er na de wachttijd nog niet, dan het stilstaande beeld; een clip die later komt, start niet alsnog", async () => {
+  const { C, urls, tik, laatLos, timers } = laad({ houd: ["welkom-sokjes.webp"] });
+  await C.laadCatalogus();
+  let g = null;
+  C.laadWelkom("sokjes", 240).then(x => { g = x; });
+  await nogEven();
+  assert.equal(g, null, "de belofte wordt waar voor de wachttijd om is");
+  assert.equal(timers.size, 1, "geen timer voor de wachttijd");
+  tik(); await nogEven(); await nogEven();
+  assert.ok(g, "na de wachttijd niet waar, terwijl het stilstaande beeld er is");
+  assert.deepEqual([g.stil, g.clip, g.volledig], [true, null, false]);
+  const img = nepImg(), sp = C.welkomSpeler(img);
+  assert.equal(sp.speel("sokjes"), false);
+  assert.deepEqual([img.src, img.getAttribute("data-beeld")], [MAP + "welkom-sokjes-stil.webp", "welkom-stil"]);
+  // de clip komt binnen: geen object-URL, het beeld blijft staan
+  laatLos("welkom-sokjes.webp"); await nogEven(); await nogEven(); await nogEven();
+  assert.ok(g.clip, "de clip wordt niet bewaard als hij binnenkomt");
+  assert.equal(urls.gemaakt.length, 0, "de late clip start alsnog");
+  assert.equal(img.src, MAP + "welkom-sokjes-stil.webp");
+  // de volgende keer (tweede welkom in dezelfde pagina, of de ontwerppagina) speelt hij wel
+  const g2 = await C.laadWelkom("sokjes", 240);
+  assert.equal(g2.volledig, true);
+  assert.equal(sp.speel("sokjes"), true);
+  assert.match(img.src, /^blob:test\/\d+\/katten\/clips\/welkom-sokjes\.webp$/);
+  // is de clip er wel op tijd, dan wacht niemand op de timer
+  const { C: snel } = laad();
+  const g3 = await snel.laadWelkom("tuxedo", 240);
+  assert.ok(g3.clip && g3.stil && g3.volledig, "met een snelle clip niet volledig");
 });
 
 test("welkom bij reduced motion: de clip wordt niet gehaald, het eerste beeld staat stil", async () => {

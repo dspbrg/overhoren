@@ -81,15 +81,19 @@ const SCHIL = [
   "./fonts/inter-latin-wght-normal.woff2",
   "./fonts/inter-latin-ext-wght-normal.woff2",
   // de zes katten (katten/clips/katten.json): per kat rust en twee
-  // eindbeelden (de app), en de welkomclip met zijn eerste beeld (het
-  // welkom, ook offline). Komt er een kat bij, dan hier ook.
+  // eindbeelden (de app) en het stilstaande eerste beeld van het welkom.
+  // De welkomclips zelf (welkom-<kat>.webp, samen 3,8 MB) niet: die komen
+  // bij het eerste gebruik van het netwerk en worden dan bewaard, net als
+  // elk ander bestand dat in de cache ontbreekt (zie fetch hieronder).
+  // Zolang een clip er niet is, toont het welkom het stilstaande beeld.
+  // Komt er een kat bij, dan hier ook.
   "./katten/clips/katten.json",
-  "./katten/clips/strepen-rust.webp", "./katten/clips/strepen-goed-eind.webp", "./katten/clips/strepen-bijna-eind.webp", "./katten/clips/welkom-strepen.webp", "./katten/clips/welkom-strepen-stil.webp",
-  "./katten/clips/tuxedo-rust.webp", "./katten/clips/tuxedo-goed-eind.webp", "./katten/clips/tuxedo-bijna-eind.webp", "./katten/clips/welkom-tuxedo.webp", "./katten/clips/welkom-tuxedo-stil.webp",
-  "./katten/clips/lapjes-rust.webp", "./katten/clips/lapjes-goed-eind.webp", "./katten/clips/lapjes-bijna-eind.webp", "./katten/clips/welkom-lapjes.webp", "./katten/clips/welkom-lapjes-stil.webp",
-  "./katten/clips/sokjes-rust.webp", "./katten/clips/sokjes-goed-eind.webp", "./katten/clips/sokjes-bijna-eind.webp", "./katten/clips/welkom-sokjes.webp", "./katten/clips/welkom-sokjes-stil.webp",
-  "./katten/clips/stippen-rust.webp", "./katten/clips/stippen-goed-eind.webp", "./katten/clips/stippen-bijna-eind.webp", "./katten/clips/welkom-stippen.webp", "./katten/clips/welkom-stippen-stil.webp",
-  "./katten/clips/rodestreep-rust.webp", "./katten/clips/rodestreep-goed-eind.webp", "./katten/clips/rodestreep-bijna-eind.webp", "./katten/clips/welkom-rodestreep.webp", "./katten/clips/welkom-rodestreep-stil.webp"
+  "./katten/clips/strepen-rust.webp", "./katten/clips/strepen-goed-eind.webp", "./katten/clips/strepen-bijna-eind.webp", "./katten/clips/welkom-strepen-stil.webp",
+  "./katten/clips/tuxedo-rust.webp", "./katten/clips/tuxedo-goed-eind.webp", "./katten/clips/tuxedo-bijna-eind.webp", "./katten/clips/welkom-tuxedo-stil.webp",
+  "./katten/clips/lapjes-rust.webp", "./katten/clips/lapjes-goed-eind.webp", "./katten/clips/lapjes-bijna-eind.webp", "./katten/clips/welkom-lapjes-stil.webp",
+  "./katten/clips/sokjes-rust.webp", "./katten/clips/sokjes-goed-eind.webp", "./katten/clips/sokjes-bijna-eind.webp", "./katten/clips/welkom-sokjes-stil.webp",
+  "./katten/clips/stippen-rust.webp", "./katten/clips/stippen-goed-eind.webp", "./katten/clips/stippen-bijna-eind.webp", "./katten/clips/welkom-stippen-stil.webp",
+  "./katten/clips/rodestreep-rust.webp", "./katten/clips/rodestreep-goed-eind.webp", "./katten/clips/rodestreep-bijna-eind.webp", "./katten/clips/welkom-rodestreep-stil.webp"
 ];
 
 // Zonder deze geen app: de pagina en de code (zie install).

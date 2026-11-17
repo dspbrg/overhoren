@@ -113,7 +113,8 @@ test("oude katten en het verzamelen zijn weg; service worker en allowlist kennen
   for (const id of ALLE) {
     for (const s of ["rust", "goed-eind", "bijna-eind"]) assert.ok(schil.includes(`${MAP}${id}-${s}.webp`), `${MAP}${id}-${s}.webp niet in SCHIL`);
     for (const s of ["goed", "bijna"]) assert.ok(!schil.includes(`${MAP}${id}-${s}.webp`), `${MAP}${id}-${s}.webp (oude clip) nog in SCHIL`);
-    for (const f of [`welkom-${id}.webp`, `welkom-${id}-stil.webp`]) assert.ok(schil.includes(MAP + f), MAP + f + " niet in SCHIL");
+    assert.ok(schil.includes(`${MAP}welkom-${id}-stil.webp`), `${MAP}welkom-${id}-stil.webp niet in SCHIL`);
+    assert.ok(!schil.includes(`${MAP}welkom-${id}.webp`), `${MAP}welkom-${id}.webp (welkomclip) hoort niet in SCHIL`);
   }
   const allow = lees(".assetsignore").split("\n").map(r => r.trim());
   assert.ok(allow.includes("!/katten/") && allow.includes("!/katten/clips/"), "katten/clips/ niet goed in .assetsignore");

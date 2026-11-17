@@ -331,9 +331,10 @@ test("oude voortgang van woorden, lijsten en oefenaars blijft na de update staan
   await context.close();
 });
 
-test("offline: alle dertig kattenbeelden (per kat drie stilstaande, de welkomclip en zijn eerste beeld) en katten.json staan in de cache van de service worker en laden zonder netwerk", async () => {
+test("offline: de 24 stilstaande kattenbeelden en katten.json staan na installeren in de cache; een welkomclip pas na het eerste gebruik, en dan ook offline", async () => {
   const { context, page, fouten } = await open({ sw: true });
-  const urls = ALLE.flatMap(id => [...["rust", "goed-eind", "bijna-eind"].map(s => `${MAP}${id}-${s}.webp`), `${MAP}welkom-${id}.webp`, `${MAP}welkom-${id}-stil.webp`]);
+  const urls = ALLE.flatMap(id => [...["rust", "goed-eind", "bijna-eind"].map(s => `${MAP}${id}-${s}.webp`), `${MAP}welkom-${id}-stil.webp`]);
+  const clips = ALLE.map(id => `${MAP}welkom-${id}.webp`);
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await page.waitForFunction(async urls => {
     for (const u of urls) if (!(await caches.match(u))) return false;
@@ -341,15 +342,23 @@ test("offline: alle dertig kattenbeelden (per kat drie stilstaande, de welkomcli
   }, [...urls, MAP + "katten.json"], { timeout: 10000, polling: 200 });
   if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) await page.reload();
   assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller), "service worker neemt de pagina niet over");
+  // de welkomclips zitten niet in de schil
+  const inCache = lijst => page.evaluate(async lijst => (await Promise.all(lijst.map(u => caches.match(u)))).map(Boolean), lijst);
+  assert.deepEqual(await inCache(clips), clips.map(() => false), "een welkomclip staat al na installeren in de cache");
+  // eerste gebruik van een clip: de service worker bewaart hem
+  const eerste = clips[1];
+  assert.equal(await page.evaluate(async u => { const res = await fetch(u); await res.arrayBuffer(); return res.status; }, eerste), 200);
+  await page.waitForFunction(async u => !!(await caches.match(u)), eerste, { timeout: 5000, polling: 100 });
+  assert.deepEqual(await inCache(clips), clips.map(u => u === eerste), "niet precies de gebruikte clip bewaard");
 
   await context.setOffline(true);
   await page.reload(); await wachtOpScherm(page, "scr-lessons");
-  // elk beeld echt laden en tekenen, zonder netwerk
+  // elk beeld echt laden en tekenen, zonder netwerk, ook de gebruikte clip
   const r = await page.evaluate(async urls => Promise.all(urls.map(u => new Promise(ok => {
     const i = new Image(); i.onload = () => ok({ u, w: i.naturalWidth, h: i.naturalHeight }); i.onerror = () => ok({ u, w: 0, h: 0 }); i.src = u;
-  }))), urls);
+  }))), [...urls, eerste]);
   for (const x of r) { assert.ok(x.w > 0, x.u + " laadt niet offline"); assert.equal(x.h, 480, x.u); }
-  const types = await page.evaluate(async urls => Promise.all(urls.map(async u => { const res = await fetch(u); return res.status + " " + res.headers.get("content-type"); })), urls);
+  const types = await page.evaluate(async urls => Promise.all(urls.map(async u => { const res = await fetch(u); return res.status + " " + res.headers.get("content-type"); })), [...urls, eerste]);
   for (const t of types) assert.equal(t, "200 image/webp");
   assert.equal(await page.evaluate(async u => (await (await fetch(u)).json()).welkom.fps, MAP + "katten.json"), 12, "katten.json niet offline");
   // en in de app: een ronde offline, de kat op de rand van de vraag en van de samenvatting

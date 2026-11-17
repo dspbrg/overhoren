@@ -2503,9 +2503,11 @@ function zetBeta(){
 // eerstvolgende ronde, in een lichte zeshoek (UI.Welkom, ds.css .welkom). Bij elke keer openen,
 // een keer per sessie: niet opnieuw bij herladen of terugkeren naar
 // hetzelfde tabblad. Niet als er een ronde openstaat die je kunt hervatten:
-// die heeft al een eigen kat. De beelden van die kat moeten binnen 300 ms
-// klaar zijn (uit de cache, ook offline); anders slaat het welkom stil
-// over. De clip (3 s) speelt een keer vanaf het eerste beeld. Na --welkom-duur min
+// die heeft al een eigen kat. Het stilstaande beeld van die kat moet
+// binnen 300 ms klaar zijn (uit de cache, ook offline); anders slaat het
+// welkom stil over. Is de clip er dan ook (na de eerste keer uit de cache
+// van de service worker), dan speelt hij een keer vanaf het eerste beeld;
+// anders staat het eerste beeld stil. Na --welkom-duur min
 // --welkom-overgang opent een zeshoekig gat (ds.css .welkom.opent), en na
 // --welkom-overgang is het weg. Tik of toets start hetzelfde gat in
 // --welkom-overgang-snel. De app blijft inert tot het welkom weg is. Bij
@@ -2542,7 +2544,8 @@ function welkom(){
   const stil = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   new Promise((klaar, mis) => {
     setTimeout(mis, WELKOM_WACHT);
-    Celebrate.laadWelkom(id).then(g => (g.volledig ? klaar() : mis()));
+    // de clip mag tot vlak voor de grens; daarna telt alleen het stilstaande beeld
+    Celebrate.laadWelkom(id, WELKOM_WACHT - 60).then(g => (g.stil ? klaar() : mis()));
   }).then(() => toonWelkom(Celebrate.welkomBeeld(id), stil), () => { /* te traag of kapot: stil overslaan */ });
 }
 function toonWelkom(beeld, stil){

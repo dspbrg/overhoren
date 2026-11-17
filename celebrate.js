@@ -8,8 +8,8 @@
 //   bijna-eind   bij een fout of bijna-goed antwoord, en bij gedag na
 //                een stevige ronde
 // Alleen het welkom beweegt: per kat een eigen clip (welkom-<kat>.webp,
-// geanimeerde WebP met alpha, 36 beelden, 12 per seconde, 3 s) in een
-// lichte zeshoek. Bij reduced motion staat daar het eerste beeld van die
+// geanimeerde WebP met alpha, 36 beelden, 12 per seconde, 3 s, speelt een
+// keer) in een lichte zeshoek. Bij reduced motion staat daar het eerste beeld van die
 // clip stil (welkom-<kat>-stil.webp).
 // De oude goed- en bijna-clips (6 beelden per seconde) staan in
 // archief/katten-clips-v3/ en worden niet meer geladen.
@@ -184,36 +184,48 @@
     return { id: k.id, src: MAP + g.welkom.stil, anim: MAP + g.welkom.anim, beeld: "welkom-stil",
       width: catalogus.welkom.breedte, height: catalogus.welkom.hoogte, duurMs: g.welkom.duurMs };
   }
-  // laadWelkom(id): het stilstaande beeld alvast in de browser, en de clip
-  // als Blob, zodat hij uit een eigen object-URL bij het eerste beeld
-  // begint. Bij reduced motion alleen het stilstaande beeld, de clip niet.
+  // laadWelkom(id, wacht): het stilstaande beeld alvast in de browser, en
+  // de clip als Blob, zodat hij uit een eigen object-URL bij het eerste
+  // beeld begint. Bij reduced motion alleen het stilstaande beeld, de clip
+  // niet. De clip staat niet in de schil van de service worker: de eerste
+  // keer komt hij van het netwerk (en de service worker bewaart hem), en
+  // dat mag langer duren. Zonder wacht: de belofte wordt waar als alles
+  // binnen is. Met wacht (ms): uiterlijk dan, zodra het stilstaande beeld
+  // er is, ook als de clip nog onderweg is. g.stil zegt of het stilstaande
+  // beeld er is, g.clip is de clip (null zolang hij er niet is), g.volledig
+  // of alles binnen is.
   let welkomGeladen = null;
-  function laadWelkom(id) {
-    if (welkomGeladen && welkomGeladen.id === id) return welkomGeladen.belofte;
-    const g = { id, clip: null, klaar: false, volledig: false, beelden: [] };
-    welkomGeladen = g;
-    g.belofte = laadCatalogus().then(() => {
-      const k = gegevens(id);
-      if (!k || !k.welkom) return [false];
-      const stil = vooraf(g, MAP + k.welkom.stil);
-      if (reduced()) return Promise.all([stil]);
-      const clip = root.fetch(MAP + k.welkom.anim)
-        .then(r => (r.ok ? r.blob() : null)).catch(() => null)
-        .then(b => { g.clip = b || null; return !!b; });
-      return Promise.all([stil, clip]);
-    }).then(ok => {
-      g.klaar = true;
-      g.volledig = ok.every(Boolean);
-      return g;
-    });
-    return g.belofte;
+  function laadWelkom(id, wacht) {
+    let g = welkomGeladen && welkomGeladen.id === id ? welkomGeladen : null;
+    if (!g) {
+      g = { id, clip: null, stil: false, klaar: false, volledig: false, beelden: [] };
+      welkomGeladen = g;
+      const k = laadCatalogus().then(() => gegevens(id));
+      g.stilBelofte = k.then(k => (k && k.welkom ? vooraf(g, MAP + k.welkom.stil) : false)).then(ok => { g.stil = ok; return g; });
+      const clip = k.then(k => {
+        if (!k || !k.welkom) return false;
+        if (reduced()) return true;
+        return root.fetch(MAP + k.welkom.anim)
+          .then(r => (r.ok ? r.blob() : null)).catch(() => null)
+          .then(b => { g.clip = b || null; return !!b; });
+      });
+      g.belofte = Promise.all([g.stilBelofte, clip]).then(([, ok]) => {
+        g.klaar = true;
+        g.volledig = g.stil && ok;
+        return g;
+      });
+    }
+    if (!wacht) return g.belofte;
+    const vast = g;
+    return Promise.race([vast.belofte, new Promise(af => root.setTimeout(af, wacht)).then(() => vast.stilBelofte)]);
   }
   // welkomSpeler(img): speel(id) zet de welkomclip uit een nieuwe
   // object-URL op het <img>, dus altijd vanaf het eerste beeld. De WebP
-  // herhaalt zichzelf; het welkom staat --welkom-duur, dus de clip (3 s)
-  // speelt een keer en is dan weg. Bij reduced motion, of zonder geladen
-  // clip, blijft het stilstaande eerste beeld staan. stop() ruimt de URL
-  // op. data-beeld: "welkom" als de clip speelt, "welkom-stil" als hij stilstaat.
+  // speelt een keer en blijft dan op zijn laatste beeld staan; de clip
+  // duurt 3 s, het welkom --welkom-duur. Bij reduced motion, of als de clip
+  // er (nog) niet is, blijft het stilstaande eerste beeld staan; een clip
+  // die later binnenkomt, start niet alsnog. stop() ruimt de URL op.
+  // data-beeld: "welkom" als de clip speelt, "welkom-stil" als hij stilstaat.
   function welkomSpeler(img) {
     let url = null;
     function stop() {
@@ -223,7 +235,7 @@
       stop();
       const k = gegevens(id);
       if (!k || !k.welkom) return false;
-      const g = welkomGeladen && welkomGeladen.id === id && welkomGeladen.klaar ? welkomGeladen : null;
+      const g = welkomGeladen && welkomGeladen.id === id ? welkomGeladen : null;
       img.setAttribute("data-kat", id);
       if (reduced() || !g || !g.clip) {
         img.src = MAP + k.welkom.stil;
