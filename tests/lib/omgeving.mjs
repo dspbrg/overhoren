@@ -201,8 +201,12 @@ export function volgFouten(page) {
   page.on("console", m => { if (m.type() === "error") fouten.push("console.error: " + m.text()); });
   page.on("response", r => { if (r.url().includes("localhost") && r.status() >= 400) fouten.push("HTTP " + r.status() + ": " + r.url()); });
   page.on("requestfailed", r => {
-    const u = r.url();
-    if (u.includes("localhost")) fouten.push("verzoek mislukt: " + u + " (" + (r.failure()?.errorText || "") + ")");
+    const u = r.url(), fout = r.failure()?.errorText || "";
+    // De app haalt in rustige tijd de welkomclip voor het volgende welkom op
+    // (welkomclipVooruit in index.html). Herlaadt of sluit een test de pagina
+    // terwijl die nog loopt, dan breekt de browser hem af. Dat is geen fout.
+    if (/\/katten\/clips\/welkom-[a-z]+\.webp$/.test(u) && fout === "net::ERR_ABORTED") return;
+    if (u.includes("localhost")) fouten.push("verzoek mislukt: " + u + " (" + fout + ")");
   });
   return fouten;
 }

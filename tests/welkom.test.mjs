@@ -446,6 +446,51 @@ test("welkom: komt de clip niet binnen 300 ms (de eerste keer, of offline), dan 
   }
 });
 
+test("welkom vooruit: na een overgeslagen of getoond welkom haalt de app in rustige tijd een welkomclip op; niet bij reduced motion, saveData of offline", async () => {
+  const clipsVan = page => { const lijst = []; page.on("request", r => { const m = r.url().match(/\/katten\/clips\/(welkom-\w+\.webp)$/); if (m) lijst.push(m[1]); }); return lijst; };
+  // overgeslagen (al eerder in deze sessie): de clip van de kat van de eerstvolgende ronde
+  {
+    const context = await browser.newContext({ viewport: { width: 360, height: 780 }, serviceWorkers: "block", locale: "nl-NL" });
+    await schermNetwerkAf(context);
+    const page = await context.newPage();
+    const fouten = volgFouten(page), clips = clipsVan(page);
+    await page.goto(server.url + "/index.html"); await wachtOpScherm(page, "scr-lessons");
+    await page.waitForFunction(() => performance.getEntriesByType("resource").some(e => /welkom-\w+\.webp$/.test(e.name)), null, { timeout: 8000 });
+    const volgende = await page.evaluate(() => Celebrate.volgende());
+    assert.deepEqual(clips, [`welkom-${volgende}.webp`], "niet de clip van de volgende kat");
+    assert.deepEqual(fouten, []);
+    await context.close();
+  }
+  // getoond: de clip van die kat is er al, er komt er geen tweede bij
+  {
+    const { context } = await nieuweContext();
+    const { page, fouten } = await openPagina(context);
+    await welkomEl(page).waitFor({ state: "attached", timeout: 1500 });
+    const kat = await page.locator("body > .welkom img.welkom-kat").getAttribute("data-kat");
+    await welkomEl(page).waitFor({ state: "detached", timeout: 6000 });
+    const clips = clipsVan(page);
+    await page.waitForTimeout(2500);
+    assert.equal(await page.evaluate(() => Celebrate.volgende()), kat, "de eerstvolgende ronde heeft niet de kat van het welkom");
+    assert.deepEqual(clips, [], "na het welkom dezelfde clip nog een keer opgehaald");
+    assert.deepEqual(fouten, []);
+    await context.close();
+  }
+  // reduced motion, saveData en offline: niets
+  for (const soort of ["reduced", "saveData", "offline"]) {
+    const context = await browser.newContext({ viewport: { width: 360, height: 780 }, serviceWorkers: "block", locale: "nl-NL", reducedMotion: soort === "reduced" ? "reduce" : "no-preference" });
+    await schermNetwerkAf(context);
+    if (soort === "saveData") await context.addInitScript(() => Object.defineProperty(navigator, "connection", { value: { saveData: true }, configurable: true }));
+    if (soort === "offline") await context.addInitScript(() => Object.defineProperty(navigator, "onLine", { value: false, configurable: true }));
+    const page = await context.newPage();
+    const fouten = volgFouten(page), clips = clipsVan(page);
+    await page.goto(server.url + "/index.html"); await wachtOpScherm(page, "scr-lessons");
+    await page.waitForTimeout(3000);
+    assert.deepEqual(clips, [], soort + ": toch een welkomclip opgehaald");
+    assert.deepEqual(fouten, []);
+    await context.close();
+  }
+});
+
 test("welkom: komt ook het stilstaande beeld niet binnen 300 ms, dan stil overslaan", async () => {
   const { context } = await nieuweContext();
   await context.route(/\/katten\/clips\/welkom-\w+(-stil)?\.webp/, async route => { await new Promise(r => setTimeout(r, 900)); await route.continue(); });

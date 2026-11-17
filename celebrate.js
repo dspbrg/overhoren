@@ -219,6 +219,23 @@
     const vast = g;
     return Promise.race([vast.belofte, new Promise(af => root.setTimeout(af, wacht)).then(() => vast.stilBelofte)]);
   }
+  // welkomVooruit(id): haalt de welkomclip van een kat alvast op, met lage
+  // prioriteit, zodat de service worker hem bewaart en een volgend welkom
+  // hem uit de cache heeft. De inhoud wordt niet bewaard in de pagina.
+  // Niet bij reduced motion (dan speelt de clip nooit), niet bij
+  // navigator.connection.saveData, niet offline, en niet als deze pagina de clip van die
+  // kat al ophaalt of heeft (laadWelkom). Geeft true als hij is opgehaald.
+  function welkomVooruit(id) {
+    const nav = root.navigator;
+    if (reduced() || (nav && nav.connection && nav.connection.saveData) || (nav && nav.onLine === false)) return Promise.resolve(false);
+    if (welkomGeladen && welkomGeladen.id === id) return Promise.resolve(false);
+    return laadCatalogus().then(() => {
+      const k = gegevens(id);
+      if (!k || !k.welkom) return false;
+      return root.fetch(MAP + k.welkom.anim, { priority: "low" })
+        .then(r => (r.ok ? r.arrayBuffer().then(() => true) : false));
+    }).catch(() => false);
+  }
   // welkomSpeler(img): speel(id) zet de welkomclip uit een nieuwe
   // object-URL op het <img>, dus altijd vanaf het eerste beeld. De WebP
   // speelt een keer en blijft dan op zijn laatste beeld staan; de clip
@@ -423,5 +440,5 @@
   }
 
   root.Celebrate = { celebrate, confetti, KATTEN, STANDEN, HOUDING, MAP, laadCatalogus, catalogus: () => catalogus, beeld, welkomBeeld, kijkt, spiegel,
-    laadKat, laadWelkom, toon, welkomSpeler, bestaat, nieuweRonde, volgende, onthoud, vorige, zegt, gedag, ZEGT, GEDAG, VORIGE };
+    laadKat, laadWelkom, welkomVooruit, toon, welkomSpeler, bestaat, nieuweRonde, volgende, onthoud, vorige, zegt, gedag, ZEGT, GEDAG, VORIGE };
 })(typeof window === "object" ? window : globalThis);

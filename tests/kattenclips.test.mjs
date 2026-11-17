@@ -281,6 +281,35 @@ test("welkom met wacht: is de clip er na de wachttijd nog niet, dan het stilstaa
   assert.ok(g3.clip && g3.stil && g3.volledig, "met een snelle clip niet volledig");
 });
 
+test("welkomVooruit: haalt de welkomclip met lage prioriteit op; niet bij reduced motion, saveData, offline of een clip die de pagina al heeft", async () => {
+  const opgevraagd = [];
+  const maak = ({ reduced = false, saveData = false, offline = false } = {}) => {
+    const ctx = vm.createContext({ localStorage: { getItem: () => null, setItem: () => {} }, setTimeout, clearTimeout, URL: { createObjectURL: () => "blob:x", revokeObjectURL() {} },
+      fetch: async (pad, opties) => { opgevraagd.push([pad, opties?.priority]); const buf = readFileSync(join(REPO, pad));
+        return { ok: true, json: async () => JSON.parse(buf.toString("utf8")), blob: async () => ({ pad }), arrayBuffer: async () => buf }; } });
+    ctx.window = ctx; ctx.matchMedia = () => ({ matches: reduced });
+    if (saveData) ctx.navigator = { connection: { saveData: true } };
+    if (offline) ctx.navigator = { onLine: false };
+    vm.runInContext(lees("celebrate.js"), ctx);
+    return ctx.Celebrate;
+  };
+  const clips = () => opgevraagd.filter(([p]) => p.endsWith(".webp"));
+  assert.equal(await maak().welkomVooruit("stippen"), true);
+  assert.deepEqual(clips(), [[MAP + "welkom-stippen.webp", "low"]]);
+  for (const opties of [{ reduced: true }, { saveData: true }, { offline: true }]) {
+    opgevraagd.length = 0;
+    assert.equal(await maak(opties).welkomVooruit("stippen"), false, JSON.stringify(opties));
+    assert.deepEqual(clips(), [], JSON.stringify(opties) + ": toch opgehaald");
+  }
+  // de pagina heeft de clip al (het welkom van nu): niet nog een keer
+  opgevraagd.length = 0;
+  const C = maak();
+  await C.laadWelkom("lapjes");
+  assert.equal(await C.welkomVooruit("lapjes"), false);
+  assert.deepEqual(clips(), [[MAP + "welkom-lapjes.webp", undefined]]);
+  assert.equal(await C.welkomVooruit("bestaatniet"), false);
+});
+
 test("welkom bij reduced motion: de clip wordt niet gehaald, het eerste beeld staat stil", async () => {
   const { C, opgehaald, plaatjes, urls } = laad({ reduced: true });
   const g = await C.laadWelkom("tuxedo");
@@ -458,9 +487,12 @@ for (const kat of ALLE) {
     assert.equal((await page.evaluate(() => window.__urls)).gemaakt.length, 0, "object-URL in de ronde");
     assert.equal((await beeldNu(page)).anim, 0, "er loopt een css-animatie op de kat");
     geenSprong(await page.evaluate(() => window.__vakken), "q-kat", kat);
-    // alleen de stilstaande beelden van deze kat, geen clip en geen welkom
-    assert.deepEqual(verzoeken.filter(p => RONDECLIP.test(p) || p.includes("welkom")), [], "een clip geladen in de ronde");
-    assert.deepEqual(verzoeken.filter(p => !p.startsWith(MAP + kat + "-") && p !== MAP + "katten.json"), [], "beelden van een andere kat geladen");
+    // alleen de stilstaande beelden van deze kat, geen clip. Een welkomclip
+    // mag een keer: die haalt de app bij het openen vooruit op voor het
+    // volgende welkom (welkom.test.mjs), los van de ronde.
+    assert.deepEqual(verzoeken.filter(p => RONDECLIP.test(p)), [], "een clip geladen in de ronde");
+    assert.ok(verzoeken.filter(p => /\/welkom-[a-z]+\.webp$/.test(p)).length <= 1, "meer dan een welkomclip opgehaald: " + verzoeken.join(", "));
+    assert.deepEqual(verzoeken.filter(p => !p.startsWith(MAP + kat + "-") && p !== MAP + "katten.json" && !/\/welkom-[a-z]+\.webp$/.test(p)), [], "beelden van een andere kat geladen");
     assert.deepEqual(fouten, []); assert.deepEqual(extern, []);
     await context.close();
   });
