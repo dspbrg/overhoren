@@ -2519,6 +2519,10 @@ function zetBeta(){
 // onthoudt WELKOM_DAG de datum van vandaag.
 const WELKOM_PER_DAG = false;
 const WELKOM_DAG = "overhoor:welkom:dag", WELKOM_SESSIE = "overhoor:welkom:sessie", WELKOM_WACHT = 300;
+// Zo lang (ms) mag de clip erover doen; daarna telt alleen het stilstaande
+// beeld. 60 ms onder WELKOM_WACHT, zodat er na het besluit nog tijd is voor
+// de belofte en het tekenen voordat het welkom stil overgeslagen wordt.
+const WELKOM_CLIP_WACHT = WELKOM_WACHT - 60;
 function dagVan(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function heeftOpenRonde(){
   const voor = "overhoor:session:"+slug(learner)+":";
@@ -2537,16 +2541,17 @@ function heeftOpenRonde(){
 // haalt de app in rustige tijd zijn clip op, zodat die bij het volgende
 // openen al in de cache van de service worker staat. Na een getoond welkom
 // altijd een nieuwe kat, nooit die van nu. Overgeslagen: de bewaarde kat
-// blijft als die nog mag (geldig, niet de vorige, niet die van nu), anders
-// een nieuwe. Ophalen niet bij reduced motion, saveData of offline
+// blijft als die nog mag (geldig en niet de vorige), anders een nieuwe. Ophalen niet bij reduced motion, saveData of offline
 // (Celebrate.welkomVooruit). Een keer per pagina.
-let welkomGepland = false;
+let welkomVooruitGepland = false;
 function planVolgendWelkom(getoond){
-  if(welkomGepland) return;
-  welkomGepland = true;
+  if(welkomVooruitGepland) return;
+  welkomVooruitGepland = true;
   const doe = () => {
+    // overgeslagen: de bewaarde kat is niet getoond, dus hij mag blijven
+    // zolang hij niet de vorige is
     const bewaard = Celebrate.welkomGepland();
-    const mag = !getoond && bewaard && bewaard !== Celebrate.vorige() && bewaard !== Celebrate.volgende();
+    const mag = !getoond && bewaard && bewaard !== Celebrate.vorige();
     Celebrate.welkomVooruit(mag ? bewaard : Celebrate.planWelkom());
   };
   if(window.requestIdleCallback) requestIdleCallback(doe, { timeout: 5000 });
@@ -2564,8 +2569,7 @@ function welkom(){
   const stil = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   new Promise((klaar, mis) => {
     setTimeout(mis, WELKOM_WACHT);
-    // de clip mag tot vlak voor de grens; daarna telt alleen het stilstaande beeld
-    Celebrate.laadWelkom(id, WELKOM_WACHT - 60).then(g => (g.stil ? klaar() : mis()));
+    Celebrate.laadWelkom(id, WELKOM_CLIP_WACHT).then(g => (g.stil ? klaar() : mis()));
   }).then(() => toonWelkom(Celebrate.welkomBeeld(id), stil), () => { planVolgendWelkom(false); /* te traag of kapot: stil overslaan */ });
 }
 function toonWelkom(beeld, stil){

@@ -534,6 +534,24 @@ test("welkom vooruit: na een overgeslagen of getoond welkom ligt de kat van het 
   }
 });
 
+test("welkom vooruit: overgeslagen omdat het te traag is, dan blijft de bewaarde kat gepland (hij is niet getoond) en wordt alleen zijn clip opgehaald", async () => {
+  const { context } = await nieuweContext({ zaai: { [VORIGE]: JSON.stringify("sokjes"), [WELKOM_VOLGENDE]: JSON.stringify("stippen") } });
+  // het stilstaande beeld te traag: het welkom van stippen wordt overgeslagen
+  await context.route(/\/katten\/clips\/welkom-stippen-stil\.webp/, async route => { await new Promise(r => setTimeout(r, 900)); await route.continue(); });
+  const page = await context.newPage();
+  const fouten = volgFouten(page);
+  const clips = [];
+  page.on("request", r => { const m = r.url().match(/\/katten\/clips\/(welkom-\w+\.webp)$/); if (m) clips.push(m[1]); });
+  await page.goto(server.url + "/index.html"); await wachtOpScherm(page, "scr-lessons");
+  await page.waitForFunction(() => performance.getEntriesByType("resource").some(e => /welkom-\w+\.webp$/.test(e.name)), null, { timeout: 8000 });
+  await page.waitForTimeout(1500);
+  assert.equal(await page.evaluate(() => window.__welkom.gezien), 0, "het welkom kwam toch");
+  assert.equal(await page.evaluate(k => JSON.parse(localStorage.getItem(k)), WELKOM_VOLGENDE), "stippen", "de bewaarde kat is vervangen");
+  assert.deepEqual([...new Set(clips)], ["welkom-stippen.webp"], "een andere clip opgehaald: " + clips.join(", "));
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
 test("welkom: komt ook het stilstaande beeld niet binnen 300 ms, dan stil overslaan", async () => {
   const { context } = await nieuweContext();
   await context.route(/\/katten\/clips\/welkom-\w+(-stil)?\.webp/, async route => { await new Promise(r => setTimeout(r, 900)); await route.continue(); });

@@ -102,7 +102,9 @@
     }
     return catalogusBelofte;
   }
-  function gegevens(id) { return (catalogus && catalogus.katten[id]) || null; }
+  // eerst bestaat(id): een id als "__proto__" of "constructor" geeft zo null,
+  // niet iets van Object.prototype
+  function gegevens(id) { return (bestaat(id) && catalogus && Object.prototype.hasOwnProperty.call(catalogus.katten, id) && catalogus.katten[id]) || null; }
 
   // Kijkrichting per stand. Rust volgt goed.
   function kijkt(id, stand) {

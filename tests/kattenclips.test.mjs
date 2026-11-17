@@ -116,6 +116,15 @@ test("de oude goed- en bijna-clips staan in het archief; de schil heeft de stils
   }
 });
 
+test("SCHIL bevat voor de katten precies katten.json, per kat rust, de twee eindbeelden en het stilstaande welkombeeld, en geen enkele clip", () => {
+  const schil = [...lees("sw.js").matchAll(/"\.\/([^"]+)"/g)].map(m => m[1]).filter(f => f.startsWith("katten/"));
+  const verwacht = [MAP + "katten.json"];
+  for (const k of Object.values(KAT.katten)) verwacht.push(MAP + k.rust, MAP + k.goed.eind, MAP + k.bijna.eind, MAP + k.welkom.stil);
+  assert.deepEqual([...schil].sort(), [...verwacht].sort(), "de katten in SCHIL kloppen niet met katten.json");
+  assert.equal(new Set(schil).size, schil.length, "dubbel in SCHIL");
+  for (const k of Object.values(KAT.katten)) assert.ok(!schil.includes(MAP + k.welkom.anim), k.welkom.anim + " staat in SCHIL");
+});
+
 // ---------- zonder browser ----------
 // celebrate.js in een eigen context met een nep-klok, nep-URL's, een
 // nep-Image en een fetch die de bestanden uit de repo leest.
@@ -188,6 +197,25 @@ test("Celebrate.toon: elk moment meteen het stilstaande beeld, geen clip, geen t
   const img = nepImg();
   assert.equal(C.toon(img, "bestaatniet", "goed", "rechts"), false);
   assert.equal(img.src, "");
+});
+
+test("een kat-id als __proto__ of constructor is geen kat: niets laden, niets tonen, geen fout", async () => {
+  const { C, plaatjes, opgehaald, urls } = laad();
+  await C.laadCatalogus();
+  for (const id of ["__proto__", "constructor", "toString", "hasOwnProperty"]) {
+    assert.equal(C.kijkt(id, "goed"), "voor", id);
+    assert.equal(C.beeld(id, "goed"), null, id);
+    assert.equal(C.welkomBeeld(id), null, id);
+    const img = nepImg();
+    assert.equal(C.toon(img, id, "goed", "rechts"), false, id);
+    assert.equal(C.welkomSpeler(img).speel(id), false, id);
+    assert.equal(img.src, "", id);
+    assert.equal((await C.laadKat(id)).volledig, false, id + ": laadKat geeft een volledige kat");
+    assert.equal(await C.welkomVooruit(id), false, id);
+  }
+  assert.deepEqual(plaatjes, [], "beelden geladen voor een vreemd id: " + plaatjes.join(", "));
+  assert.deepEqual(opgehaald.filter(p => p !== MAP + "katten.json"), []);
+  assert.equal(urls.gemaakt.length, 0);
 });
 
 test("Celebrate.toon: spiegelen volgens de regel, voor alle zes katten (rechts en kijkt rechts: gespiegeld; voor: nooit; midden: nooit)", async () => {

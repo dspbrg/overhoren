@@ -65,10 +65,11 @@ const VERSIE = "20261112104108";
 // niet meeneemt. Verandert de waarde in de repo, dan hier ook.
 const NIET_GESTEMPELD = ["2026111210" + "4108", "dev"];
 const ONGESTEMPELD = NIET_GESTEMPELD.includes(VERSIE);
-// "2-": de indeling van de cache veranderde (alles zonder ?v=, alleen de
-// eigen cache). Zo begint ook GitHub Pages, waar VERSIE niet verandert,
-// een keer met een schone cache.
-const CACHE = "overhoren-2-" + VERSIE;
+// "3-": de inhoud van de cache veranderde (eerder "2-": alles zonder ?v=,
+// alleen de eigen cache; "3-": geen goed- en bijna-clips meer, de
+// welkomclips niet meer in de schil). Zo begint ook GitHub Pages, waar
+// VERSIE niet verandert, een keer met een schone cache.
+const CACHE = "overhoren-3-" + VERSIE;
 
 const SCHIL = [
   "./", "./ds.css", "./ui.js",

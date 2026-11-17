@@ -328,7 +328,7 @@ async function wachtOpNieuweSw(page) {
     if (Date.now() > eind) throw new Error("de nieuwe service worker neemt niet over");
     await page.waitForTimeout(100);
   }
-  await wachtTot(page, async () => { const n = await caches.keys(); return n.length === 1 && n[0].startsWith("overhoren-2-"); });
+  await wachtTot(page, async () => { const n = await caches.keys(); return n.length === 1 && n[0].startsWith("overhoren-3-"); });
 }
 
 async function offlineIs(page, context, fouten, verwacht) {
@@ -445,7 +445,7 @@ test("sw A, server al B: de eerste keer openen is meteen B, en de cache van A ho
     assert.equal(await heel(page, fouten, `open ${i}`), "B", `open ${i}: niet meteen de verse pagina`);
     await page.waitForTimeout(400);   // ruimte voor een achtergrondschrijfactie
     const bewaard = await page.evaluate(async () => {
-      const c = await caches.open("overhoren-2-a111111");
+      const c = await caches.open("overhoren-3-a111111");
       const res = await c.match("./");
       return res ? await res.text() : null;
     });
