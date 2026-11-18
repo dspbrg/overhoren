@@ -113,7 +113,7 @@ const toestel = i => "00000000-0000-4000-8000-" + String(i).padStart(12, "0");
 test("katten wordt genegeerd: niet opgeslagen, niet teruggegeven, rest wel", async () => {
   const k = { verdiend: ["strepen"], huidig: "strepen", start: "strepen", bijgewerkt: 1 };
   const uit = mergeSync({ katten: k }, { katten: k, progress: { l1: { updated: 1 } }, updated: 5 }, NU);
-  assert.deepEqual(Object.keys(uit).sort(), ["cats", "lists", "progress", "updated"]);
+  assert.deepEqual(Object.keys(uit).sort(), ["cats", "klasWeg", "lists", "progress", "updated"]);
   assert.deepEqual(uit.progress, { l1: vg(1) });
 
   // via de handler, met een oud katten-veld al in KV
@@ -2019,4 +2019,24 @@ test("onbeperkt: telt niet zolang APP_SECRET gezet is (eerst het wachtwoord weg)
     const zonder = { ...env(kv), ONBEPERKT: sha(PIA_CODE) }; delete zonder.APP_SECRET;
     assert.equal((await worker.fetch(open("/extract", FOTO, TOESTEL, { "x-code": PIA_CODE }), zonder)).status, 200);
   });
+});
+
+// ---------- prullenbak via de handler ----------
+
+test("prullenbak: PUT en GET /sync geven klasWeg en grafstenen door; een PUT zonder klasWeg houdt de opgeslagen waarde", async () => {
+  const nu = Date.now();
+  const klasWeg = { "klas-1": { weg: nu - 1000, bijgewerkt: nu - 1000 } };
+  const graf = { id: "custom-1", title: "", items: [], gewist: nu - 1000, bijgewerkt: nu - 1000 };
+  const kv = nepKV({ "learner:pia": { klasWeg, lists: [graf], progress: { "custom-1": { updated: 1 }, l2: { updated: 1 } }, updated: 1 } });
+  const get = await (await worker.fetch(new Request("https://api.test/sync/pia", { headers: { "x-api-token": "geheim" } }), env(kv))).json();
+  assert.deepEqual(get.klasWeg, klasWeg);
+  assert.deepEqual(Object.keys(get.progress), ["l2"]);
+  // een oude app: geen klasWeg, de lijst nog levend met alleen added
+  const res = await worker.fetch(put({ lists: [{ id: "custom-1", title: "Terug", items: [{ word: "a", def: "b" }], added: 5 }], updated: 2 }), env(kv));
+  assert.equal(res.status, 200);
+  const terug = await res.json();
+  assert.deepEqual(terug.klasWeg, klasWeg);
+  assert.deepEqual(terug.lists, [graf]);
+  assert.deepEqual(opgeslagen(kv).klasWeg, klasWeg);
+  assert.deepEqual(opgeslagen(kv).lists, [graf]);
 });

@@ -344,8 +344,10 @@ Uitzetten: `npx wrangler secret delete HQ_MELD_TOKEN -c wrangler.toml`.
 Kapotte JSON geeft 400. Fouten van de Anthropic-API geven 502 met een algemene
 melding; de details staan alleen in de logs.
 
-Opgeslagen worden alleen `cats`, `progress`, `lists` en `updated`. Andere velden,
-zoals het vervallen `katten`, worden genegeerd.
+Opgeslagen worden alleen `cats`, `progress`, `lists`, `klasWeg` en `updated`.
+Andere velden, zoals het vervallen `katten`, worden genegeerd. Ontbreekt een
+veld in de PUT (een oude app kent `klasWeg` niet), dan blijft de opgeslagen
+waarde staan.
 
 Ook de vorm binnen die velden wordt gecontroleerd (`worker/src/merge.js`,
 dezelfde regels als `schoneLijst`, `schoneVoortgang` enzovoort in `index.html`;
@@ -367,10 +369,27 @@ weggooien:
   de nummering van de voortgang klopt), een titel die geen tekst is `""`.
   Losse optionele velden van de verkeerde soort vallen weg; `mix` en `bronnen`
   komen er nooit in.
+- Prullenbak in `lists[]`: drie optionele tijden, `bijgewerkt` (laatste
+  wijziging van de lijst als geheel), `weg` (in de prullenbak sinds) en
+  `gewist` (definitief weg). `weg` en `gewist` tellen alleen boven 0. Een
+  lijst met `gewist` is een grafsteen: `{ id, title: "", items: [] }` plus
+  `weg`, `gewist`, `bijgewerkt` en `added`, zonder inhoud. Staat een lijst
+  langer dan `PRULLENBAK_DAGEN` (30) in de prullenbak, dan wordt hij bij de
+  controle een grafsteen met `gewist = weg + 30 dagen`. Grafstenen blijven
+  bewaard, zodat een oud toestel de lijst niet terugbrengt.
+- Samenvoegen van `lists[]` per id: de hoogste stand wint (`bijgewerkt`,
+  anders `added`, anders 0). Bij gelijke stand wint een grafsteen van een
+  levende lijst, anders blijft de opgeslagen versie. `progress[id]` van een
+  grafsteen valt weg; een lijst die alleen `weg` heeft houdt zijn voortgang.
+- `klasWeg[lijst-id]`: klaslijsten in de prullenbak, `{ weg, bijgewerkt }`.
+  `weg: 0` is teruggezet. Sleutel als bij `progress`, hooguit 200 regels;
+  een regel zonder object of zonder eindige `weg` en `bijgewerkt` valt weg.
+  Per id wint de hoogste `bijgewerkt`, gelijk: de opgeslagen regel blijft.
 - `cats[bron]`: alleen `aantal`, `eerst` en `laatst`, als eindig getal; anders
   valt de waarde weg. `aantal` wordt niet negatief.
 - Tijden (`updated` van het record, `progress.updated`, `lists[].added`,
-  `cats.eerst` en `cats.laatst`) worden begrensd op 0 tot nu plus 5 minuten.
+  `bijgewerkt`, `weg` en `gewist`, de tijden in `klasWeg`, `cats.eerst` en
+  `cats.laatst`) worden begrensd op 0 tot nu plus 5 minuten.
   Zo kan een tijd als 1e308 niet voorgoed van latere wijzigingen winnen.
 
 ## Testen
