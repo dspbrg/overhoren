@@ -26,7 +26,7 @@ function appVorm() {
   c.window = c;
   vm.runInContext(readFileSync(join(REPO, "engine.js"), "utf8"), c);
   vm.runInContext("var E = window.Engine;\n" + html.slice(begin, eind) +
-    "\nthis.vorm = { schoneLijst, schoneStaat, schoneVoortgang, schoneCat };", c);
+    "\nthis.vorm = { schoneLijst, schoneStaat, schoneVoortgang, schoneCat, schoneKlasWeg, stand, wintVan, mergeKlasWeg, PRULLENBAK_DAGEN, MAX_KLAS_WEG };", c);
   return c.vorm;
 }
 
@@ -490,4 +490,104 @@ test("pariteit: schoneLijst, schoneStaat, schoneVoortgang en schoneCat in de app
   const weg = worker.lijsten.map((l, i) => l ? null : i).filter(i => i !== null);
   assert.deepEqual(weg, [1, 2, 3, 4, 6, 7, 8, 9, 10, 11]);
   assert.deepEqual(worker.staten.map(s => s === null), [false, true, true, true, false, false, false, false, false, false, false, false, false]);
+});
+
+// ---------- pariteit: prullenbak (weg, gewist, bijgewerkt, klasWeg) ----------
+
+test("pariteit: PRULLENBAK_DAGEN en MAX_KLAS_WEG zijn in de app gelijk aan de worker", () => {
+  const A = appVorm();
+  assert.equal(A.PRULLENBAK_DAGEN, MERGE.PRULLENBAK_DAGEN);
+  assert.equal(A.PRULLENBAK_DAGEN, 30);
+  assert.equal(A.MAX_KLAS_WEG, MERGE.MAX_KLAS_WEG);
+});
+
+test("pariteit: schoneLijst met weg, gewist en bijgewerkt geeft hetzelfde als de worker", () => {
+  const NU = 1_800_000_000_000, DAG = 24 * 60 * 60 * 1000, B = MERGE.PRULLENBAK_DAGEN * DAG;
+  const lijst = (extra = {}) => ({ id: "custom-1", title: "Lijst", subject: "Engels", added: 3, items: [{ word: "cat", def: "kat" }], ...extra });
+  const zonderItems = extra => { const l = lijst(extra); delete l.items; return l; };
+  const gevallen = [
+    // bijgewerkt
+    lijst({ bijgewerkt: NU - 5 }), lijst({ bijgewerkt: 1e308 }), lijst({ bijgewerkt: -1 }), lijst({ bijgewerkt: "gisteren" }), lijst({ bijgewerkt: NaN }), lijst({ bijgewerkt: NU + 1 }),
+    // weg: binnen 30 dagen blijft het een lijst; kapot of 0 valt weg
+    lijst({ weg: NU - DAG, bijgewerkt: NU - DAG }), lijst({ weg: 0 }), lijst({ weg: -5 }), lijst({ weg: "x" }), lijst({ weg: null }), lijst({ weg: Infinity }),
+    lijst({ weg: 1e308, bijgewerkt: 1e308 }),
+    // 30 dagen: precies 30 niet, strikt meer wel
+    lijst({ weg: NU - B, bijgewerkt: NU - B }), lijst({ weg: NU - B - 1, bijgewerkt: NU - B - 1 }), lijst({ weg: NU - 40 * DAG }),
+    lijst({ weg: NU - 40 * DAG, bijgewerkt: NU }),
+    // gewist: grafsteen, ook zonder items, bijgewerkt minstens gewist
+    lijst({ gewist: NU - DAG, bijgewerkt: NU - DAG }), lijst({ gewist: NU - DAG }), lijst({ gewist: NU - DAG, bijgewerkt: NU - 9 * DAG }),
+    lijst({ gewist: NU - DAG, weg: NU - 2 * DAG, bijgewerkt: NU - DAG }), zonderItems({ gewist: NU - DAG, bijgewerkt: NU - DAG }),
+    zonderItems({ weg: NU - 40 * DAG }), zonderItems({ weg: NU - DAG }), lijst({ gewist: 1e308 }), lijst({ gewist: -1 }), lijst({ gewist: "x" }),
+    lijst({ gewist: NU - DAG, added: "x" }), lijst({ gewist: NU - DAG, title: "Geheim", items: [{ word: "a", def: "b" }], subject: "Frans" }),
+    { id: 5, gewist: NU - DAG }, { id: "x".repeat(101), gewist: NU - DAG }, { id: "__proto__", gewist: NU - DAG },
+  ];
+  const A = appVorm();
+  const json = x => JSON.parse(JSON.stringify(x));
+  gevallen.forEach((l, i) => {
+    const app = json(A.schoneLijst(l, NU)), worker = json(MERGE.controleerLijst(l, NU));
+    assert.deepEqual(app, worker, "geval " + i + " verschilt: " + JSON.stringify(l).slice(0, 120));
+    if (worker && worker.gewist) assert.deepEqual(Object.keys(worker).filter(k => !["weg", "added"].includes(k)), ["id", "title", "items", "gewist", "bijgewerkt"]);
+  });
+  // een paar vaste uitkomsten, zodat beide niet samen fout kunnen zijn
+  const w = i => MERGE.controleerLijst(gevallen[i], NU);
+  assert.equal(w(1).bijgewerkt, NU + 5 * 60 * 1000, "1e308 wordt niet begrensd");
+  assert.equal(w(7).weg, undefined, "weg 0 blijft staan");
+  assert.equal(w(9).weg, undefined, "kapotte weg blijft staan");
+  assert.equal(w(13).gewist, undefined, "precies 30 dagen is al een grafsteen");
+  assert.equal(w(14).gewist, NU - 1, "meer dan 30 dagen is geen grafsteen");
+  assert.equal(w(16).bijgewerkt, NU, "bijgewerkt van een grafsteen gaat omlaag");
+  assert.equal(w(19).bijgewerkt, NU - DAG, "bijgewerkt van een grafsteen is niet minstens gewist");
+  assert.deepEqual(json(w(21)), { id: "custom-1", title: "", items: [], gewist: NU - DAG, bijgewerkt: NU - DAG, added: 3 });
+  assert.equal(w(22).gewist, NU - 10 * DAG, "na 40 dagen zonder items geen grafsteen");
+  assert.equal(w(23), null, "een lijst zonder items en zonder gewist valt niet weg");
+  assert.deepEqual(json(w(28)), { id: "custom-1", title: "", items: [], gewist: NU - DAG, bijgewerkt: NU - DAG, added: 3 }, "een grafsteen houdt inhoud");
+});
+
+test("pariteit: stand en de keuze bij samenvoegen zijn in de app gelijk aan de worker", () => {
+  const NU = 1_800_000_000_000;
+  const A = appVorm();
+  const l = (extra = {}) => ({ id: "custom-1", title: "L", items: [{ word: "a", def: "b" }], ...extra });
+  const s = (extra = {}) => ({ id: "custom-1", title: "", items: [], gewist: NU - 10, ...extra });
+  const paren = [
+    [l({ bijgewerkt: 5 }), l({ bijgewerkt: 6 })], [l({ bijgewerkt: 6 }), l({ bijgewerkt: 5 })], [l({ bijgewerkt: 5 }), l({ bijgewerkt: 5, title: "Ander" })],
+    [l({ added: 9 }), l({ bijgewerkt: 8 })], [l({}), l({ added: 1 })], [l({ bijgewerkt: NU - 10 }), s({ bijgewerkt: NU - 10 })],
+    [s({ bijgewerkt: NU - 10 }), l({ bijgewerkt: NU - 10 })], [s({ bijgewerkt: NU - 10 }), s({ bijgewerkt: NU - 10, weg: 5 })],
+    [l({ weg: NU - 5, bijgewerkt: NU - 5 }), l({ added: 100 })], [l({ added: 100 }), l({ weg: NU - 5, bijgewerkt: NU - 5 })],
+  ];
+  for (const [i, [remote, local]] of paren.entries()) {
+    const worker = MERGE.mergeSync({ lists: [remote] }, { lists: [local] }, NU).lists[0];
+    // de worker: remote staat er al, local komt erbij
+    const rc = A.schoneLijst(remote, NU), lc = A.schoneLijst(local, NU);
+    const app = A.wintVan(lc, rc) ? lc : rc;
+    assert.deepEqual(JSON.parse(JSON.stringify(app)), JSON.parse(JSON.stringify(worker)), "paar " + i);
+    assert.equal(A.stand(lc), MERGE.stand(MERGE.controleerLijst(local, NU)));
+  }
+});
+
+test("pariteit: schoneKlasWeg en mergeKlasWeg in de app geven hetzelfde als de worker", () => {
+  const NU = 1_800_000_000_000;
+  const A = appVorm();
+  const json = x => JSON.parse(JSON.stringify(x));
+  const veel = {};
+  for (let i = 0; i < 230; i++) veel["lijst-" + i] = { weg: i % 2 ? NU - i : 0, bijgewerkt: NU - i };
+  const gevallen = [
+    null, "x", [], {}, { a: { weg: 1, bijgewerkt: 2 } }, { a: { weg: 0, bijgewerkt: 2 } }, { a: { weg: "x", bijgewerkt: 2 } }, { a: { weg: 1 } },
+    { a: null }, { a: { weg: -5, bijgewerkt: -1 } }, { a: { weg: 1e308, bijgewerkt: 1e308 } }, { a: { weg: 1, bijgewerkt: 2, extra: "<b>" } },
+    { ["x".repeat(101)]: { weg: 1, bijgewerkt: 2 } }, JSON.parse('{"__proto__":{"weg":1,"bijgewerkt":2},"b":{"weg":1,"bijgewerkt":2}}'), veel,
+  ];
+  gevallen.forEach((d, i) => assert.deepEqual(json(A.schoneKlasWeg(d, NU)), json(MERGE.controleerKlasWeg(d, NU)), "geval " + i));
+  assert.equal(Object.keys(A.schoneKlasWeg(veel, NU)).length, 200, "meer dan 200 regels");
+  // samenvoegen: de nieuwste wint, gelijk blijft wat er stond, hooguit 200 met de nieuwste
+  const a = { x: { weg: 5, bijgewerkt: 5 }, y: { weg: 0, bijgewerkt: 9 } };
+  const b = { x: { weg: 0, bijgewerkt: 6 }, y: { weg: 7, bijgewerkt: 9 }, z: { weg: 1, bijgewerkt: 1 } };
+  const worker = MERGE.mergeSync({ klasWeg: a }, { klasWeg: b }, NU).klasWeg;
+  assert.deepEqual(json(A.mergeKlasWeg(a, b)), json(worker));
+  assert.deepEqual(json(worker), { x: { weg: 0, bijgewerkt: 6 }, y: { weg: 0, bijgewerkt: 9 }, z: { weg: 1, bijgewerkt: 1 } });
+  const half = {}, rest = {};
+  for (let i = 0; i < 150; i++) half["a" + i] = { weg: 1, bijgewerkt: 1000 + i };
+  for (let i = 0; i < 150; i++) rest["b" + i] = { weg: 1, bijgewerkt: 2000 + i };
+  const m = A.mergeKlasWeg(half, rest), mw = MERGE.mergeSync({ klasWeg: half }, { klasWeg: rest }, NU).klasWeg;
+  assert.deepEqual(json(m), json(mw));
+  assert.equal(Object.keys(m).length, 200);
+  assert.ok(!("a99" in m) && "a100" in m && "b0" in m, "niet de nieuwste 200");
 });

@@ -368,7 +368,8 @@ test("welkom wegtikken: een tik of een toets start de snelle overgang (250 ms) e
     assert.ok(await page.locator("#scr-lessons").isVisible(), toets + " ging door naar de app");
     // daarna doen toetsen weer gewoon hun werk
     await page.locator("#btn-menu").focus(); await page.keyboard.press("Enter");
-    await page.keyboard.press("Tab"); await page.keyboard.press("Enter"); await wachtOpScherm(page, "scr-info");
+    // Rapport, Prullenbak, Over Overhoren
+    await page.keyboard.press("Tab"); await page.keyboard.press("Tab"); await page.keyboard.press("Enter"); await wachtOpScherm(page, "scr-info");
     assert.deepEqual(fouten, []);
     await context.close();
   }
