@@ -70,7 +70,8 @@ test("menu: knop rechtsboven in de kop, dicht bij de start, en geen footer meer"
   const inMenu = await page.evaluate(() => ["btn-report", "btn-info", "theme-seg"].map(id => !!document.getElementById(id)?.closest("#menu")));
   assert.deepEqual(inMenu, [true, true, true], "Rapport, Over Overhoren of het thema staat niet in het menu");
   const items = await page.locator("#menu .menu-item").evaluateAll(bs => bs.map(b => b.textContent.trim()));
-  assert.deepEqual(items, ["Rapport", "Over Overhoren"]);
+  // de Prullenbak staat ertussen; zonder lijsten in de prullenbak geen teller
+  assert.deepEqual(items, ["Rapport", "Prullenbak", "Over Overhoren"]);
   // klasvraag en "Op een ander toestel verder" blijven op het startscherm
   assert.equal(await page.locator("#scr-lessons .start-kop #btn-ander-toestel").count(), 1);
   assert.equal(await page.locator("#scr-lessons .start-kop #klas-vraag").count(), 1);

@@ -49,7 +49,8 @@
     alert:   '<path d="M12 4.2l8.6 15.3H3.4z"/><path d="M12 10v4"/><circle cx="12" cy="16.8" r=".9" fill="currentColor" stroke="none"/>',
     sparkle: '<path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/>',
     menu:    '<path d="M5 7h14M5 12h14M5 17h14"/>',
-    info:    '<circle cx="12" cy="12" r="8.5"/><path d="M12 11.2V16"/><circle cx="12" cy="8.2" r=".9" fill="currentColor" stroke="none"/>'
+    info:    '<circle cx="12" cy="12" r="8.5"/><path d="M12 11.2V16"/><circle cx="12" cy="8.2" r=".9" fill="currentColor" stroke="none"/>',
+    prullenbak: '<path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.9 12.2h9.2L17.5 7M10 11v5M14 11v5"/>'
   };
   // name: sleutel uit ICONS. size volgt standaard de tekstgrootte (1em).
   function Icon(name, o) {
@@ -195,7 +196,11 @@
   }
 
   // --- Menu: kaart onder de menuknop ---------------------------
-  // items: [{ id, icon, label }], knoppen die ergens heen gaan.
+  // items: [{ id, icon, label, teller, tellerId }], knoppen die ergens
+  // heen gaan. teller: een getal in een chip rechts (zoals bij de
+  // Prullenbak); bij 0 of zonder teller geen chip. Met tellerId staat de
+  // chip er altijd, verborgen bij 0, zodat de app hem kan bijwerken
+  // (zetTeller).
   // thema: { id, labelId } zet de themakiezer erin (Systeem, Licht,
   // Donker; de app zet zelf welke aan staat). Onderaan de versie.
   // Ervoor een dimlaag die een tik buiten het menu opvangt.
@@ -205,7 +210,8 @@
     o = o || {};
     const open = !!o.open;
     const items = (o.items || []).map(function (it) {
-      return '<button type="button" class="menu-item"' + attr("id", it.id) + '>' + Icon(it.icon) + '<span>' + esc(it.label) + '</span></button>';
+      return '<button type="button" class="menu-item"' + attr("id", it.id) + '>' + Icon(it.icon) + '<span>' + esc(it.label) + '</span>' +
+        Teller({ id: it.tellerId, n: it.teller, altijd: !!it.tellerId }) + '</button>';
     }).join("");
     const th = o.thema;
     const thema = th ? '<div class="menu-sectie" role="group"' + attr("aria-labelledby", th.labelId) + '>' +
@@ -218,6 +224,26 @@
     return '<div class="menu-scrim" aria-hidden="true"' + (open ? "" : " hidden") + '></div>' +
       '<nav class="menu"' + attr("id", o.id) + ' aria-label="Menu"' + (open ? "" : " hidden") + '>' + items + thema +
       '<p class="menu-versie"' + attr("id", o.versieId) + '>Versie ' + esc(String(o.versie || VERSIE).slice(0, 7)) + '</p></nav>';
+  }
+  // Teller: een getal in een chip, rechts in een menu-item. Alleen een
+  // heel getal boven 0 telt; anders verborgen (altijd) of weg. De chip
+  // zelf is voor het oog; een schermlezer hoort ", 2 lijsten", zodat de
+  // naam van het item "Prullenbak, 2 lijsten" wordt en niet "Prullenbak2".
+  function tellerTekst(n) { return ", " + n + (n === 1 ? " lijst" : " lijsten"); }
+  function Teller(o) {
+    o = o || {};
+    const n = Math.max(0, Math.floor(Number(o.n) || 0));
+    if (!n && !o.altijd) return "";
+    return '<span class="teller"' + attr("id", o.id) + (n ? "" : " hidden") + '>' +
+      '<span class="chip" aria-hidden="true">' + (n || "") + '</span><span class="sr-only">' + (n ? tellerTekst(n) : "") + '</span></span>';
+  }
+  function zetTeller(el, n) {
+    if (!el) return;
+    n = Math.max(0, Math.floor(Number(n) || 0));
+    // bij 0 leeg en verborgen, zodat er ook in de tekst niets staat
+    el.querySelector(".chip").textContent = n ? String(n) : "";
+    el.querySelector(".sr-only").textContent = n ? tellerTekst(n) : "";
+    el.hidden = !n;
   }
   // Tikken op de knop opent en sluit. Open: de focus naar het eerste item,
   // de knop wordt een kruis. Escape, een tik op de dimlaag of de knop
@@ -323,6 +349,111 @@
     html += '<p class="hint" id="' + id("code-melding") + '" role="status"' + (o.melding ? "" : " hidden") + '>' + esc(o.melding || "") + '</p>' +
       Link({ id: id("btn-code-sluit"), label: "Sluiten" }) + '</div>';
     return html;
+  }
+
+  // --- Ongedaan: balk onderin na verwijderen --------------------
+  // Een donkere balk (in het donkere thema licht) met een korte zin en de
+  // link Ongedaan maken, en een balk die aftelt. role="status": de zin
+  // wordt voorgelezen, maar de balk pakt de focus niet; met Tab is hij te
+  // bereiken. Zet hem een keer in de pagina (hidden) en toon hem met
+  // toonOngedaan(el, { tekst, ms, ongedaan }).
+  //   id      id van de balk
+  //   tekst   de zin, zoals "Unité 2 is verwijderd." (gaat door esc())
+  //   actie   tekst van de link, standaard Ongedaan maken
+  //   hidden  verborgen beginnen
+  function Ongedaan(o) {
+    o = o || {};
+    return '<div class="ongedaan" role="status"' + attr("id", o.id) + (o.hidden ? " hidden" : "") + '>' +
+      '<div class="ongedaan-rij"><p class="ongedaan-tekst">' + esc(o.tekst) + '</p>' +
+      Link({ label: o.actie || "Ongedaan maken", className: "ongedaan-actie" }) + '</div>' +
+      '<span class="meter sm ongedaan-meter" aria-hidden="true"><i class="b"></i></span></div>';
+  }
+  // Toont de balk met een nieuwe zin. Hij staat --ongedaan-duur (ds.css, 8 s)
+  // en pauzeert zolang de focus of de muis erin is. Een nieuwe aanroep
+  // vervangt de vorige: de oude ongedaan-actie vervalt. Ongedaan maken
+  // roept o.ongedaan() aan en haalt de balk weg. Geeft een functie terug
+  // die de balk meteen weghaalt. De aftelbalk is een css-animatie van
+  // dezelfde duur (ds.css, .ongedaan.telt); bij reduced motion staat hij
+  // stil, de tijd geldt wel.
+  function toonOngedaan(el, o) {
+    if (!el) return function () {};
+    o = o || {};
+    if (el._ongedaanWeg) el._ongedaanWeg();
+    // de tijd staat in ds.css (--ongedaan-duur); o.ms kan hem vervangen
+    if (Number(o.ms) > 0) el.style.setProperty("--ongedaan-duur", Number(o.ms) + "ms");
+    const ms = parseFloat(getComputedStyle(el).getPropertyValue("--ongedaan-duur")) || 8000;
+    const link = el.querySelector(".ongedaan-actie");
+    let rest = ms, start = 0, klok = null, muis = false, weg = false;
+    function loop() { start = Date.now(); klok = setTimeout(sluit, rest); el.classList.remove("pauze"); }
+    function pauze() {
+      if (!klok) return;
+      clearTimeout(klok); klok = null;
+      rest = Math.max(0, rest - (Date.now() - start));
+      el.classList.add("pauze");
+    }
+    function verder() { if (!weg && !klok && !muis && !el.contains(document.activeElement)) loop(); }
+    const opMuis = () => { muis = true; pauze(); };
+    const vanMuis = () => { muis = false; verder(); };
+    const opFocus = () => pauze();
+    const vanFocus = e => { if (!el.contains(e.relatedTarget)) setTimeout(verder, 0); };
+    const opLink = () => { const f = o.ongedaan; sluit(); if (f) f(); };
+    function sluit() {
+      if (weg) return;
+      weg = true;
+      clearTimeout(klok); klok = null;
+      el.removeEventListener("mouseenter", opMuis); el.removeEventListener("mouseleave", vanMuis);
+      el.removeEventListener("focusin", opFocus); el.removeEventListener("focusout", vanFocus);
+      if (link) link.removeEventListener("click", opLink);
+      el.classList.remove("telt", "pauze");
+      el.hidden = true;
+      el._ongedaanWeg = null;
+    }
+    el.classList.remove("telt", "pauze");
+    el.hidden = false;
+    void el.offsetWidth;   // de aftelbalk begint opnieuw
+    el.classList.add("telt");
+    // de zin pas na het tonen zetten, zodat role=status hem voorleest
+    el.querySelector(".ongedaan-tekst").textContent = String(o.tekst == null ? "" : o.tekst);
+    el.addEventListener("mouseenter", opMuis); el.addEventListener("mouseleave", vanMuis);
+    el.addEventListener("focusin", opFocus); el.addEventListener("focusout", vanFocus);
+    if (link) link.addEventListener("click", opLink);
+    el._ongedaanWeg = sluit;
+    loop();
+    if (el.matches(":hover")) opMuis();
+    return sluit;
+  }
+
+  // --- PrullenKaart: een lijst in de prullenbak -----------------
+  //   id       het id van de lijst (data-id)
+  //   vak      eyebrow, mag leeg
+  //   titel    de naam van de lijst
+  //   regel    eronder, zoals "12 woorden · nog 27 dagen"
+  //   eigen    true: ook Definitief verwijderen (alleen eigen lijsten)
+  //   bevestig true: in plaats van de knoppen de vraag of het definitief
+  //            moet, met Ja, verwijder en Annuleren (role=group met de
+  //            vraag als naam)
+  //   kopId    id voor de titel (voor aria-labelledby)
+  // Alles gaat door esc(). De knoppen hebben data-actie: terug, wis, ja
+  // of annuleer; de app koppelt ze.
+  function PrullenKaart(o) {
+    o = o || {};
+    const kop = o.kopId ? attr("id", o.kopId) : "";
+    const vraagId = o.kopId ? o.kopId + "-vraag" : null;
+    let onder;
+    if (o.bevestig) {
+      onder = '<div class="notice prullen-vraag" role="group"' + attr("aria-labelledby", vraagId) + '>' +
+        Icon("alert", { className: "notice-icon" }) + '<div>' +
+        '<p' + attr("id", vraagId) + '><b>Definitief verwijderen?</b> Dit kan niet ongedaan worden gemaakt.</p>' +
+        '<div class="row"><button type="button" class="btn danger" data-actie="ja">Ja, verwijder</button>' +
+        '<button type="button" class="link" data-actie="annuleer"><span>Annuleren</span></button></div></div></div>';
+    } else {
+      onder = '<div class="row"><button type="button" class="btn primary" data-actie="terug">Terugzetten</button>' +
+        (o.eigen ? '<button type="button" class="link danger" data-actie="wis"><span>Definitief verwijderen</span></button>' : "") + '</div>';
+    }
+    return '<div class="card prullen"' + attr("data-id", o.id) + '>' +
+      '<div>' + (o.vak ? '<span class="eyebrow">' + esc(o.vak) + '</span>' : "") +
+      '<h2 class="prullen-titel"' + kop + '>' + esc(o.titel) + '</h2>' +
+      '<p class="muted">' + esc(o.regel) + '</p></div>' + onder + '</div>';
   }
 
   // --- Empty: lege staat --------------------------------------
@@ -455,5 +586,5 @@
   }
 
   root.UI = { esc, cls, pct, Icon, ICONS, Button, Link, TopBar, Stat, StatsRow, Meter, Ring, Chip,
-              Beta, BetaUitleg, BETA_UITLEG, VERSIE, bindBeta, IconBtn, Menu, bindMenu, Choice, Choices, Notice, CodePaneel, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, Welkom, hydrateIcons };
+              Beta, BetaUitleg, BETA_UITLEG, VERSIE, bindBeta, IconBtn, Menu, Teller, zetTeller, bindMenu, Ongedaan, toonOngedaan, PrullenKaart, Choice, Choices, Notice, CodePaneel, Empty, Mark, MARK_ICON, LessonCard, Spraak, KatRand, Welkom, hydrateIcons };
 })(typeof window === "object" ? window : globalThis);

@@ -96,8 +96,9 @@ test("klas: bij Nee blijven eigen lijsten zichtbaar, de klaslijsten niet", async
   await page.locator('#lessons .lesson[data-id="custom-1"]').click();
   await wachtOpScherm(page, "scr-home");
   assert.equal(await page.locator("#list-title").textContent(), "Mijn lijst");
-  // een eigen lijst wissen die de laatste was: weer de lege staat, geen fout
-  page.once("dialog", d => d.accept());
+  // een eigen lijst verwijderen die de laatste was: weer de lege staat, geen
+  // fout en geen vraag (de lijst gaat naar de prullenbak)
+  page.once("dialog", () => assert.fail("verwijderen vraagt nog met confirm()"));
   await page.click("#btn-delete-list");
   await wachtOpScherm(page, "scr-lessons");
   assert.deepEqual(await lijstIds(page), []);

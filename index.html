@@ -39,7 +39,7 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
   <div class="app">
     <div class="start-kop">
       <!-- de menuknop en het menu komen in .kop-rij (zie zetMenu) -->
-      <header class="brand"><div class="kop-rij" id="kop-rij"><h1 id="app-titel">Overhoren</h1></div><p class="tag">Woordjes leren met slimme herhaling</p></header>
+      <header class="brand"><div class="kop-rij" id="kop-rij"><h1 id="app-titel" tabindex="-1">Overhoren</h1></div><p class="tag">Woordjes leren met slimme herhaling</p></header>
       <!-- hier komt de uitleg bij Beta (zie zetBeta) -->
       <div class="learner-row">
         <span id="learner-view">Wie oefent: <b id="learner-label"></b> <button class="link" id="btn-learner">wissel</button></span>
@@ -67,7 +67,8 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
 <!-- LES -->
 <section id="scr-home" class="screen" hidden>
   <div class="app">
-    <div class="topbar"><button class="link" data-icon="back" id="btn-home-back">Alle lessen</button><span class="muted" id="home-learner"></span></div>
+    <!-- rechts de naam en de prullenbakknop (UI.IconBtn, zie zetVerwijderKnop) -->
+    <div class="topbar"><button class="link" data-icon="back" id="btn-home-back">Alle lessen</button><span class="topbar-rechts" id="home-rechts"><span class="muted" id="home-learner"></span></span></div>
     <div id="resume" class="notice row-between" hidden>
       <span>Je was nog bezig met een ronde.</span>
       <span class="row"><button class="btn primary" id="btn-resume">Verder gaan</button><button class="link" id="btn-discard">Opnieuw beginnen</button></span>
@@ -113,7 +114,6 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       <button class="btn primary big" data-icon="play" id="btn-start">Start overhoring</button>
       <div class="row"><button class="btn" data-icon="book" id="btn-study">Eerst lezen</button><button class="btn" data-icon="chart" id="btn-progress">Voortgang</button></div>
     </div>
-    <p class="foot"><button class="link" id="btn-delete-list" hidden>Lijst verwijderen</button></p>
   </div>
 </section>
 
@@ -274,6 +274,16 @@ try { zetThema(JSON.parse(localStorage.getItem("overhoor:thema"))); } catch (e) 
       <h3>Katten</h3>
       <p>Strepen, Tuxedo, Lapjes, Sokjes, Stippen en Rode streep. In elke ronde kijkt er een mee. De katten zijn met AI gemaakt.</p>
     </div>
+  </div>
+</section>
+
+<!-- PRULLENBAK -->
+<section id="scr-prullenbak" class="screen" hidden>
+  <div class="app">
+    <div class="topbar"><button class="link" data-icon="back" id="btn-prullenbak-back">Terug</button></div>
+    <header class="brand"><h1 id="prullenbak-kop" tabindex="-1">Prullenbak</h1><p class="tag">Verwijderde lijsten blijven 30 dagen bewaard, met je voortgang.</p></header>
+    <div class="prullen-lijst" id="prullenbak-body"></div>
+    <p class="sr-only" id="prullenbak-melding" role="status"></p>
   </div>
 </section>
 
@@ -495,6 +505,8 @@ function pauzeRest(){ const t = tijdVandaag(); return Math.max(0, (t.pauzeTot||0
 // ---------- opslag ----------
 function load(key, fallback){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; } }
 function save(key, val){ try{ if(val==null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+// KWKEY: klaslijsten in de prullenbak (zie schoneKlasWeg), sync-veld klasWeg
+const KWKEY = "overhoor:klas-weg";
 const LKEY = "overhoor:lists", CKEY = "overhoor:current", LEARNER_KEY = "overhoor:learner", LEARNERS_KEY = "overhoor:learners";
 const slug = s => String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 // s: slug van een andere oefenaar dan de huidige (optioneel)
@@ -585,8 +597,123 @@ function markKlas(){
 let lists = [], list = null, progress = null, session = null, sizeChoice = 15, timer = null;
 const ui = { pick:null, checked:false, verdictDef:null, clsOk:false, firstBlank:false, pauseShown:false };
 
-// eigen lijsten uit opslag alleen in de goede vorm (zie schoneLijst)
-function allLists(){ return (window.WORDLISTS||[]).concat(schoneLijsten(load(LKEY, []))); }
+// eigen lijsten uit opslag alleen in de goede vorm (zie schoneLijst).
+// Zonder wat in de prullenbak staat of definitief weg is: die lijsten
+// staan niet op het startscherm, niet in Alles door elkaar en niet in het
+// rapport.
+function allLists(){
+  const kw = klasWeg();
+  return (window.WORDLISTS||[]).filter(l => !inKlasWeg(kw, l.id))
+    .concat(eigenLijsten().filter(l => !(l.weg > 0) && !(l.gewist > 0)));
+}
+// eigen lijsten nooit met het id van een klaslijst
+const eigenLijsten = nu => schoneLijsten(load(LKEY, []), nu).filter(l => !isKlasId(l.id));
+const isKlasId = id => (window.WORDLISTS||[]).some(k => String(k.id) === String(id));
+// een eigen lijst die definitief weg is (voortgang hoort er niet meer bij)
+const isGrafsteen = id => kanGrafsteen(id) && eigenLijsten().some(l => l.id === id && l.gewist > 0);
+// alle lijsten met mogelijk voortgang: ook die in de prullenbak (de
+// voortgang blijft), geen grafstenen
+function lijstenMetVoortgang(){
+  return (window.WORDLISTS||[]).concat(eigenLijsten().filter(l => !(l.gewist > 0)));
+}
+
+// ---------- prullenbak ----------
+// Verwijderen zet een lijst in de prullenbak, zonder te vragen; de balk
+// onderin (UI.Ongedaan) zet hem terug. Eigen lijsten krijgen weg en
+// bijgewerkt in overhoor:lists, klaslijsten een regel in KWKEY. De
+// voortgang blijft staan. Na PRULLENBAK_DAGEN wordt een eigen lijst een
+// grafsteen (zie grafsteen); klaslijsten blijven tot je ze terugzet.
+const klasWeg = () => schoneKlasWeg(load(KWKEY, {})) || {};
+const inKlasWeg = (kw, id) => !!(kw[id] && kw[id].weg > 0);
+const isKlasLijst = l => (window.WORDLISTS||[]).some(k => k.id === l.id);
+// Past de rauwe eigen lijst met dit id aan; de rest blijft zoals hij is.
+function wijzigEigen(id, f){
+  const rauw = load(LKEY, []);
+  if(!Array.isArray(rauw)) return false;
+  const i = rauw.findIndex(el => isObject(el) && String(el.id) === String(id));
+  if(i < 0) return false;
+  rauw[i] = f(rauw[i]);
+  save(LKEY, rauw);
+  return true;
+}
+// bijgewerkt altijd hoger dan wat er stond, ook als de klok van dit
+// toestel achterloopt: anders wint de vorige stand bij het samenvoegen
+const naStand = vorige => Math.max(Date.now(), (isGetal(vorige) ? vorige : 0) + 1);
+const naLijst = x => naStand(stand(schoneLijst(x) || {}));
+function zetKlasRegel(id, weg){
+  const kw = klasWeg(), nu = Date.now();
+  kw[id] = { weg: weg ? nu : 0, bijgewerkt: naStand(kw[id] && kw[id].bijgewerkt) };
+  save(KWKEY, mergeKlasWeg({}, kw));
+}
+function naarPrullenbak(l){
+  const nu = Date.now();
+  if(isKlasLijst(l)) zetKlasRegel(l.id, true);
+  else wijzigEigen(l.id, x => Object.assign(x, { weg: nu, bijgewerkt: naLijst(x) }));
+}
+function terugzetten(id){
+  const klas = (window.WORDLISTS||[]).find(k => k.id === id);
+  if(klas){ zetKlasRegel(id, false); return; }
+  wijzigEigen(id, x => { x.bijgewerkt = naLijst(x); delete x.weg; return x; });
+}
+// Definitief, alleen eigen lijsten: de lijst wordt een grafsteen, en wat
+// hier nog van die lijst staat gaat weg.
+function definitief(id){
+  const nu = Date.now();
+  wijzigEigen(id, x => schoneLijst(Object.assign({}, x, { gewist: nu, bijgewerkt: naLijst(x) }), nu) || x);
+  ruimLijstOp(id);
+}
+// Voortgang, ronde, eigen antwoorden, grens en toetsdatum van een lijst,
+// voor elke oefenaar op dit toestel.
+function ruimLijstOp(id){
+  if(isKlasId(id)) return;   // nooit de voortgang van een klaslijst
+  const staart = ":" + id, weg = [];
+  try{
+    for(let i=0; i<localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k) continue;
+      const m = /^overhoor:(progress|session|alts|grens):([^:]*)(:.*)$/.exec(k);
+      if((m && m[3] === staart) || k === "overhoor:progress" + staart || k === DKEY(id)) weg.push(k);
+    }
+    weg.forEach(k => localStorage.removeItem(k));
+  }catch(e){}
+  if(load(CKEY, null) === id) save(CKEY, null);
+}
+// Bij het laden: een lijst die langer dan PRULLENBAK_DAGEN in de
+// prullenbak staat, wordt in opslag een grafsteen en wordt opgeruimd.
+// Ook een grafsteen die nog voortgang heeft (van een pull), ruimt op.
+function ruimPrullenbakOp(){
+  const rauw = load(LKEY, []);
+  if(!Array.isArray(rauw)) return;
+  const nu = Date.now();
+  let anders = false;
+  const schoon = rauw.map(x => schoneLijst(x, nu));
+  rauw.forEach((x, i) => {
+    const l = schoon[i];
+    if(!l || !(l.gewist > 0) || isKlasId(l.id)) return;
+    if(!(isObject(x) && x.gewist > 0)){ rauw[i] = l; anders = true; }
+    ruimLijstOp(l.id);
+  });
+  // hooguit MAX_GRAFSTENEN: de oudste grafstenen gaan eruit
+  // en een grafsteen met het id van een klaslijst wordt niet bewaard
+  const houd = new Set(begrensGrafstenen(schoon.filter(Boolean)));
+  const kort = rauw.filter((x, i) => !(isObject(x) && x.gewist && isKlasId(x.id)) && (!schoon[i] || houd.has(schoon[i])));
+  if(kort.length !== rauw.length){ anders = true; }
+  if(anders) save(LKEY, kort);
+}
+// Wat er in de prullenbak staat, het nieuwste eerst. Klaslijsten alleen
+// als die getoond worden. dagen: nog zoveel dagen (naar boven, minstens 1).
+function prullenbak(){
+  const nu = Date.now(), out = [];
+  for(const l of eigenLijsten(nu)){
+    if(!(l.weg > 0) || l.gewist > 0) continue;
+    out.push({ lijst: l, eigen: true, weg: l.weg, dagen: Math.max(1, Math.ceil((l.weg + PRULLENBAK_MS - nu) / DAY)) });
+  }
+  if(klasLijstenTonen()){
+    const kw = klasWeg();
+    for(const l of window.WORDLISTS||[]) if(inKlasWeg(kw, l.id)) out.push({ lijst: l, eigen: false, weg: kw[l.id].weg });
+  }
+  return out.sort((a, b) => b.weg - a.weg);
+}
 // Wat op het startscherm staat. lists blijft alles: voortgang, sync en het
 // rapport houden zo ook de verborgen klaslijsten.
 function zichtbareLijsten(){
@@ -674,11 +801,13 @@ function saveProgress(){
   progress.updated = Date.now();
   if(bronProgress){
     // de woordtoestanden zitten in de bronlijsten; hier alleen de rondes bewaren
-    for(const lid in bronProgress){ bronProgress[lid].updated = Date.now(); save(PKEY(lid), bronProgress[lid]); }
+    for(const lid in bronProgress){ if(isGrafsteen(lid)) continue; bronProgress[lid].updated = Date.now(); save(PKEY(lid), bronProgress[lid]); }
     save(PKEY(list.id), { items: {}, sessions: progress.sessions, updated: progress.updated });
     pushProgress();
     return;
   }
+  // een lijst die intussen definitief weg is (pull tijdens een ronde): niets bewaren
+  if(isGrafsteen(list.id)) return;
   save(PKEY(list.id), progress); pushProgress();
 }
 function setLearner(name){
@@ -898,8 +1027,12 @@ async function initDb(){
   if(!WORKER_URL || !heeftNaam() || moetBevestigen()) return;
   if(APP_SECRET) await migreerHuidig();
   if(canSync()){
+    const voor = zichtbareLijsten().map(l => l.id).join("\n");
     try{ await cloudPull(); setSyncState("", true); }
     catch(e){ setSyncState("", false); }
+    // een lijst die op een ander toestel verwijderd is, gaat hier ook weg
+    if(!$("scr-lessons").hidden && zichtbareLijsten().map(l => l.id).join("\n") !== voor) renderLessons();
+    else zetPrullenbakTeller();
   }
   const link = codeUitLink();
   if(link) await probeerCode(link, "link");
@@ -1031,16 +1164,19 @@ function gatherLocal(){
   const s = slug(learner);
   var cats = load("overhoor:cats:" + s, {});
   var prog = {};
-  for(var l of lists){
+  // ook de lijsten in de prullenbak: hun voortgang blijft
+  for(var l of lijstenMetVoortgang()){
     var p = laadVoortgang(l.id);
     if(p) prog[l.id] = p;
   }
   // Wat de app verstuurt, gaat door dezelfde controle als wat binnenkomt.
-  // De rauwe lijsten in opslag blijven zoals ze zijn.
-  var customLists = schoneLijsten(load(LKEY, []));
+  // De rauwe lijsten in opslag blijven zoals ze zijn. De grafstenen en
+  // de lijsten in de prullenbak gaan mee, net als de klaslijsten in de
+  // prullenbak (klasWeg).
+  var customLists = eigenLijsten();
   // De katten zelf gaan niet mee: er valt niets te verzamelen. De oude
   // cats gaan ongewijzigd mee, zodat ze in de worker niet verdwijnen.
-  return { cats: cats, progress: prog, lists: customLists, updated: Date.now() };
+  return { cats: cats, progress: prog, lists: customLists, klasWeg: klasWeg(), updated: Date.now() };
 }
 
 // ---------- vorm van voortgang, eigen lijsten en oude cats ----------
@@ -1052,7 +1188,8 @@ function gatherLocal(){
 // woordtoestand wordt 0, te lange tekst wordt afgekapt, een kapot woord
 // wordt een leeg woord op dezelfde plek (zodat de nummering van de
 // voortgang klopt). Alleen een lijst zonder geldig id of zonder
-// items-array valt weg. De rauwe lijsten in opslag blijven staan.
+// items-array valt weg (behalve een grafsteen, zie hieronder). De rauwe
+// lijsten in opslag blijven staan.
 const isObject = x => !!x && typeof x === "object" && !Array.isArray(x);
 const VORM = {
   grens: { id: 100, sleutel: 200, tekst: 200, woord: 1000, woorden: 5000, lijstje: 50 },
@@ -1158,17 +1295,113 @@ function schoonWoord(it){
   const accept = tekstLijst(w.accept, g.woord); if(accept && accept.length) out.accept = accept;
   return out;
 }
-// Een eigen lijst. Zonder geldig id of zonder items-array: null. Verder
-// wordt alles hersteld of afgekapt; mix en bronnen komen er niet in.
+// ---------- prullenbak ----------
+// Drie tijden per eigen lijst (ms, door tijd() begrensd):
+// - bijgewerkt: laatste wijziging van de lijst als geheel (verwijderen,
+//   terugzetten, definitief);
+// - weg: sinds wanneer in de prullenbak (0 of ontbreekt: niet);
+// - gewist: definitief weg. Zo'n lijst is een grafsteen, zonder inhoud:
+//   { id, title: "", items: [], weg?, gewist, bijgewerkt, added? }. Hij
+//   blijft bewaard, zodat een ander toestel de lijst niet terugbrengt.
+// Na PRULLENBAK_DAGEN (strikt meer) wordt een lijst met weg een grafsteen.
+// Gelijk aan PRULLENBAK_DAGEN in worker/src/merge.js (pariteitstest).
+const PRULLENBAK_DAGEN = 30;
+const PRULLENBAK_MS = PRULLENBAK_DAGEN * 24 * 60 * 60 * 1000;
+// Hooguit zoveel regels in klasWeg; daarboven blijven de nieuwste.
+const MAX_KLAS_WEG = 200;
+// Hooguit zoveel grafstenen; de nieuwste op gewist blijven.
+const MAX_GRAFSTENEN = 500;
+// Alleen een eigen lijst kan een grafsteen worden: eigen lijsten hebben
+// altijd een id "custom-<tijd>" (importList, photoSave). Een grafsteen met
+// het id van een klaslijst zou de voortgang daarvan blijvend wissen.
+const EIGEN_ID = "custom-";
+const kanGrafsteen = id => typeof id === "string" && id.startsWith(EIGEN_ID);
+// Stand voor het samenvoegen: bijgewerkt, anders added, anders 0.
+function stand(l){
+  if(isGetal(l.bijgewerkt)) return l.bijgewerkt;
+  if(isGetal(l.added)) return l.added;
+  return 0;
+}
+// De grafsteen van l, of null als l geen grafsteen is.
+function grafsteen(l, id, nu){
+  if(!kanGrafsteen(id)) return null;
+  const weg = isGetal(l.weg) ? tijd(l.weg, nu) : 0;
+  let gewist = isGetal(l.gewist) ? tijd(l.gewist, nu) : 0;
+  if(!gewist && weg && nu - weg > PRULLENBAK_MS) gewist = weg + PRULLENBAK_MS;
+  if(!gewist) return null;
+  const out = { id, title: "", items: [] };
+  if(weg) out.weg = weg;
+  out.gewist = gewist;
+  const b = isGetal(l.bijgewerkt) ? tijd(l.bijgewerkt, nu) : isGetal(l.added) ? tijd(l.added, nu) : 0;
+  out.bijgewerkt = Math.max(b, gewist);
+  if(isGetal(l.added)) out.added = tijd(l.added, nu);
+  return out;
+}
+// Wint lijst a van de lijst b die er al staat? Hoogste stand; bij gelijke
+// stand wint een grafsteen van een levende lijst, anders blijft b.
+// Dezelfde regel als mergeLists in de worker. b, wat er al staat, is hier
+// de lokale lijst; in de worker is dat wat in KV staat.
+function begrensGrafstenen(lists){
+  const stenen = lists.map((l, i) => ({ l, i })).filter(x => x.l.gewist > 0);
+  if(stenen.length <= MAX_GRAFSTENEN) return lists;
+  const weg = new Set(stenen.sort((x, y) => (y.l.gewist - x.l.gewist) || (x.i - y.i)).slice(MAX_GRAFSTENEN).map(x => x.i));
+  return lists.filter((_, i) => !weg.has(i));
+}
+function wintVan(a, b){
+  return stand(a) > stand(b) || (stand(a) === stand(b) && a.gewist > 0 && !(b.gewist > 0));
+}
+// Klaslijsten in de prullenbak: { [lijst-id]: { weg, bijgewerkt } }. weg 0
+// is teruggezet (de regel blijft voor het samenvoegen). Kapotte regels
+// vallen weg; hooguit MAX_KLAS_WEG.
+function schoneKlasRegel(r, nu){
+  if(!isObject(r) || !isGetal(r.weg) || !isGetal(r.bijgewerkt)) return null;
+  return { weg: tijd(r.weg, nu), bijgewerkt: tijd(r.bijgewerkt, nu) };
+}
+function schoneKlasWeg(d, nu){
+  if(!isObject(d)) return null;
+  const out = {};
+  let n = 0;
+  for(const k of Object.keys(d)){
+    if(n >= MAX_KLAS_WEG) break;
+    if(!veiligeSleutel(k, VORM.grens.id)) continue;
+    const v = schoneKlasRegel(d[k], nu);
+    if(v){ out[k] = v; n++; }
+  }
+  return out;
+}
+// a: wat er al staat, b: wat erbij komt. Per id wint de hoogste
+// bijgewerkt; gelijk: a blijft. Hooguit MAX_KLAS_WEG, de nieuwste.
+function mergeKlasWeg(a, b){
+  const byId = new Map();
+  for(const k of Object.keys(a)) byId.set(k, a[k]);
+  for(const k of Object.keys(b)){
+    const oud = byId.get(k);
+    if(!oud || b[k].bijgewerkt > oud.bijgewerkt) byId.set(k, b[k]);
+  }
+  let regels = Array.from(byId.entries());
+  if(regels.length > MAX_KLAS_WEG) regels = regels.sort((x, y) => y[1].bijgewerkt - x[1].bijgewerkt).slice(0, MAX_KLAS_WEG);
+  const out = {};
+  for(const [k, v] of regels) out[k] = v;
+  return out;
+}
+
+// Een eigen lijst. Zonder geldig id: null. Zonder items-array ook null,
+// behalve bij een grafsteen. Verder wordt alles hersteld of afgekapt; mix
+// en bronnen komen er niet in.
 function schoneLijst(l, nu){
   const g = VORM.grens;
+  if(nu === undefined) nu = Date.now();
   if(!isObject(l)) return null;
   if(typeof l.id === "number" ? !isGetal(l.id) : !veiligeSleutel(l.id, g.id)) return null;
+  const steen = grafsteen(l, l.id, nu);
+  if(steen) return steen;
   if(!Array.isArray(l.items)) return null;
   const out = { id: l.id, title: kapOfLeeg(l.title, g.tekst) };
   for(const n of VORM.lijstTeksten){ const t = kap(l[n], g.tekst); if(t !== undefined) out[n] = t; }
   for(const n of VORM.lijstVlaggen) if(typeof l[n] === "boolean") out[n] = l[n];
   if(isGetal(l.added)) out.added = tijd(l.added, nu);
+  if(isGetal(l.bijgewerkt)) out.bijgewerkt = tijd(l.bijgewerkt, nu);
+  if(isGetal(l.weg) && tijd(l.weg, nu) > 0) out.weg = tijd(l.weg, nu);
   const dirs = (tekstLijst(l.directions, g.tekst) || []).filter(d => VORM.richtingen.includes(d));
   if(dirs.length) out.directions = dirs;
   const classes = tekstLijst(l.classes, g.tekst); if(classes && classes.length) out.classes = classes;
@@ -1235,19 +1468,48 @@ function applyRemote(remote, s){
     try{
       // De lokale lijsten blijven rauw staan, ook als ze niet door de
       // controle komen. Alleen een lijst met hetzelfde id wordt vervangen
-      // door de gecontroleerde lijst van de worker: als die nieuwer is, of
-      // als de lokale onbruikbaar is (geen items-array).
+      // door de gecontroleerde lijst van de worker: als die wint op stand
+      // (wintVan, dezelfde regel als de worker: bij gelijke stand wint een
+      // grafsteen), of als de lokale onbruikbaar is (geen items-array).
+      // Zo brengt een pull een verwijderde lijst niet terug.
       const rauw = load(LKEY, []);
       const opslag = Array.isArray(rauw) ? rauw.slice() : [];
+      const stenen = [];
       for(const rl of schoneLijsten(remote.lists, nu)){
+        // een eigen lijst heeft nooit het id van een klaslijst: negeren
+        if(isKlasId(rl.id)) continue;
         const i = opslag.findIndex(el => isObject(el) && (typeof el.id === "string" || typeof el.id === "number") && String(el.id) === String(rl.id));
-        if(i < 0){ opslag.push(rl); continue; }
-        const oud = schoneLijst(opslag[i], nu);
-        if(!oud || tijd(rl.added, nu) > tijd(oud.added, nu)) opslag[i] = rl;
+        const oud = i < 0 ? null : schoneLijst(opslag[i], nu);
+        if(i >= 0 && oud && !wintVan(rl, oud)) continue;
+        if(i < 0) opslag.push(rl); else opslag[i] = rl;
+        if(rl.gewist > 0) stenen.push(rl.id);
       }
       save(LKEY, opslag);
+      stenen.forEach(ruimLijstOp);
+      ruimPrullenbakOp();   // ook: hooguit MAX_GRAFSTENEN
     } catch(e){ /* lijsten kapot: de rest gaat door */ }
   }
+  if(isObject(remote.klasWeg)){
+    try{
+      // per klaslijst wint de nieuwste; gelijk: de lokale blijft
+      save(KWKEY, mergeKlasWeg(klasWeg(), schoneKlasWeg(remote.klasWeg, nu) || {}));
+    } catch(e){ /* klasWeg kapot: de rest gaat door */ }
+  }
+  // wat nu in de prullenbak staat, staat niet meer bij de lijsten
+  lists = allLists();
+  naPull();
+}
+// Na een pull: staat de open lijst nu in de prullenbak of is hij een
+// grafsteen, dan een andere lijst kiezen en terug naar het lessenscherm.
+// Een lopende ronde breekt niet af; saveProgress schrijft dan niets meer
+// onder een grafsteen. Staat de prullenbak open, dan opnieuw tekenen.
+function naPull(){
+  if(list && !list.mix && !lists.some(l => l.id === list.id) && $("scr-quiz").hidden){
+    selectList(null);
+    if(["scr-home", "scr-study", "scr-progress"].some(id => !$(id).hidden)){ renderLessons(); show("scr-lessons"); }
+  }
+  if(!$("scr-prullenbak").hidden) verversPrullenbak();
+  else zetPrullenbakTeller();
 }
 
 // De slug en de code gaan mee: wisselt ze van oefenaar of van code terwijl
@@ -1424,10 +1686,11 @@ function toonNaamVraag(){
   $("naam-vraag-naam").textContent = learner; $("btn-naam-ja").textContent = "Ja, ik ben " + learner;
   $("learner-view").hidden = true; $("learner-form").hidden = true; $("naam-vraag").hidden = false;
 }
-function show(id){ document.querySelectorAll(".screen").forEach(s=>s.hidden = s.id!==id); window.scrollTo(0,0); if(id==="scr-lessons") verversNaUpdate(); }
+function show(id){ if(id!=="scr-lessons") sluitOngedaan(); document.querySelectorAll(".screen").forEach(s=>s.hidden = s.id!==id); window.scrollTo(0,0); if(id==="scr-lessons") verversNaUpdate(); }
 
 function renderLessons(){
   $("learner-label").textContent = learner;
+  zetPrullenbakTeller();
   // een kaart tekenen, voor een gewone lijst of voor de gemengde
   function kaart(l){
     let c;
@@ -1521,7 +1784,8 @@ function renderHome(){
   bewaakPauze();
   const s = load(SKEY(list.id), null);
   $("resume").hidden = !(s && s.pos < s.queue.length);
-  $("btn-delete-list").hidden = !String(list.id).startsWith("custom-");
+  // eigen lijsten en klaslijsten, niet Alles door elkaar
+  $("btn-delete-list").hidden = !!list.mix;
 }
 
 function renderStudy(){
@@ -1654,7 +1918,7 @@ function elapsed(){
 }
 function startTimer(){ stopTimer(); timer = setInterval(()=>{ $("q-timer").textContent = fmtTime(elapsed()); if(!ui.pauseShown && elapsed()>PAUSE_AFTER){ ui.pauseShown=true; $("pause-hint").hidden=false; } }, 1000); }
 function stopTimer(){ if(timer){ clearInterval(timer); timer=null; } }
-function persistSession(){ session.elapsedBefore = elapsed(); session.startedAt = Date.now(); save(SKEY(list.id), session); }
+function persistSession(){ session.elapsedBefore = elapsed(); session.startedAt = Date.now(); if(!isGrafsteen(list.id)) save(SKEY(list.id), session); }
 
 function current(){ return session.queue[session.pos]; }
 
@@ -1996,11 +2260,110 @@ function importList(){
   lists = allLists(); selectList(nl.id); $("imp-title").value=""; $("imp-text").value=""; msg.hidden=true;
   renderHome(); show("scr-home");
 }
+// Lijst verwijderen (de prullenbakknop op het lesscherm): zonder te vragen
+// naar de prullenbak, terug naar het startscherm met de focus op de kop,
+// en onderin de balk met Ongedaan maken. De balk pakt de focus niet, maar
+// staat in de DOM direct na de kop (hij is fixed, dus het beeld blijft
+// gelijk). Ongedaan maken zet de lijst terug en zet de focus op zijn kaart.
+let ongedaanSluit = null;
 function deleteList(){
-  if(!confirm("Lijst '"+list.title+"' en de voortgang ervan verwijderen?")) return;
-  // rauwe opslag: alleen de lijst met dit id gaat eruit, de rest blijft zoals hij is
-  save(LKEY, load(LKEY, []).filter(l=>!isObject(l) || l.id!==list.id)); save(PKEY(list.id), null); save(SKEY(list.id), null);
-  lists = allLists(); selectList(null); renderLessons(); show("scr-lessons");
+  if(!list || list.mix) return;
+  const l = list;
+  naarPrullenbak(l);
+  lists = allLists(); selectList(null);
+  renderLessons(); show("scr-lessons");
+  // de knop is weg: de focus naar de kop; de balk staat er in de DOM vlak
+  // na, dus met Tab ben je er meteen
+  $("app-titel").focus();
+  cloudPush();
+  ongedaanSluit = UI.toonOngedaan($("ongedaan"), { tekst: l.title + " is verwijderd.", ongedaan: () => {
+    ongedaanSluit = null;
+    terugzetten(l.id);
+    lists = allLists();
+    renderLessons(); show("scr-lessons");
+    cloudPush();
+    const kaart = [...$("lessons").querySelectorAll(".lesson")].find(b => b.dataset.id === String(l.id));
+    if(kaart) kaart.focus();
+  } });
+}
+function sluitOngedaan(){ if(ongedaanSluit){ ongedaanSluit(); ongedaanSluit = null; } }
+
+// ---------- prullenbak (scherm) ----------
+// Per lijst een kaart (UI.PrullenKaart), het nieuwste bovenaan. Na
+// Terugzetten of Definitief verwijderen verdwijnt de kaart, zegt
+// #prullenbak-melding (role=status) wat er gebeurde, en gaat de focus naar
+// de volgende kaart, of de vorige, of de kop als de prullenbak leeg is.
+// Definitief verwijderen vraagt eerst in de kaart. De focus gaat dan naar
+// Annuleren: de veilige keuze, en een tweede tik of Enter op dezelfde plek
+// verwijdert niets. De vraag is de naam van de groep, dus een
+// schermlezer leest hem voor. Escape annuleert.
+let bevestigId = null;
+const prullenRegel = x => x.eigen
+  ? x.lijst.items.length + (x.lijst.items.length === 1 ? " woord" : " woorden") + " · nog " + x.dagen + (x.dagen === 1 ? " dag" : " dagen")
+  : "Klaslijst · blijft hier tot je hem terugzet";
+function renderPrullenbak(){
+  ruimPrullenbakOp();
+  const items = prullenbak(), body = $("prullenbak-body");
+  if(!items.some(x => x.eigen && String(x.lijst.id) === bevestigId)) bevestigId = null;
+  if(!items.length){
+    body.innerHTML = '<div class="card">' + UI.Empty({ glyph: "0", title: "De prullenbak is leeg.", body: "Een verwijderde lijst staat hier " + PRULLENBAK_DAGEN + " dagen." }) + '</div>';
+  } else {
+    body.innerHTML = items.map((x, i) => UI.PrullenKaart({ id: String(x.lijst.id), kopId: "prullen-" + i,
+      vak: x.lijst.subject, titel: x.lijst.title, regel: prullenRegel(x),
+      eigen: x.eigen, bevestig: x.eigen && String(x.lijst.id) === bevestigId })).join("");
+  }
+  zetPrullenbakTeller();
+  return items;
+}
+// opnieuw tekenen na een pull: de focus blijft op dezelfde knop als die
+// er nog is, anders op de kop. Een open vraag sluit alleen als zijn lijst
+// er niet meer is (renderPrullenbak).
+function verversPrullenbak(){
+  const a = document.activeElement, kaart = a && a.closest && a.closest("#prullenbak-body .prullen");
+  const id = kaart && kaart.dataset.id, actie = a && a.dataset && a.dataset.actie;
+  renderPrullenbak();
+  if(!kaart) return;
+  const k = prullenKaarten().find(c => c.dataset.id === id);
+  const b = k && (k.querySelector('[data-actie="' + actie + '"]') || k.querySelector("button"));
+  if(b) b.focus(); else $("prullenbak-kop").focus();
+}
+function zetPrullenbakTeller(){ UI.zetTeller($("prullenbak-teller"), prullenbak().length); }
+function prullenMelding(tekst){
+  const m = $("prullenbak-melding");
+  m.textContent = "";
+  setTimeout(() => { m.textContent = tekst; }, 50);
+}
+const prullenKaarten = () => [...$("prullenbak-body").querySelectorAll(".prullen")];
+function prullenFocus(id, actie){
+  const k = prullenKaarten().find(c => c.dataset.id === id);
+  const b = k && k.querySelector('[data-actie="' + actie + '"]');
+  if(b) b.focus();
+}
+// na het weghalen van kaart i: de focus naar wat er nu op plek i staat
+function prullenFocusNa(i){
+  const ks = prullenKaarten(), k = ks[i] || ks[i - 1];
+  if(k) k.querySelector('[data-actie="terug"]').focus();
+  else $("prullenbak-kop").focus();
+}
+function prullenActie(b){
+  const kaart = b.closest(".prullen"); if(!kaart) return;
+  const id = kaart.dataset.id, actie = b.dataset.actie;
+  const i = prullenKaarten().indexOf(kaart);
+  const x = prullenbak().find(y => String(y.lijst.id) === id); if(!x) return;
+  if(actie === "wis"){ bevestigId = id; renderPrullenbak(); prullenFocus(id, "annuleer"); return; }
+  if(actie === "annuleer"){ bevestigId = null; renderPrullenbak(); prullenFocus(id, "wis"); return; }
+  if(actie === "terug"){
+    terugzetten(x.lijst.id);
+    prullenMelding(x.lijst.title + " staat weer bij je lijsten.");
+  } else if(actie === "ja" && x.eigen){
+    definitief(x.lijst.id);
+    prullenMelding(x.lijst.title + " is definitief verwijderd.");
+  } else return;
+  bevestigId = null;
+  lists = allLists();
+  cloudPush();
+  renderPrullenbak();
+  prullenFocusNa(i);
 }
 
 // ---------- foto-import ----------
@@ -2323,6 +2686,16 @@ function bind(){
   $("btn-report").addEventListener("click", ()=>{ show("scr-report"); renderReport(); $("btn-report-back").focus(); });
   $("btn-report-back").addEventListener("click", ()=>{ renderLessons(); show("scr-lessons"); $("btn-menu").focus(); });
   $("btn-report-copy").addEventListener("click", copyReport);
+  // prullenbak: zoals Rapport, de focus naar Terug en na Terug naar de menuknop
+  $("btn-prullenbak").addEventListener("click", ()=>{ bevestigId = null; renderPrullenbak(); show("scr-prullenbak"); $("btn-prullenbak-back").focus(); });
+  $("btn-prullenbak-back").addEventListener("click", ()=>{ bevestigId = null; renderLessons(); show("scr-lessons"); $("btn-menu").focus(); });
+  $("prullenbak-body").addEventListener("click", e=>{ const b = e.target.closest("button[data-actie]"); if(b) prullenActie(b); });
+  $("prullenbak-body").addEventListener("keydown", e=>{
+    if(e.key !== "Escape" || !bevestigId) return;
+    e.preventDefault();
+    const b = $("prullenbak-body").querySelector('[data-actie="annuleer"]');
+    if(b) prullenActie(b);
+  });
   $("btn-ander-toestel").addEventListener("click", ()=>{ if($("code-plek").hidden) toonCodePaneel(); else sluitCodePaneel(); });
   $("btn-learner").addEventListener("click", ()=>{ sluitCodePaneel(); $("learner-form").hidden=false; $("learner-view").hidden=true; $("learner-name").value=learner; $("learner-name").focus(); });
   const saveLearner = ()=>{
@@ -2477,16 +2850,26 @@ function registreerSW(){
 }
 
 // Menuknop rechts in de kop, met het menu eronder (UI.IconBtn, UI.Menu,
-// UI.bindMenu): Rapport, Over Overhoren, het thema en de versie.
+// UI.bindMenu): Rapport, Prullenbak (met een teller), Over Overhoren, het
+// thema en de versie.
 function zetMenu(){
   const rij = $("kop-rij");
   if(!rij || $("btn-menu")) return;
   rij.insertAdjacentHTML("beforeend",
     UI.IconBtn({ id: "btn-menu", icon: "menu", label: "Menu", controls: "menu" }) +
     UI.Menu({ id: "menu", versieId: "menu-versie",
-      items: [{ id: "btn-report", icon: "chart", label: "Rapport" }, { id: "btn-info", icon: "info", label: "Over Overhoren" }],
+      items: [{ id: "btn-report", icon: "chart", label: "Rapport" },
+        { id: "btn-prullenbak", icon: "prullenbak", label: "Prullenbak", tellerId: "prullenbak-teller", teller: 0 },
+        { id: "btn-info", icon: "info", label: "Over Overhoren" }],
       thema: { id: "theme-seg", labelId: "theme-label" } }));
   UI.bindMenu($("btn-menu"));
+}
+// Prullenbakknop rechtsboven op het lesscherm (UI.IconBtn, rood), en de
+// ongedaan-balk onderin (UI.Ongedaan), een keer in de pagina.
+function zetVerwijderKnop(){
+  if($("btn-delete-list")) return;
+  $("home-rechts").insertAdjacentHTML("beforeend", UI.IconBtn({ id: "btn-delete-list", icon: "prullenbak", label: "Lijst verwijderen", className: "danger" }));
+  $("app-titel").insertAdjacentHTML("afterend", UI.Ongedaan({ id: "ongedaan", hidden: true }));
 }
 
 // Beta naast de naam, met de uitleg onder de kop (UI.Beta, UI.bindBeta)
@@ -2599,11 +2982,14 @@ function init(){
   Celebrate.laadCatalogus();   // katten.json: klein, en dan staat de kat meteen klaar
   zetBeta();
   zetMenu();
+  zetVerwijderKnop();
   UI.hydrateIcons(document);
   klasStart();   // voor er iets in opslag komt, zoals de laatste lijst
   zetKlasTeksten();
+  ruimPrullenbakOp();   // na PRULLENBAK_DAGEN: grafsteen
   lists = allLists();
-  if(!lists.length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
+  // alles in de prullenbak is geen kapotte lists.js
+  if(!(window.WORDLISTS||[]).length && !eigenLijsten().length){ document.body.textContent = "Geen woordenlijsten gevonden (lists.js)."; return; }
   if(heeftNaam()) setLearner(learner);
   checkCodeHash();
   window.addEventListener("hashchange", ()=>{ if(checkCodeHash()) initDb(); });

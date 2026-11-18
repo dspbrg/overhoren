@@ -11,6 +11,25 @@
 // speling voor klokken die iets voorlopen
 export const TOEKOMST_MARGE_MS = 5 * 60 * 1000;
 
+// Zoveel dagen blijft een eigen lijst in de prullenbak. Daarna wordt hij bij
+// de controle een grafsteen. Gelijk aan PRULLENBAK_DAGEN in index.html.
+export const PRULLENBAK_DAGEN = 30;
+const PRULLENBAK_MS = PRULLENBAK_DAGEN * 24 * 60 * 60 * 1000;
+
+// Hoogste klaslijsten in klasWeg. Er zijn er veel minder; dit is een rem.
+export const MAX_KLAS_WEG = 200;
+
+// Hooguit zoveel grafstenen per record; de nieuwste op gewist blijven.
+// Zo kan een vol record weer kleiner worden. Gelijk aan index.html.
+export const MAX_GRAFSTENEN = 500;
+
+// Alleen een eigen lijst kan een grafsteen worden. Eigen lijsten hebben
+// altijd een id "custom-<tijd>" (index.html, importList en photoSave, zo
+// sinds de eerste versie). Klaslijsten uit lists.js hebben andere ids; een
+// grafsteen met zo'n id zou hun voortgang blijvend wissen.
+export const EIGEN_ID = "custom-";
+export const kanGrafsteen = id => typeof id === "string" && id.startsWith(EIGEN_ID);
+
 // Hoogste box. Gelijk aan MAX_BOX in engine.js (een test bewaakt dat).
 export const MAX_BOX = 6;
 
@@ -211,13 +230,44 @@ export function controleerWoord(it) {
   return out;
 }
 
-// Een eigen lijst. Zonder geldig id of zonder items-array: null. Verder
-// wordt alles hersteld of afgekapt. Velden die een lijst van buiten niet
-// mag hebben (mix, bronnen) komen er niet in.
+// Stand van een eigen lijst voor het samenvoegen: bijgewerkt, anders
+// added, anders 0. Dezelfde regel staat in index.html.
+export function stand(l) {
+  if (getal(l.bijgewerkt)) return l.bijgewerkt;
+  if (getal(l.added)) return l.added;
+  return 0;
+}
+
+// Prullenbak: weg (in de prullenbak sinds), gewist (definitief weg) en
+// bijgewerkt (laatste wijziging van de lijst als geheel). weg en gewist
+// tellen alleen boven 0. Na PRULLENBAK_DAGEN wordt een lijst met weg een
+// grafsteen. Een grafsteen is { id, title: "", items: [] } plus de tijden,
+// zonder inhoud. Geeft null als de lijst geen grafsteen is.
+function grafsteen(l, id, nu) {
+  if (!kanGrafsteen(id)) return null;
+  const weg = getal(l.weg) ? tijd(l.weg, nu) : 0;
+  let gewist = getal(l.gewist) ? tijd(l.gewist, nu) : 0;
+  if (!gewist && weg && nu - weg > PRULLENBAK_MS) gewist = weg + PRULLENBAK_MS;
+  if (!gewist) return null;
+  const out = { id, title: "", items: [] };
+  if (weg) out.weg = weg;
+  out.gewist = gewist;
+  const b = getal(l.bijgewerkt) ? tijd(l.bijgewerkt, nu) : getal(l.added) ? tijd(l.added, nu) : 0;
+  out.bijgewerkt = Math.max(b, gewist);
+  if (getal(l.added)) out.added = tijd(l.added, nu);
+  return out;
+}
+
+// Een eigen lijst. Zonder geldig id: null. Zonder items-array ook null,
+// behalve bij een grafsteen: die heeft geen inhoud nodig. Verder wordt alles
+// hersteld of afgekapt. Velden die een lijst van buiten niet mag hebben
+// (mix, bronnen) komen er niet in.
 export function controleerLijst(l, nu = Date.now()) {
   if (!isObject(l)) return null;
   const id = l.id;
   if (typeof id === "number" ? !Number.isFinite(id) : !(veiligeSleutel(id) && id.length <= GRENS.id)) return null;
+  const steen = grafsteen(l, id, nu);
+  if (steen) return steen;
   if (!Array.isArray(l.items)) return null;
   const out = { id, title: kapOfLeeg(l.title, GRENS.tekst) };
   for (const n of LIJST_TEKSTEN) {
@@ -226,6 +276,8 @@ export function controleerLijst(l, nu = Date.now()) {
   }
   for (const n of LIJST_VLAGGEN) if (typeof l[n] === "boolean") out[n] = l[n];
   if (getal(l.added)) out.added = tijd(l.added, nu);
+  if (getal(l.bijgewerkt)) out.bijgewerkt = tijd(l.bijgewerkt, nu);
+  if (getal(l.weg) && tijd(l.weg, nu) > 0) out.weg = tijd(l.weg, nu);
   const dirs = (tekstLijst(l.directions, GRENS.tekst) || []).filter(d => RICHTINGEN.includes(d));
   if (dirs.length) out.directions = dirs;
   const classes = tekstLijst(l.classes, GRENS.tekst);
@@ -238,7 +290,7 @@ export function controleerLijst(l, nu = Date.now()) {
   return out;
 }
 
-// ---------- cats, progress, lists ----------
+// ---------- cats, progress, lists, klasWeg ----------
 
 // Een object waarvan elke waarde door `controleer` gaat. Geen object: null
 // (veld telt niet mee). Kapotte waarden of verboden sleutels vallen weg.
@@ -262,6 +314,27 @@ export function controleerLists(d, nu = Date.now()) {
   for (const l of d) {
     const x = controleerLijst(l, nu);
     if (x) out.push(x);
+  }
+  return out;
+}
+
+// Klaslijsten in de prullenbak: { [lijst-id]: { weg, bijgewerkt } }. weg 0
+// betekent teruggezet. Sleutel als bij progress, hooguit MAX_KLAS_WEG
+// regels, beide getallen via tijd(). Een regel die geen object is of waar
+// weg of bijgewerkt geen eindig getal is, valt weg.
+export function controleerKlasRegel(r, nu = Date.now()) {
+  if (!isObject(r) || !getal(r.weg) || !getal(r.bijgewerkt)) return null;
+  return { weg: tijd(r.weg, nu), bijgewerkt: tijd(r.bijgewerkt, nu) };
+}
+export function controleerKlasWeg(d, nu = Date.now()) {
+  if (!isObject(d)) return null;
+  const out = {};
+  let n = 0;
+  for (const k of Object.keys(d)) {
+    if (n >= MAX_KLAS_WEG) break;
+    if (!veiligeSleutel(k) || k.length > GRENS.id) continue;
+    const v = controleerKlasRegel(d[k], nu);
+    if (v) { out[k] = v; n++; }
   }
   return out;
 }
@@ -292,26 +365,72 @@ function mergeProgress(a, b, nu) {
   return out;
 }
 
-function mergeLists(a, b, nu) {
+// Hooguit MAX_GRAFSTENEN grafstenen: de nieuwste op gewist blijven, bij
+// gelijke gewist de eerste. De volgorde van de rest blijft.
+export function begrensGrafstenen(lists) {
+  const stenen = lists.map((l, i) => ({ l, i })).filter(x => x.l.gewist > 0);
+  if (stenen.length <= MAX_GRAFSTENEN) return lists;
+  const weg = new Set(stenen.sort((x, y) => (y.l.gewist - x.l.gewist) || (x.i - y.i)).slice(MAX_GRAFSTENEN).map(x => x.i));
+  return lists.filter((_, i) => !weg.has(i));
+}
+
+// Per id wint de hoogste stand. Bij gelijke stand wint een grafsteen van
+// een levende lijst; anders blijft de bestaande staan. Hier is dat remote
+// (wat in KV staat); in de app is het de lokale lijst.
+function mergeLists(a, b) {
   const byId = new Map();
   for (const l of a) byId.set(String(l.id), l);
   for (const l of b) {
     const oud = byId.get(String(l.id));
-    if (!oud || tijd(l.added, nu) > tijd(oud.added, nu)) byId.set(String(l.id), l);
+    const wint = !oud || stand(l) > stand(oud) ||
+      (stand(l) === stand(oud) && l.gewist > 0 && !(oud.gewist > 0));
+    if (wint) byId.set(String(l.id), l);
   }
-  return Array.from(byId.values());
+  return begrensGrafstenen(Array.from(byId.values()));
+}
+
+// Per id wint de hoogste bijgewerkt; gelijk: remote blijft. Hooguit
+// MAX_KLAS_WEG regels, de nieuwste eerst.
+function mergeKlasWeg(a, b) {
+  const byId = new Map();
+  for (const k of Object.keys(a)) byId.set(k, a[k]);
+  for (const k of Object.keys(b)) {
+    const oud = byId.get(k);
+    if (!oud || b[k].bijgewerkt > oud.bijgewerkt) byId.set(k, b[k]);
+  }
+  let regels = Array.from(byId.entries());
+  if (regels.length > MAX_KLAS_WEG) {
+    regels = regels.sort((x, y) => y[1].bijgewerkt - x[1].bijgewerkt).slice(0, MAX_KLAS_WEG);
+  }
+  const out = {};
+  for (const [k, v] of regels) out[k] = v;
+  return out;
+}
+
+// Voortgang van een grafsteen valt weg. Een lijst die alleen weg heeft,
+// houdt zijn voortgang.
+function zonderGrafstenen(progress, lists) {
+  const stenen = new Set(lists.filter(l => l.gewist > 0 && kanGrafsteen(l.id)).map(l => String(l.id)));
+  const out = {};
+  for (const k of Object.keys(progress)) if (!stenen.has(k)) out[k] = progress[k];
+  return out;
 }
 
 // remote: wat in KV staat, local: de body van de PUT.
-// Het resultaat bevat alleen cats, progress, lists en updated. Andere velden
-// (zoals het vervallen `katten`) worden niet opgeslagen en niet teruggegeven.
+// Het resultaat bevat alleen cats, progress, lists, klasWeg en updated.
+// Andere velden (zoals het vervallen `katten`) worden niet opgeslagen en
+// niet teruggegeven. Ontbreekt een veld in de PUT (een oude app kent
+// klasWeg niet), dan blijft de remote waarde staan.
 export function mergeSync(remote, local, nu = Date.now()) {
   const r = isObject(remote) ? remote : {};
   const l = isObject(local) ? local : {};
+  const lists = mergeLists(controleerLists(r.lists, nu) || [], controleerLists(l.lists, nu) || []);
+  const progress = mergeProgress(controleerProgress(r.progress, nu) || {}, controleerProgress(l.progress, nu) || {}, nu);
   return {
     cats: mergeCats(controleerCats(r.cats, nu) || {}, controleerCats(l.cats, nu) || {}, nu),
-    progress: mergeProgress(controleerProgress(r.progress, nu) || {}, controleerProgress(l.progress, nu) || {}, nu),
-    lists: mergeLists(controleerLists(r.lists, nu) || [], controleerLists(l.lists, nu) || [], nu),
+    progress: zonderGrafstenen(progress, lists),
+    lists,
+    klasWeg: mergeKlasWeg(controleerKlasWeg(r.klasWeg, nu) || {}, controleerKlasWeg(l.klasWeg, nu) || {}),
     updated: Math.max(tijd(r.updated, nu), tijd(l.updated, nu)),
   };
 }

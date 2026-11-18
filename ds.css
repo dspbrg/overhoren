@@ -267,6 +267,7 @@
     --page-y: var(--s5);        /* paginarand boven en onder */
     --menu-breedte: 21rem;      /* het menu rechtsboven, smaller als het scherm dat is */
     --menu-dim: 78%;            /* hoeveel van --page-1 de dimlaag achter het menu dekt */
+    --ongedaan-breedte: 34rem;  /* de ongedaan-balk onderin, smaller als het scherm dat is */
     /* Veilige rand: als app op het beginscherm (iOS, black-translucent en
        viewport-fit=cover) loopt de pagina onder de statusbalk en de
        thuisbalk door. env() geeft daar de ruimte die vrij moet blijven,
@@ -312,6 +313,10 @@
     --welkom-overgang-snel: 250ms;  /* hetzelfde gat na een tik of toets */
     --welkom-curve: cubic-bezier(0.6, 0, 0.4, 1);    /* rustig open, snel over het midden, rustig de hoeken uit */
     --t-welkom:    2.5rem;    /* 40px, de naam van de app in het welkom */
+
+    /* --- ongedaan: zo lang staat de balk na verwijderen (UI.toonOngedaan
+       leest deze waarde, in ms). Muis of focus erin pauzeert hem. --- */
+    --ongedaan-duur: 8000ms;
 
     /* kleinste tikdoel op een telefoon; knoppen zijn 48 */
     --tap:44px;
@@ -856,6 +861,19 @@
     color: var(--accent-ink); z-index: 11;
   }
   .icon-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  /* rood icoon voor iets dat weggaat, zoals Lijst verwijderen */
+  .icon-btn.danger { color: var(--bad-ink); }
+  /* rechts in een topbar: tekst en een icoonknop naast elkaar */
+  .topbar-rechts { display: flex; align-items: center; gap: var(--gap-inline); min-inline-size: 0; }
+
+  /* --- link in rood: iets dat weggaat, zoals Definitief verwijderen --- */
+  .link.danger { color: var(--bad-ink); }
+
+  /* --- alleen voor een schermlezer --- */
+  .sr-only {
+    position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; border: 0;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
 
   /* --- menu: een kaart onder de menuknop, rechts uitgelijnd (UI.Menu).
          De dimlaag erachter vangt een tik buiten het menu. --- */
@@ -873,11 +891,48 @@
     font: inherit; font-weight: 600; color: var(--ink); text-align: start; cursor: pointer;
   }
   .menu-item .icon { font-size: var(--t-icon-menu); color: var(--accent-strong); }
+  /* teller rechts in een menu-item (UI.Teller), zoals bij de Prullenbak */
+  .menu-item .teller { margin-inline-start: auto; }
+  .teller .chip { color: var(--accent-strong); font-variant-numeric: tabular-nums; }
   .menu-item:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
   .menu-sectie, .menu-versie { border-block-start: 1px solid var(--line); }
   .menu-sectie { margin-block-start: var(--gap-label); padding: var(--pad-menu-sectie); display: flex; flex-direction: column; gap: var(--gap-label); }
   .menu-sectie > .seg { margin-inline-start: calc(var(--slant) / -2); }
   .menu-versie { margin: 0; padding: var(--pad-menu-versie); color: var(--muted); font-size: var(--t-meta); font-variant-numeric: tabular-nums; }
+
+  /* --- ongedaan: balk onderin na verwijderen (UI.Ongedaan) ---
+     Omgekeerd thema, zodat hij opvalt zonder nieuwe kleuren: color-scheme
+     draait om, dus light-dark() in alle tokens pakt de andere kant. In
+     licht is hij donker, in donker licht. De aftelbalk krimpt met een
+     transform (.telt) in --ongedaan-duur; .pauze zet hem stil. Bij reduced
+     motion staat hij vol (regel onderaan), de tijd loopt wel. */
+  .ongedaan {
+    color-scheme: dark; color: var(--ink);
+    position: fixed; z-index: 20; inset-inline: var(--rand-links) var(--rand-rechts); inset-block-end: var(--rand-onder);
+    max-inline-size: var(--ongedaan-breedte); margin-inline: auto; margin-block-end: var(--drop-y);
+    isolation: isolate; filter: var(--card-shadow);
+    padding: var(--pad-card-compact); display: flex; flex-direction: column; gap: var(--gap-inline);
+  }
+  :root[data-theme="dark"] .ongedaan { color-scheme: light; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme]) .ongedaan { color-scheme: light; } }
+  .ongedaan::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--card-1); clip-path: var(--cut-card); }
+  .ongedaan-rij { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-inline); }
+  .ongedaan-tekst { min-inline-size: 0; overflow-wrap: anywhere; }
+  .ongedaan-actie { flex: none; }
+  .ongedaan-meter i { inline-size: 100%; transform-origin: left center; }
+  .ongedaan.telt .ongedaan-meter i { animation: aftellen var(--ongedaan-duur) linear forwards; }
+  .ongedaan.pauze .ongedaan-meter i { animation-play-state: paused; }
+
+  /* --- prullen: een lijst in de prullenbak (UI.PrullenKaart) ---
+     Vak, titel en een regel, daaronder Terugzetten en bij eigen lijsten
+     Definitief verwijderen. Bevestigen gebeurt in de kaart, in een
+     .notice. */
+  .prullen { gap: var(--gap-stack); }
+  .prullen .eyebrow { display: block; margin-block-end: var(--s1); }
+  .prullen-titel { font-family: var(--body); font-weight: 600; font-size: var(--t-list); line-height: 1.2; }
+  .prullen .row { align-items: center; gap: 0 var(--gap-group); }
+  .prullen .row > .btn { flex: 0 0 auto; }
+  .prullen-vraag .row { gap: 0 var(--gap-group); }
 
   /* --- vak: een map met de lijsten van een schoolvak ---
      De vaknaam is een sectielabel; de kaarten eronder dragen de titels. */
@@ -1005,6 +1060,7 @@
   .lesson:active { transform: translateY(3px); }
   .lesson:not(.is-mix):active { --drop: drop-shadow(0 3px 0 var(--card-shadow-color)); }
 
+  @keyframes aftellen { from { transform: scaleX(1); } to { transform: scaleX(0); } }
   @keyframes pop  { from { transform: scale(.7); opacity: 0 } to { transform: scale(1); opacity: 1 } }
   @keyframes bump { 0% { transform: scale(1) } 40% { transform: scale(1.22) } 100% { transform: scale(1) } }
   /* welkom: alleen translate, scale, rotate, opacity en het gat */
@@ -1078,6 +1134,12 @@
 
   /* eerst lezen */
   .sec-title td { background: var(--mark); font-weight: 600; font-family: var(--body); }
+
+  /* prullenbak */
+  .prullen-lijst { display: flex; flex-direction: column; gap: var(--gap-stack); }
+  /* koppen die de focus krijgen na een actie (tabindex=-1) */
+  :is(#prullenbak-kop, #app-titel):focus { outline: none; }
+  :is(#prullenbak-kop, #app-titel):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
   /* rapport */
   .rep { display: flex; flex-direction: column; gap: var(--s3); }
@@ -1208,6 +1270,8 @@
     .choice.right { border-style: double; border-width: 5px; }
     .choice.wrong { border-style: dashed; }
     .q-card.is-good { animation: none; }
+    .ongedaan { border: 2px solid CanvasText; filter: none; }
+    .ongedaan::before { clip-path: none; }
     .card, .notice, .stat, .empty, .chip, .due-chip, .deadline-chip, .meter, .streak, .verdict, .spraak,
     .beta-chip, .beta-uitleg { clip-path: none; }
     .beta-chip { border: 1px solid ButtonText; }

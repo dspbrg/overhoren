@@ -627,7 +627,7 @@ test("sync: de app stuurt geen katten mee en leest ze niet; de oude cats gaan on
   assert.ok(puts.length, "geen PUT naar de worker");
   for (const p of puts) {
     assert.equal("katten" in p.body, false, "de app stuurt nog katten mee");
-    assert.deepEqual(Object.keys(p.body).sort(), ["cats", "lists", "progress", "updated"]);
+    assert.deepEqual(Object.keys(p.body).sort(), ["cats", "klasWeg", "lists", "progress", "updated"]);
   }
   assert.deepEqual(puts[puts.length - 1].body.cats, JSON.parse(OUD), "oude cats gaan niet ongewijzigd mee");
   await geenKattenOpslag(page);
