@@ -19,6 +19,17 @@ const PRULLENBAK_MS = PRULLENBAK_DAGEN * 24 * 60 * 60 * 1000;
 // Hoogste klaslijsten in klasWeg. Er zijn er veel minder; dit is een rem.
 export const MAX_KLAS_WEG = 200;
 
+// Hooguit zoveel grafstenen per record; de nieuwste op gewist blijven.
+// Zo kan een vol record weer kleiner worden. Gelijk aan index.html.
+export const MAX_GRAFSTENEN = 500;
+
+// Alleen een eigen lijst kan een grafsteen worden. Eigen lijsten hebben
+// altijd een id "custom-<tijd>" (index.html, importList en photoSave, zo
+// sinds de eerste versie). Klaslijsten uit lists.js hebben andere ids; een
+// grafsteen met zo'n id zou hun voortgang blijvend wissen.
+export const EIGEN_ID = "custom-";
+export const kanGrafsteen = id => typeof id === "string" && id.startsWith(EIGEN_ID);
+
 // Hoogste box. Gelijk aan MAX_BOX in engine.js (een test bewaakt dat).
 export const MAX_BOX = 6;
 
@@ -233,6 +244,7 @@ export function stand(l) {
 // grafsteen. Een grafsteen is { id, title: "", items: [] } plus de tijden,
 // zonder inhoud. Geeft null als de lijst geen grafsteen is.
 function grafsteen(l, id, nu) {
+  if (!kanGrafsteen(id)) return null;
   const weg = getal(l.weg) ? tijd(l.weg, nu) : 0;
   let gewist = getal(l.gewist) ? tijd(l.gewist, nu) : 0;
   if (!gewist && weg && nu - weg > PRULLENBAK_MS) gewist = weg + PRULLENBAK_MS;
@@ -353,8 +365,18 @@ function mergeProgress(a, b, nu) {
   return out;
 }
 
+// Hooguit MAX_GRAFSTENEN grafstenen: de nieuwste op gewist blijven, bij
+// gelijke gewist de eerste. De volgorde van de rest blijft.
+export function begrensGrafstenen(lists) {
+  const stenen = lists.map((l, i) => ({ l, i })).filter(x => x.l.gewist > 0);
+  if (stenen.length <= MAX_GRAFSTENEN) return lists;
+  const weg = new Set(stenen.sort((x, y) => (y.l.gewist - x.l.gewist) || (x.i - y.i)).slice(MAX_GRAFSTENEN).map(x => x.i));
+  return lists.filter((_, i) => !weg.has(i));
+}
+
 // Per id wint de hoogste stand. Bij gelijke stand wint een grafsteen van
-// een levende lijst; anders blijft de bestaande (remote) staan.
+// een levende lijst; anders blijft de bestaande staan. Hier is dat remote
+// (wat in KV staat); in de app is het de lokale lijst.
 function mergeLists(a, b) {
   const byId = new Map();
   for (const l of a) byId.set(String(l.id), l);
@@ -364,7 +386,7 @@ function mergeLists(a, b) {
       (stand(l) === stand(oud) && l.gewist > 0 && !(oud.gewist > 0));
     if (wint) byId.set(String(l.id), l);
   }
-  return Array.from(byId.values());
+  return begrensGrafstenen(Array.from(byId.values()));
 }
 
 // Per id wint de hoogste bijgewerkt; gelijk: remote blijft. Hooguit
@@ -388,7 +410,7 @@ function mergeKlasWeg(a, b) {
 // Voortgang van een grafsteen valt weg. Een lijst die alleen weg heeft,
 // houdt zijn voortgang.
 function zonderGrafstenen(progress, lists) {
-  const stenen = new Set(lists.filter(l => l.gewist > 0).map(l => String(l.id)));
+  const stenen = new Set(lists.filter(l => l.gewist > 0 && kanGrafsteen(l.id)).map(l => String(l.id)));
   const out = {};
   for (const k of Object.keys(progress)) if (!stenen.has(k)) out[k] = progress[k];
   return out;

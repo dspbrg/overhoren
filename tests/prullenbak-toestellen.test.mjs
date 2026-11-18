@@ -193,16 +193,17 @@ test("pull in de app: een lijst die op de server al meer dan 30 dagen weg is, wo
   await t.context.close();
 });
 
-test("definitief verwijderen en een grafsteen uit de pull ruimen de voortgang van elke oefenaar op, ook van een lijst met een getal als id", async () => {
+// Eigen lijsten hebben altijd een id "custom-<tijd>"; alleen die kunnen een grafsteen worden.
+test("definitief verwijderen en een grafsteen uit de pull ruimen de voortgang van elke oefenaar op", async () => {
   const nu = Date.now();
-  const w = nepWorker({ [REC]: { lists: [{ id: 7, title: "", items: [], gewist: nu - DAG, bijgewerkt: nu - DAG }], updated: nu - DAG } });
+  const w = nepWorker({ [REC]: { lists: [{ id: "custom-7", title: "", items: [], gewist: nu - DAG, bijgewerkt: nu - DAG }], updated: nu - DAG } });
   const t = await toestel(w, { zaai: {
-    "overhoor:learners": ["Pia", "Noor", "Sem"], [LKEY]: [eigen(7, "Getal", { added: nu - 9 * DAG }), eigen("custom-3", "Los", { weg: nu - DAG, bijgewerkt: nu - DAG })],
-    [P(7)]: voortgang(1), [P(7, "noor")]: voortgang(1), [P(7, "sem")]: voortgang(1), [P("custom-3")]: voortgang(1), [P("custom-3", "sem")]: voortgang(1),
+    "overhoor:learners": ["Pia", "Noor", "Sem"], [LKEY]: [eigen("custom-7", "Zeven", { added: nu - 9 * DAG }), eigen("custom-3", "Los", { weg: nu - DAG, bijgewerkt: nu - DAG })],
+    [P("custom-7")]: voortgang(1), [P("custom-7", "noor")]: voortgang(1), [P("custom-7", "sem")]: voortgang(1), [P("custom-3")]: voortgang(1), [P("custom-3", "sem")]: voortgang(1),
     "overhoor:current": "custom-3" } });
-  // de pull bracht de grafsteen voor lijst 7
-  assert.ok(een(await lees(t.page, LKEY), 7).gewist > 0);
-  for (const s of ["pia", "noor", "sem"]) assert.equal(await lees(t.page, P(7, s)), null, "voortgang van " + s + " blijft staan");
+  // de pull bracht de grafsteen voor custom-7
+  assert.ok(een(await lees(t.page, LKEY), "custom-7").gewist > 0);
+  for (const s of ["pia", "noor", "sem"]) assert.equal(await lees(t.page, P("custom-7", s)), null, "voortgang van " + s + " blijft staan");
   // definitief via het scherm: ook Sem en de huidige lijst
   await prullenbak(t.page);
   await t.page.click('#prullenbak-body .prullen[data-id="custom-3"] [data-actie="wis"]');

@@ -1137,8 +1137,9 @@
 
   /* prullenbak */
   .prullen-lijst { display: flex; flex-direction: column; gap: var(--gap-stack); }
-  #prullenbak-kop:focus { outline: none; }
-  #prullenbak-kop:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  /* koppen die de focus krijgen na een actie (tabindex=-1) */
+  :is(#prullenbak-kop, #app-titel):focus { outline: none; }
+  :is(#prullenbak-kop, #app-titel):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
   /* rapport */
   .rep { display: flex; flex-direction: column; gap: var(--s3); }

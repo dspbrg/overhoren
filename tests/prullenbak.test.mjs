@@ -571,3 +571,170 @@ for (const thema of THEMAS) {
     });
   }
 }
+
+// ---------- na de keuring ----------
+
+// Een pull die pas antwoordt als de test dat zegt: zo komt hij binnen
+// terwijl je op een ander scherm bent. Geeft { context, page, fouten, laat }.
+async function openMetLatePull(remote, { zaai = {}, puts = [] } = {}) {
+  let laat;
+  const poort = new Promise(r => { laat = r; });
+  let gevraagd = 0;
+  const context = await browser.newContext({ viewport: { width: 360, height: 780 }, serviceWorkers: "block", locale: "nl-NL" });
+  await schermNetwerkAf(context);
+  const alles = Object.assign({ "overhoor:learner": "Pia", "overhoor:learners": ["Pia"], "overhoor:klas": true, "overhoor:app-secret": "test" }, zaai);
+  await context.addInitScript(z => {
+    if (sessionStorage.getItem("gezaaid")) return;
+    sessionStorage.setItem("gezaaid", "1");
+    for (const k in z) localStorage.setItem(k, JSON.stringify(z[k]));
+  }, alles);
+  await context.route(/workers\.dev\/sync\//, async route => {
+    const req = route.request();
+    if (req.method() === "PUT") { puts.push(JSON.parse(req.postData())); return route.fulfill({ status: 200, contentType: "application/json", body: "{}", headers: CORS }); }
+    gevraagd++;
+    await poort;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(remote), headers: CORS });
+  });
+  const page = await context.newPage();
+  const fouten = volgFouten(page);
+  page.on("dialog", d => { fouten.push("vraag van de browser: " + d.message()); d.dismiss(); });
+  await page.goto(server.url + "/index.html");
+  await wachtOpScherm(page, "scr-lessons");
+  for (let i = 0; i < 60 && !gevraagd; i++) await page.waitForTimeout(50);
+  assert.ok(gevraagd, "de app vroeg niets op");
+  return { context, page, fouten, laat: async () => { laat(); await page.waitForTimeout(400); } };
+}
+
+test("keuring 1: na verwijderen staat de focus op de kop, en de balk staat direct na de kop (alleen Beta ertussen)", async () => {
+  const { context, page, fouten } = await open({ zaai: { [LKEY]: [eigen("custom-1", "Unité 2")] } });
+  await verwijder(page, "custom-1");
+  const r = await page.evaluate(() => {
+    const kop = document.getElementById("app-titel"), balk = document.getElementById("ongedaan");
+    return { focus: document.activeElement.id, tabindex: kop.getAttribute("tabindex"), naKop: kop.nextElementSibling === balk,
+      focusErin: balk.contains(document.activeElement) };
+  });
+  assert.deepEqual(r, { focus: "app-titel", tabindex: "-1", naKop: true, focusErin: false });
+  await page.keyboard.press("Tab");
+  const eerste = await page.evaluate(() => document.activeElement.className);
+  if (!/ongedaan-actie/.test(eerste)) {
+    assert.match(eerste, /\bbeta\b/, "tussen de kop en de balk staat meer dan Beta: " + eerste);
+    await page.keyboard.press("Tab");
+  }
+  assert.ok(await page.evaluate(() => document.activeElement.classList.contains("ongedaan-actie")), "de balk is niet direct na de kop te bereiken");
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("keuring 2: bij een klok die achterloopt wordt bijgewerkt toch hoger dan wat er stond", async () => {
+  const later = Date.now() + 2 * 60_000;   // een ander toestel zette dit, met een klok die voorloopt
+  const { context, page, fouten } = await open({ zaai: {
+    [LKEY]: [eigen("custom-1", "Een", { bijgewerkt: later })], [KWKEY]: { [KLAS.id]: { weg: 0, bijgewerkt: later } } } });
+  await verwijder(page, "custom-1");
+  const weg = eigenUit(await lees(page, LKEY), "custom-1").bijgewerkt;
+  assert.ok(weg > later, "verwijderen verliest van de oudere stand: " + (weg - later));
+  await naarPrullenbak(page);
+  await page.click('.prullen[data-id="custom-1"] [data-actie="terug"]');
+  assert.ok(eigenUit(await lees(page, LKEY), "custom-1").bijgewerkt > weg, "terugzetten verliest van het verwijderen");
+  await page.click("#btn-prullenbak-back"); await wachtOpScherm(page, "scr-lessons");
+  await verwijder(page, KLAS.id);
+  const kw = (await lees(page, KWKEY))[KLAS.id];
+  assert.ok(kw.weg > 0 && kw.bijgewerkt > later, "de klasregel verliest van de oudere stand");
+  await naarPrullenbak(page);
+  await page.click(`.prullen[data-id="${KLAS.id}"] [data-actie="terug"]`);
+  assert.ok((await lees(page, KWKEY))[KLAS.id].bijgewerkt > kw.bijgewerkt, "terugzetten van de klaslijst verliest");
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("keuring 3: een pull terwijl de prullenbak open staat tekent hem opnieuw; een open vraag sluit alleen als zijn lijst weg is", async () => {
+  const nu = Date.now();
+  const steen = id => ({ id, title: "", items: [], weg: nu - 2 * DAG, gewist: nu - 1000, bijgewerkt: nu - 1000 });
+  const zaai = { [LKEY]: [eigen("custom-1", "Een", { weg: nu - 2 * DAG, bijgewerkt: nu - 2 * DAG }), eigen("custom-2", "Twee", { weg: nu - 3 * DAG, bijgewerkt: nu - 3 * DAG })] };
+  // de vraag staat bij custom-1, de pull wist custom-1
+  let t = await openMetLatePull({ updated: 9, lists: [steen("custom-1")] }, { zaai });
+  await naarPrullenbak(t.page);
+  await t.page.click('.prullen[data-id="custom-1"] [data-actie="wis"]');
+  await t.laat();
+  assert.deepEqual((await kaarten(t.page)).map(k => k.id), ["custom-2"], "de prullenbak is niet opnieuw getekend");
+  assert.equal(await t.page.locator("#prullenbak-body .notice").count(), 0, "de vraag bleef staan");
+  assert.equal(await focusId(t.page), "prullenbak-kop");
+  assert.deepEqual(t.fouten, []);
+  await t.context.close();
+  // de vraag staat bij custom-1, de pull wist custom-2: de vraag blijft, met de focus
+  t = await openMetLatePull({ updated: 9, lists: [steen("custom-2")] }, { zaai });
+  await naarPrullenbak(t.page);
+  await t.page.click('.prullen[data-id="custom-1"] [data-actie="wis"]');
+  await t.laat();
+  assert.deepEqual((await kaarten(t.page)).map(k => k.id), ["custom-1"]);
+  assert.equal(await t.page.locator('.prullen[data-id="custom-1"] .notice').count(), 1, "de vraag sloot terwijl zijn lijst er nog is");
+  assert.equal(await focusId(t.page), "annuleer");
+  assert.deepEqual(t.fouten, []);
+  await t.context.close();
+});
+
+test("keuring 4: wordt de open lijst door een pull een grafsteen, dan terug naar het lessenscherm; in een ronde blijft de ronde en komt er geen voortgang onder de grafsteen", async () => {
+  const nu = Date.now();
+  const remote = { updated: 9, lists: [{ id: "custom-1", title: "", items: [], gewist: nu - 1000, bijgewerkt: nu - 1000 }] };
+  const zaai = { [LKEY]: [eigen("custom-1", "Een", { added: nu - DAG }), eigen("custom-2", "Twee")] };
+  // op het lesscherm
+  let t = await openMetLatePull(remote, { zaai });
+  await t.page.locator('#lessons .lesson[data-id="custom-1"]').click(); await wachtOpScherm(t.page, "scr-home");
+  await t.laat();
+  await wachtOpScherm(t.page, "scr-lessons");
+  assert.notEqual(await lees(t.page, CKEY), "custom-1", "de laatste lijst wijst naar de grafsteen");
+  assert.ok(!(await lijstIds(t.page)).includes("custom-1"));
+  assert.deepEqual(t.fouten, []);
+  await t.context.close();
+  // in een ronde: de ronde loopt door, maar er wordt niets onder custom-1 bewaard
+  t = await openMetLatePull(remote, { zaai });
+  await t.page.locator('#lessons .lesson[data-id="custom-1"]').click(); await wachtOpScherm(t.page, "scr-home");
+  await t.page.click("#btn-start"); await wachtOpScherm(t.page, "scr-quiz");
+  await t.laat();
+  assert.ok(await zichtbaar(t.page, "#scr-quiz"), "de ronde is afgebroken");
+  await t.page.fill("#q-input", "de hond");
+  await t.page.click("#btn-check");
+  await t.page.locator("#btn-next").waitFor({ state: "visible" });
+  await t.page.click("#btn-next");
+  await t.page.waitForTimeout(200);
+  assert.equal(await lees(t.page, P("custom-1")), null, "voortgang geschreven onder een grafsteen");
+  assert.equal(await lees(t.page, "overhoor:session:pia:custom-1"), null, "ronde bewaard onder een grafsteen");
+  assert.equal(eigenUit(await lees(t.page, LKEY), "custom-1").gewist, nu - 1000);
+  assert.deepEqual(t.fouten, []);
+  await t.context.close();
+});
+
+test("keuring 5: een grafsteen met het id van een klaslijst wist niets, wordt genegeerd en niet bewaard of verstuurd", async () => {
+  const nu = Date.now();
+  const puts = [];
+  const stenen = [{ id: KLAS.id, title: "", items: [], gewist: nu - 1000, bijgewerkt: nu - 1000 }];
+  const { context, page, fouten } = await open({ sync: { updated: 9, lists: stenen }, puts, zaai: {
+    [LKEY]: [{ id: WL[1].id, title: "", items: [], weg: nu - 40 * DAG, gewist: nu - DAG, bijgewerkt: nu - DAG }, eigen("custom-1", "Een")],
+    [P(KLAS.id)]: voortgang(), [P(WL[1].id)]: voortgang(), ["overhoor:session:pia:" + KLAS.id]: { queue: [], pos: 0 } } });
+  assert.deepEqual(await lees(page, P(KLAS.id)), voortgang(), "de pull wiste de voortgang van een klaslijst");
+  assert.deepEqual(await lees(page, P(WL[1].id)), voortgang(), "het laden wiste de voortgang van een klaslijst");
+  assert.ok(await lees(page, "overhoor:session:pia:" + KLAS.id), "de ronde van een klaslijst is gewist");
+  assert.equal((await lees(page, LKEY)).some(l => l && (l.id === KLAS.id || l.id === WL[1].id)), false, "een grafsteen met een klas-id is bewaard");
+  const ids = await lijstIds(page);
+  assert.ok(ids.includes(KLAS.id) && ids.includes(WL[1].id), "een klaslijst is verdwenen: " + ids);
+  assert.equal(ids.filter(i => i === WL[1].id).length, 1, "een klaslijst staat er dubbel");
+  // de push stuurt geen eigen lijst met een klas-id
+  await verwijder(page, "custom-1");
+  for (let i = 0; i < 60 && !puts.length; i++) await page.waitForTimeout(100);
+  assert.ok(puts.length, "geen PUT");
+  assert.deepEqual(puts[puts.length - 1].lists.map(l => l.id), ["custom-1"]);
+  assert.deepEqual(fouten, []);
+  await context.close();
+});
+
+test("keuring 6: bij het laden blijven hooguit 500 grafstenen, de nieuwste", async () => {
+  const nu = Date.now();
+  const stenen = Array.from({ length: 520 }, (_, i) => ({ id: "custom-s" + i, title: "", items: [], gewist: nu - DAG - i * 1000, bijgewerkt: nu - DAG - i * 1000 }));
+  const { context, page, fouten } = await open({ zaai: { [LKEY]: [eigen("custom-1", "Levend")].concat(stenen) } });
+  const rauw = await lees(page, LKEY);
+  const over = rauw.filter(l => l.gewist > 0).map(l => l.id);
+  assert.equal(over.length, 500, "aantal grafstenen: " + over.length);
+  assert.ok(over.includes("custom-s0") && over.includes("custom-s499") && !over.includes("custom-s500"), "niet de nieuwste 500");
+  assert.ok(rauw.some(l => l.id === "custom-1" && !l.gewist), "een levende lijst is weg");
+  assert.deepEqual(fouten, []);
+  await context.close();
+});

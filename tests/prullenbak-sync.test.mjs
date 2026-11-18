@@ -91,9 +91,9 @@ test("prullenbak: na 30 dagen wordt een lijst met weg een grafsteen zonder inhou
   assert.equal("gewist" in net, false);
   assert.equal(net.title, "Lijst");
   // en een grafsteen van buiten verliest zijn inhoud, ook zonder items
-  assert.deepEqual(json(M.controleerLijst({ id: "x", title: "Geheim", items: [{ word: "a", def: "b" }], gewist: 5, bijgewerkt: 9 }, NU)),
-    { id: "x", title: "", items: [], gewist: 5, bijgewerkt: 9 });
-  assert.deepEqual(json(M.controleerLijst({ id: "x", gewist: 5 }, NU)), { id: "x", title: "", items: [], gewist: 5, bijgewerkt: 5 });
+  assert.deepEqual(json(M.controleerLijst({ id: "custom-x", title: "Geheim", items: [{ word: "a", def: "b" }], gewist: 5, bijgewerkt: 9 }, NU)),
+    { id: "custom-x", title: "", items: [], gewist: 5, bijgewerkt: 9 });
+  assert.deepEqual(json(M.controleerLijst({ id: "custom-x", gewist: 5 }, NU)), { id: "custom-x", title: "", items: [], gewist: 5, bijgewerkt: 5 });
   // tijden worden begrensd
   const ver = M.controleerLijst(lijst({ weg: 1e308, bijgewerkt: 1e308 }), NU);
   assert.equal(ver.weg, NU + MARGE);
@@ -106,13 +106,13 @@ test("prullenbak: na 30 dagen wordt een lijst met weg een grafsteen zonder inhou
 
 test("prullenbak: de voortgang van een grafsteen valt weg, die van een lijst met alleen weg blijft", () => {
   const uit = mergeSync(
-    { lists: [lijst({ id: "a", weg: T(500), bijgewerkt: T(500) }), lijst({ id: 7 })], progress: { a: vg(1), b: vg(1), 7: vg(1) } },
-    { lists: [steen({ id: "b", gewist: T(600), bijgewerkt: T(600) }), steen({ id: 7, gewist: T(600), bijgewerkt: T(600) })] },
+    { lists: [lijst({ id: "custom-a", weg: T(500), bijgewerkt: T(500) }), lijst({ id: "custom-7" })], progress: { "custom-a": vg(1), "custom-b": vg(1), "custom-7": vg(1) } },
+    { lists: [steen({ id: "custom-b", gewist: T(600), bijgewerkt: T(600) }), steen({ id: "custom-7", gewist: T(600), bijgewerkt: T(600) })] },
     NU);
-  assert.deepEqual(Object.keys(uit.progress).sort(), ["a"]);
+  assert.deepEqual(Object.keys(uit.progress).sort(), ["custom-a"]);
   // ook na 30 dagen in de prullenbak
-  const oud = mergeSync({ lists: [lijst({ id: "c", weg: NU - 40 * DAG })], progress: { c: vg(1) } }, {}, NU);
-  assert.deepEqual(uit.progress.a, vg(1));
+  const oud = mergeSync({ lists: [lijst({ id: "custom-c", weg: NU - 40 * DAG })], progress: { "custom-c": vg(1) } }, {}, NU);
+  assert.deepEqual(uit.progress["custom-a"], vg(1));
   assert.deepEqual(oud.progress, {});
 });
 

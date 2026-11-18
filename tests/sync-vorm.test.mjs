@@ -26,7 +26,7 @@ function appVorm() {
   c.window = c;
   vm.runInContext(readFileSync(join(REPO, "engine.js"), "utf8"), c);
   vm.runInContext("var E = window.Engine;\n" + html.slice(begin, eind) +
-    "\nthis.vorm = { schoneLijst, schoneStaat, schoneVoortgang, schoneCat, schoneKlasWeg, stand, wintVan, mergeKlasWeg, PRULLENBAK_DAGEN, MAX_KLAS_WEG };", c);
+    "\nthis.vorm = { schoneLijst, schoneStaat, schoneVoortgang, schoneCat, schoneKlasWeg, stand, wintVan, mergeKlasWeg, PRULLENBAK_DAGEN, MAX_KLAS_WEG, kanGrafsteen, begrensGrafstenen, MAX_GRAFSTENEN, EIGEN_ID };", c);
   return c.vorm;
 }
 
@@ -533,8 +533,8 @@ test("pariteit: schoneLijst met weg, gewist en bijgewerkt geeft hetzelfde als de
   assert.equal(w(1).bijgewerkt, NU + 5 * 60 * 1000, "1e308 wordt niet begrensd");
   assert.equal(w(7).weg, undefined, "weg 0 blijft staan");
   assert.equal(w(9).weg, undefined, "kapotte weg blijft staan");
-  assert.equal(w(13).gewist, undefined, "precies 30 dagen is al een grafsteen");
-  assert.equal(w(14).gewist, NU - 1, "meer dan 30 dagen is geen grafsteen");
+  assert.equal(w(13).gewist, undefined, "precies 30 dagen hoort nog geen grafsteen te zijn");
+  assert.equal(w(14).gewist, NU - 1, "meer dan 30 dagen hoort een grafsteen te zijn");
   assert.equal(w(16).bijgewerkt, NU, "bijgewerkt van een grafsteen gaat omlaag");
   assert.equal(w(19).bijgewerkt, NU - DAG, "bijgewerkt van een grafsteen is niet minstens gewist");
   assert.deepEqual(json(w(21)), { id: "custom-1", title: "", items: [], gewist: NU - DAG, bijgewerkt: NU - DAG, added: 3 });
@@ -590,4 +590,61 @@ test("pariteit: schoneKlasWeg en mergeKlasWeg in de app geven hetzelfde als de w
   assert.deepEqual(json(m), json(mw));
   assert.equal(Object.keys(m).length, 200);
   assert.ok(!("a99" in m) && "a100" in m && "b0" in m, "niet de nieuwste 200");
+});
+
+test("pariteit: alleen een eigen lijst (custom-) kan een grafsteen zijn, in de app en in de worker", () => {
+  const NU = 1_800_000_000_000, DAG = 24 * 60 * 60 * 1000;
+  const A = appVorm();
+  const json = x => JSON.parse(JSON.stringify(x));
+  assert.equal(A.EIGEN_ID, MERGE.EIGEN_ID);
+  assert.equal(A.EIGEN_ID, "custom-");
+  const ids = ["custom-1", "custom-1731000000000", "gold-a2-starter-unit1", "frans-arret-apprendre", 7, "7", "Custom-1", "xcustom-1", ""];
+  for (const id of ids) assert.equal(A.kanGrafsteen(id), MERGE.kanGrafsteen(id), String(id));
+  assert.deepEqual(ids.map(MERGE.kanGrafsteen), [true, true, false, false, false, false, false, false, false]);
+  const gevallen = [
+    { id: "gold-a2-starter-unit1", title: "", items: [], gewist: NU - DAG, bijgewerkt: NU - DAG },
+    { id: "gold-a2-starter-unit1", gewist: NU - DAG },
+    { id: "gold-a2-starter-unit1", title: "x", items: [], weg: NU - 40 * DAG },
+    { id: 7, title: "", items: [], gewist: NU - DAG, bijgewerkt: NU - DAG },
+    { id: "custom-9", gewist: NU - DAG },
+  ];
+  gevallen.forEach((l, i) => assert.deepEqual(json(A.schoneLijst(l, NU)), json(MERGE.controleerLijst(l, NU)), "geval " + i));
+  // een klas-id: gewist valt weg, na 30 dagen geen grafsteen, zonder items valt hij weg
+  assert.equal("gewist" in MERGE.controleerLijst(gevallen[0], NU), false);
+  assert.equal(MERGE.controleerLijst(gevallen[1], NU), null);
+  assert.equal("gewist" in MERGE.controleerLijst(gevallen[2], NU), false);
+  // en de worker wist de voortgang van een klaslijst niet
+  const uit = MERGE.mergeSync({ progress: { "gold-a2-starter-unit1": { items: {}, sessions: [], updated: 1 }, "custom-9": { items: {}, sessions: [], updated: 1 } } },
+    { lists: [gevallen[0], gevallen[4]] }, NU);
+  assert.deepEqual(Object.keys(uit.progress), ["gold-a2-starter-unit1"]);
+});
+
+test("pariteit: hooguit 500 grafstenen, de nieuwste op gewist, in de app en in de worker", () => {
+  const NU = 1_800_000_000_000;
+  const A = appVorm();
+  const json = x => JSON.parse(JSON.stringify(x));
+  assert.equal(A.MAX_GRAFSTENEN, MERGE.MAX_GRAFSTENEN);
+  assert.equal(MERGE.MAX_GRAFSTENEN, 500);
+  const steen = (i, g) => ({ id: "custom-s" + i, title: "", items: [], gewist: g, bijgewerkt: g });
+  const levend = { id: "custom-l", title: "L", items: [{ word: "a", def: "b" }], added: 1 };
+  // 600 stenen door elkaar, een paar met dezelfde gewist, en een levende lijst ertussen
+  const lijsten = [];
+  for (let i = 0; i < 600; i++) lijsten.push(steen(i, NU - 1_000_000 + ((i * 7919) % 600) * 1000));
+  lijsten.splice(250, 0, levend);
+  lijsten.push(steen(900, NU - 1_000_000 + 400 * 1000), steen(901, NU - 1_000_000 + 400 * 1000));
+  const app = json(A.begrensGrafstenen(lijsten)), worker = json(MERGE.begrensGrafstenen(lijsten));
+  assert.deepEqual(app, worker);
+  assert.equal(worker.filter(l => l.gewist).length, 500);
+  assert.ok(worker.some(l => l.id === "custom-l"), "de levende lijst is weg");
+  const grens = Math.min(...worker.filter(l => l.gewist).map(l => l.gewist));
+  assert.ok(lijsten.filter(l => l.gewist && !worker.some(w => w.id === l.id)).every(l => l.gewist <= grens), "er viel een nieuwere grafsteen weg");
+  // de volgorde van wat blijft, blijft
+  const volgorde = lijsten.filter(l => worker.some(w => w.id === l.id)).map(l => l.id);
+  assert.deepEqual(worker.map(l => l.id), volgorde);
+  // onder de grens verandert er niets
+  assert.equal(MERGE.begrensGrafstenen(lijsten.slice(0, 100)).length, 100);
+  // en mergeSync maakt een vol record weer kleiner
+  const uit = MERGE.mergeSync({ lists: lijsten }, { lists: [steen(1000, NU)] }, NU);
+  assert.equal(uit.lists.filter(l => l.gewist).length, 500);
+  assert.ok(uit.lists.some(l => l.id === "custom-s1000"), "de nieuwste grafsteen viel weg");
 });
